@@ -1,0 +1,8 @@
+@PACKAGE_INIT@
+
+find_package(Foundation CONFIG REQUIRED)
+find_package(GTest REQUIRED)
+
+if(NOT TARGET Virspace::Foundation)
+	include(${CMAKE_CURRENT_LIST_DIR}/FoundationTestsTargets.cmake)
+endif()
