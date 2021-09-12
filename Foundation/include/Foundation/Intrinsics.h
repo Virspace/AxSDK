@@ -4,10 +4,11 @@
 
 #include "Foundation/Types.h"
 #include <math.h>
+#include <intrin.h>
 
 inline int32_t RoundFloatToInt32(float f)
 {
-    return (_mm_cvtss_si32(_mm_set_ss(f));
+    return (_mm_cvtss_si32(_mm_set_ss(f)));
 }
 
 inline double Cos(double Angle)
@@ -17,10 +18,10 @@ inline double Cos(double Angle)
 
 inline double Sin(double Angle)
 {
-    return(sin(Angle));
+    return (sin(Angle));
 }
 
 inline double ATan2(double Y, double X)
 {
-    return(atan2(Y, X));
+    return (atan2(Y, X));
 }
