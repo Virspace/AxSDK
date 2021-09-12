@@ -1,11 +1,3 @@
-/* ========================================================================
-   $File: $
-   $Date: $
-   $Revision: $
-   $Creator: Michael DeForge $
-   $Notice: (C) Copyright 2021 by Virspace, LLC. All Rights Reserved. $
-   ======================================================================== */
-
 #include "Foundation/APIRegistry.h"
 #include "Foundation/Math.h"
 #include "Foundation/HashTable.h"

@@ -1,10 +1,3 @@
-/* ========================================================================
-   $File: $
-   $Date: $
-   $Revision: $
-   $Creator: Michael DeForge $
-   $Notice: (C) Copyright 2021 by Virspace, LLC. All Rights Reserved. $
-   ======================================================================== */
 #pragma once
 
 #include "Foundation/Types.h"

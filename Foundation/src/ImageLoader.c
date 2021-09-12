@@ -1,11 +1,3 @@
-/* ========================================================================
-   $File: $
-   $Date: $
-   $Revision: $
-   $Creator: Michael DeForge $
-   $Notice: (C) Copyright 2021 by Virspace, LLC. All Rights Reserved. $
-   ======================================================================== */
-
 #include "ImageLoader.h"
 
 #define STBI_NO_JPEG
