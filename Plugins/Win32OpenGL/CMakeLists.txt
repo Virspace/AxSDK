@@ -47,7 +47,7 @@ target_compile_definitions(Win32OpenGL
         GL_GLEXT_PROTOTYPES
 )
 
-include_directories("$<JOIN:$<TARGET_PROPERTY:Window,INCLUDE_DIRECTORIES>,;>")
+include_directories("$<JOIN:$<TARGET_PROPERTY:AxWindow,INCLUDE_DIRECTORIES>,;>")
 
 # Specify include directories to use when compiling a given target
 target_include_directories(Win32OpenGL
