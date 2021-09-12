@@ -4,7 +4,7 @@
 #include "GL/gl3w.h"
 #include "Win32OpenGL/RendererOpenGL.h"
 #include "Foundation/APIRegistry.h"
-#include "Window/Window.h"
+#include "AxWindow/AxWindow.h"
 #include "Foundation/Math.h"
 #include "Foundation/Platform.h"
 
