@@ -18,6 +18,7 @@
 // From hidusage.h
 #define HID_USAGE_PAGE_GENERIC                          ((unsigned short) 0x01) // Generic Desktop Controls Usage Pages
 #define HID_USAGE_GENERIC_MOUSE                         ((unsigned short) 0x02) // Generic Mouse
+#define HID_USAGE_GENERIC_KEYBOARD                      ((unsigned short) 0x06) // Generic Keyboard
 
 // NOTE(mdeforge): Special thanks to the Win32 API for making me use _'s for
 //                 my CreateWindow, DestroyWindow, and UpdateWindow functions
@@ -27,6 +28,8 @@
 #undef CreateWindow
 
 typedef HRESULT (WINAPI *GetDpiForMonitorPtr)(HMONITOR Monitor, int DPIType, UINT * XDPI, UINT *YDPI);
+
+// Forward declarations
 static GetDpiForMonitorPtr GetDpiForMonitor;
 
 struct AxWindowContext
@@ -84,9 +87,11 @@ struct AxWindow
     // Platform specific data
     AxWindowPlatformData Platform;
     // Window style flags
-    enum AxWindowStyleFlags Style;
+    enum AxWindowStyle Style;
     // Cursor modes
     enum AxCursorMode CursorMode;
+    // Keyboard modes
+    enum AxKeyboardMode KeyboardMode;
     // Virtual cursor position
     AxVec2 VirtualCursorPos;
 };
@@ -116,6 +121,33 @@ static RECT AxRectToRect(AxRect Rect)
 }
 
 struct AxPlatformAPI *PlatformAPI;
+
+static enum AxKeyModifier GetKeyModifiers(void)
+{
+    enum AxKeyModifier Mods;
+
+    if (GetKeyState(VK_CONTROL) & 0x8000) {
+        Mods |= AX_KEY_CTRL;
+    }
+
+    if (GetKeyState(VK_MENU) & 0x8000) {
+        Mods |= AX_KEY_ALT;
+    }
+
+    if (GetKeyState(VK_SHIFT) & 0x8000) {
+        Mods |= AX_KEY_SHIFT;
+    }
+
+    if ((GetKeyState(VK_LWIN) | GetKeyState(VK_RWIN)) & 0x8000) {
+        Mods |= AX_KEY_WIN;
+    }
+
+    if (GetKeyState(VK_CAPITAL) & 0x8000) {
+        Mods |= AX_KEY_CAPS;
+    }
+
+    return (Mods);
+}
 
 static DWORD GetWindowStyle(const AxWindow *Window)
 {
@@ -207,7 +239,16 @@ static LRESULT CALLBACK Win32MainWindowCallback(HWND Hwnd, UINT Message, WPARAM 
         case WM_KEYDOWN:
         case WM_KEYUP:
         {
-            Assert(!"Keyboard input came from a non-dispatch message!");
+            int Key, ScanCode;
+            const enum AxKeyState State = (HIWORD(LParam) & KF_UP) ? AX_KEY_RELEASED : AX_KEY_PRESSED;
+            const enum AxKeyModifier Mods = GetKeyModifiers();
+
+            ScanCode = (HIWORD(LParam) & (KF_EXTENDED | 0xff));
+            if (!ScanCode) {
+                ScanCode = MapVirtualKey((UINT)WParam, MAPVK_VK_TO_VSC);
+            }
+
+
         } break;
 
         // NOTE(mdeforge): WM_MOUSEMOVE is only received when the mouse moves INSIDE the window OR while "captured"
@@ -245,34 +286,172 @@ static LRESULT CALLBACK Win32MainWindowCallback(HWND Hwnd, UINT Message, WPARAM 
 
         case WM_INPUT:
         {
-            // If the cursor mode is normal or hidden, break. This section is for raw input.
-            if (!Window->CursorMode == AX_CURSOR_DISABLED) {
+            // If the cursor mode is normal or hidden, and the keyboard is disabled, break. This section is for raw input.
+            if (!Window->CursorMode == AX_CURSOR_DISABLED && Window->KeyboardMode == AX_KEYBOARD_DISABLED) {
                 break;
             }
 
             UINT RawInputSize;
-            static BYTE RawInputData[sizeof(RAWINPUT)]; // TODO(mdeforge): We may want to realloc this, not sure
+            BYTE RawInputData[sizeof(RAWINPUT)] = {0};
             if (!GetRawInputData((HRAWINPUT)LParam, RID_INPUT, RawInputData, &RawInputSize, sizeof(RAWINPUTHEADER))) {
                 break;
             }
 
             AxVec2 MouseDelta;
             RAWINPUT *RawInput = (RAWINPUT *)RawInputData;
-            if (RawInput->data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE)
+
+            if (RawInput->header.dwType == RIM_TYPEMOUSE)
             {
-                MouseDelta = (AxVec2)
+                if (RawInput->data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE)
                 {
-                    .X = (float)RawInput->data.mouse.lLastX - Window->Platform.Win32.LastCursorPos.X,
-                    .Y = (float)RawInput->data.mouse.lLastY - Window->Platform.Win32.LastCursorPos.Y
-                };
+                    MouseDelta = (AxVec2)
+                    {
+                        .X = (float)RawInput->data.mouse.lLastX - Window->Platform.Win32.LastCursorPos.X,
+                        .Y = (float)RawInput->data.mouse.lLastY - Window->Platform.Win32.LastCursorPos.Y
+                    };
+                }
+                else
+                {
+                    MouseDelta = (AxVec2)
+                    {
+                        .X = (float)RawInput->data.mouse.lLastX,
+                        .Y = (float)RawInput->data.mouse.lLastY
+                    };
+                }
             }
-            else
+            else if (RawInput->header.dwType == RIM_TYPEKEYBOARD)
             {
-                MouseDelta = (AxVec2)
+                // NOTE(mdeforge): https://blog.molecular-matters.com/2011/09/05/properly-handling-keyboard-input/
+                const RAWKEYBOARD RawKeyboard = RawInput->data.keyboard;
+
+                UINT VirtualKey = RawKeyboard.VKey;
+                UINT ScanCode = RawKeyboard.MakeCode;
+                UINT Flags = RawKeyboard.Flags;
+
+                if (VirtualKey == 255) {
+                    // Discard fake keys that are a part of an escape sequence
+                }
+                else if (VirtualKey == VK_SHIFT)
                 {
-                    .X = (float)RawInput->data.mouse.lLastX,
-                    .Y = (float)RawInput->data.mouse.lLastY
-                };
+                    // Correct left-hand/right-hand SHIFT
+                    VirtualKey = MapVirtualKey(ScanCode, MAPVK_VSC_TO_VK_EX);
+                }
+                else if (VirtualKey == VK_NUMLOCK)
+                {
+                    // Correct pause/break and num lock issues, and set the extra extended bit
+                    ScanCode = (MapVirtualKey(VirtualKey, MAPVK_VK_TO_VSC) | 0x100);
+                }
+
+                const bool IsEscSeq0 = ((Flags & RI_KEY_E0) != 0);
+                const bool IsEscSeq1 = ((Flags & RI_KEY_E1) != 0);
+                const bool WasUp = ((Flags & RI_KEY_BREAK) != 0);
+
+                if (IsEscSeq1)
+                {
+                    // For escaped sequences, turn the virtual key into the correct scan code using MapVirtualKey.
+                    // However, MapVirtualKey is unable to map VK_PAUSE (known bug), so we map it by hand.
+                    if (VirtualKey == VK_PAUSE) {
+                        ScanCode = 0x45;
+                    } else {
+                        ScanCode = MapVirtualKey(VirtualKey, MAPVK_VK_TO_VSC);
+                    }
+                }
+
+                switch (VirtualKey)
+                {
+                    // Right-hand CONTROL and ALT have their E0 bit set
+                    case VK_CONTROL:
+                    {
+                        VirtualKey = (IsEscSeq0) ? AX_KEY_RIGHT_CTRL : AX_KEY_LEFT_CTRL;
+                    } break;
+
+                    case VK_MENU:
+                    {
+                        VirtualKey = (IsEscSeq0) ? AX_KEY_RIGHT_ALT : AX_KEY_LEFT_ALT;
+                    } break;
+
+                    // NUMPAD ENTER has its E0 bit set
+                    case VK_RETURN:
+                    {
+                        if (IsEscSeq0) {
+                            VirtualKey = AX_KEY_NUMPAD_ENTER;
+                        }
+                    } break;
+
+                    // The standard INSERT, DELETE, HOME, END, PRIOR, and NEXT keys will always have the E0 bit set
+                    // but the same keys on the numpad will not.
+                    case VK_INSERT:
+                    {
+                        if (!IsEscSeq0) {
+                            VirtualKey = AX_KEY_NUMPAD_0;
+                        }
+                    } break;
+
+                    case VK_DELETE:
+                    {
+                        if (!IsEscSeq0) {
+                            VirtualKey = AX_KEY_NUMPAD_DECIMAL;
+                        }
+                    } break;
+
+                    case VK_HOME:
+                    {
+                        if (!IsEscSeq0) {
+                            VirtualKey = AX_KEY_NUMPAD_7;
+                        }
+                    } break;
+
+                    case VK_END:
+                    {
+                        if (!IsEscSeq0) {
+                            VirtualKey = AX_KEY_NUMPAD_1;
+                        }
+                    } break;
+
+                    case VK_PRIOR:
+                    {
+                        if (!IsEscSeq0) {
+                            VirtualKey = AX_KEY_NUMPAD_9;
+                        }
+                    } break;
+
+                    case VK_NEXT:
+                    {
+                        if (!IsEscSeq0) {
+                            VirtualKey = AX_KEY_NUMPAD_3;
+                        }
+                    } break;
+
+                    // The standard arrow keys will always have the E0 bit set, but the same keys
+                    // on the numpad will not.
+                    case VK_UP:
+                    {
+                        if (!IsEscSeq0) {
+                            VirtualKey = AX_KEY_NUMPAD_8;
+                        }
+                    } break;
+
+                    case VK_DOWN:
+                    {
+                        if (!IsEscSeq0) {
+                            VirtualKey = AX_KEY_NUMPAD_2;
+                        }
+                    } break;
+
+                    case VK_LEFT:
+                    {
+                        if (!IsEscSeq0) {
+                            VirtualKey = AX_KEY_NUMPAD_4;
+                        }
+                    } break;
+
+                    case VK_RIGHT:
+                    {
+                        if (!IsEscSeq0) {
+                            VirtualKey = AX_KEY_NUMPAD_6;
+                        }
+                    } break;
+                }
             }
 
             Window->VirtualCursorPos = Vec2Add(Window->VirtualCursorPos, MouseDelta);
@@ -444,6 +623,15 @@ static bool CreateNativeWindow(AxWindow *Window)
     SetProp(Handle, "AxonEngine", Window);
     Window->Platform.Win32.Handle = (uint64_t)Handle;
 
+    // Register raw input devices for this window
+    RAWINPUTDEVICE RawInputDevice[2];
+    RawInputDevice[0] = (RAWINPUTDEVICE){ HID_USAGE_PAGE_GENERIC, HID_USAGE_GENERIC_MOUSE, RIDEV_NOLEGACY, (HANDLE)Window->Platform.Win32.Handle };
+    RawInputDevice[1] = (RAWINPUTDEVICE){ HID_USAGE_PAGE_GENERIC, HID_USAGE_GENERIC_KEYBOARD, RIDEV_NOLEGACY, (HANDLE)Window->Platform.Win32.Handle };
+
+    if (!RegisterRawInputDevices(RawInputDevice, 2, sizeof(RAWINPUTDEVICE))) {
+        return (false);
+    }
+
     return (true);
 }
 
@@ -469,7 +657,7 @@ static void DestroyWindow_(AxWindow *Window)
     }
 }
 
-static AxWindow *CreateWindow_(const char *Title, int32_t X, int32_t Y, int32_t Width, int32_t Height, AxDisplay *Display, enum AxWindowStyleFlags Style)
+static AxWindow *CreateWindow_(const char *Title, int32_t X, int32_t Y, int32_t Width, int32_t Height, AxDisplay *Display, enum AxWindowStyle Style)
 {
     Assert(Title != NULL);
 
@@ -667,17 +855,17 @@ static void SetCursorMode(AxWindow *Window, enum AxCursorMode CursorMode)
 {
     Assert(Window != NULL);
 
+    // TODO(mdeforge): Validate CursorMode?
     Window->CursorMode = CursorMode;
-
     UpdateCursorImage(Window);
+}
 
-    if (CursorMode == AX_CURSOR_DISABLED)
-    {
-        const RAWINPUTDEVICE RawInputDevice = { HID_USAGE_PAGE_GENERIC, HID_USAGE_GENERIC_MOUSE, 0, (HANDLE)Window->Platform.Win32.Handle };
-        if (!RegisterRawInputDevices(&RawInputDevice, 1, sizeof(RAWINPUTDEVICE))) {
-            return;
-        }
-    }
+static void SetKeyboardMode(AxWindow *Window, enum AxKeyboardMode KeyboardMode)
+{
+    Assert(Window != NULL);
+
+    // TODO(mdeforge): Validate KeyboardMode?
+    Window->KeyboardMode = KeyboardMode;
 }
 
 struct AxWindowAPI *WindowAPI = &(struct AxWindowAPI) {
@@ -693,6 +881,7 @@ struct AxWindowAPI *WindowAPI = &(struct AxWindowAPI) {
     .PlatformData = PlatformData,
     .GetMouseCoords = GetMouseCoords,
     .SetCursorMode = SetCursorMode,
+    .SetKeyboardMode = SetKeyboardMode,
     // .EnableCursor = EnableCursor,
     // .DisableCursor = DisableCursor
 };
