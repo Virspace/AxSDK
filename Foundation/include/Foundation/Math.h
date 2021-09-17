@@ -78,17 +78,23 @@ inline AxVec2 Vec2Sub(AxVec2 A, AxVec2 B)
 
 inline AxVec2 Vec2Neg(AxVec2 V)
 {
-    return ((AxVec2){ -V.X, -V.Y });
+    AxVec2 Result = { -V.X, -V.Y };
+
+    return (Result);
 }
 
 inline AxVec2 Vec2MulS(AxVec2 V, double S)
 {
-    return ((AxVec2){ V.X * S, V.Y * S });
+    AxVec2 Result = { V.X * S, V.Y * S };
+
+    return (Result);
 }
 
 inline AxVec2 Vec2DivS(AxVec2 V, double S)
 {
-    return ((AxVec2){ V.X / S, V.Y / S });
+    AxVec2 Result = { V.X / S, V.Y / S };
+
+    return (Result);
 }
 
 inline double Vec2Len(AxVec2 V)
@@ -109,10 +115,12 @@ AxVec2 Vec2Norm(AxVec2 V)
 inline AxVec2 Vec2WeightedAvg3(AxVec2 A, AxVec2 B, AxVec2 C, double a, double b, double c)
 {
     double Weight = a + b + c;
-    return ((AxVec2) {
+    AxVec2 Result = {
         (A.X * a + B.X * b + C.X * c) / Weight,
         (A.Y * a + B.Y * b + C.Y * c) / Weight
-    });
+    };
+
+    return (Result);
 }
 
 inline AxVec3 Vec3Mul(AxVec3 Vector, double Value)
@@ -150,11 +158,13 @@ static AxVec3 Vec3Add(AxVec3 A, AxVec3 B)
 inline AxVec3 Vec3WeightedAvg3(AxVec3 A, AxVec3 B, AxVec3 C, double a, double b, double c)
 {
     double Weight = a + b + c;
-    return ((AxVec3) {
+    AxVec3 Result = {
         (A.X * a + B.X * b + C.X * c) / Weight,
         (A.Y * a + B.Y * b + C.Y * c) / Weight,
         (A.Z * a + B.Z * b + C.Z * c) / Weight
-    });
+    };
+
+    return (Result);
 }
 
 static AxVec4 Transform(AxMat4x4 A, AxVec4 P)
