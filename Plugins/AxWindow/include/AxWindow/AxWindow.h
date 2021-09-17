@@ -160,7 +160,7 @@ struct AxWindowAPI
      * @param Width The width of the window.
      * @param Height The height of the window.
      * @param Display The 
-     * @param StyleFlags A bitmask of AxWindowStyleFlags.
+     * @param StyleFlags A bitmask of AxWindowStyle.
      * @return An opaque pointer to a window.
      */
     AxWindow *(*CreateWindow)(const char *Title, int32_t X, int32_t Y, int32_t Width, int32_t Height,

@@ -620,13 +620,20 @@ static bool CreateNativeWindow(AxWindow *Window)
         return (false);
     }
 
+    // Add the AxWindow pointer to the window property list
     SetProp(Handle, "AxonEngine", Window);
     Window->Platform.Win32.Handle = (uint64_t)Handle;
 
+    // If fullscreen, disable legacy window messages such as WM_KEYDOWN, WM_CHAR, WM_MOUSEMOVE, etc.
+    DWORD Flags = 0;
+    if (Window->Style & AX_WINDOW_STYLE_FULLSCREEN) {
+        Flags = RIDEV_NOLEGACY;
+    }
+
     // Register raw input devices for this window
     RAWINPUTDEVICE RawInputDevice[2];
-    RawInputDevice[0] = (RAWINPUTDEVICE){ HID_USAGE_PAGE_GENERIC, HID_USAGE_GENERIC_MOUSE, RIDEV_NOLEGACY, (HANDLE)Window->Platform.Win32.Handle };
-    RawInputDevice[1] = (RAWINPUTDEVICE){ HID_USAGE_PAGE_GENERIC, HID_USAGE_GENERIC_KEYBOARD, RIDEV_NOLEGACY, (HANDLE)Window->Platform.Win32.Handle };
+    RawInputDevice[0] = (RAWINPUTDEVICE){ HID_USAGE_PAGE_GENERIC, HID_USAGE_GENERIC_MOUSE, Flags, Handle };
+    RawInputDevice[1] = (RAWINPUTDEVICE){ HID_USAGE_PAGE_GENERIC, HID_USAGE_GENERIC_KEYBOARD, Flags, Handle };
 
     if (!RegisterRawInputDevices(RawInputDevice, 2, sizeof(RAWINPUTDEVICE))) {
         return (false);
