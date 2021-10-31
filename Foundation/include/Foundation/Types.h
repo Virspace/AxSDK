@@ -44,7 +44,7 @@
 
 #define AXON_UNUSED(Variable) ((void)(Variable)) // Used to silence "unused variable warnings"
 
-#define SAFE_DELETE(a) if( (a) != NULL ) delete (a); (a) = NULL;
+#define SAFE_FREE(a) if( (a) != NULL ) free(a); (a) = NULL;
 
 #define Kilobytes(Value) ((Value) * 1024LL)
 #define Megabytes(Value) (Kilobytes(Value) * 1024LL)
@@ -55,6 +55,12 @@
 
 // TODO(mdeforge): Move to utilities
 #define FOURCC(String) (((u32)(String[0]) << 0) | ((u32)(String[1]) << 8) | ((u32)(String[2]) << 16) | ((u32)(String[3]) << 24))
+
+// This helps keep internal and external functions organized in source files
+// NOTE(mdeforge): This clashes with Google Test's "internal" namespace, so avoid defining it where gtest is used
+#if !defined(GOOGLETEST_INCLUDE_GTEST_GTEST_H_)
+#define internal static
+#endif
 
 typedef struct AxRect
 {
