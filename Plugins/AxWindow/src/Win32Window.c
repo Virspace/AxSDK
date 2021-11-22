@@ -152,6 +152,9 @@ static enum AxKeyModifier GetKeyModifiers(void)
 static DWORD GetWindowStyle(const AxWindow *Window)
 {
     Assert(Window != NULL);
+    if (!Window) {
+        return (0);
+    }
 
     // Clips all other overlapping sibling and child windows out of the draw region.
     // If these are not specified and they overlap, it is possible, when drawing within the client area
@@ -297,7 +300,7 @@ static LRESULT CALLBACK Win32MainWindowCallback(HWND Hwnd, UINT Message, WPARAM 
                 break;
             }
 
-            AxVec2 MouseDelta;
+            AxVec2 MouseDelta = {0};
             RAWINPUT *RawInput = (RAWINPUT *)RawInputData;
 
             if (RawInput->header.dwType == RIM_TYPEMOUSE)
@@ -586,6 +589,10 @@ static bool CreateNativeWindow(AxWindow *Window)
 {
     Assert(Window != NULL);
 
+    if (!Window) {
+        return (false);
+    }
+
     DWORD Style = GetWindowStyle(Window);
 
     if (Window->Style & AX_WINDOW_STYLE_FULLSCREEN ||
@@ -760,8 +767,11 @@ static bool HasRequestedClose(AxWindow *Window)
 {
     Assert(Window != NULL);
 
-    if (Window->IsRequestingClose) {
-        return (true);
+    if (Window)
+    {
+        if (Window->IsRequestingClose) {
+            return (true);
+        }
     }
 
     return (false);
@@ -771,8 +781,11 @@ static AxRect WindowRect(AxWindow *Window)
 {
     Assert(Window != NULL);
 
-    RECT Rect;
-    GetClientRect((HWND)Window->Platform.Win32.Handle, &Rect);
+    RECT Rect = { 0 };
+    
+    if (Window) {
+        GetClientRect((HWND)Window->Platform.Win32.Handle, &Rect);
+    }
 
     return (RectToAxRect(Rect));
 }
