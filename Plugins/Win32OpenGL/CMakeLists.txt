@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(Win32OpenGL VERSION 1.0.0 LANGUAGES CXX)
+project(Win32OpenGL VERSION 1.0.0 LANGUAGES C)
 include(CTest) # Enable unit testing via "make test" once the code has been compiled.
 
 #
@@ -60,8 +60,10 @@ target_include_directories(Win32OpenGL
 
 # Link dependencies
 target_link_libraries(Win32OpenGL
-    PRIVATE
+    PUBLIC
         Virspace::Foundation
+    PRIVATE
+        Virspace::Drawable
         opengl32
 )
 
@@ -122,11 +124,3 @@ export(EXPORT Win32OpenGLTargets
     FILE ${CMAKE_CURRENT_BINARY_DIR}/Win32OpenGLTargets.cmake
     NAMESPACE Virspace::
 )
-
-#
-# Testing
-#
-
-#if(BUILD_TESTING)
-#    add_subdirectory(tests)
-#endif()

@@ -2,22 +2,11 @@
 
 #include "Foundation/Types.h"
 
-// TODO(mdeforge): Create an agnostic renderer interface, render.h and move
-//                 non-OpenGL stuff there.
-
+//typedef struct OpenGLData OpenGLData;
 typedef struct AxWindow AxWindow;
 typedef struct AxMesh AxMesh;
-
-struct OpenGL;
-
-typedef struct AxMesh
-{
-    uint32_t VertexBuffer;
-    uint32_t ElementBuffer;
-    uint32_t VertexArray;
-    uint32_t Texture;
-    AxTransform Transform; // TODO(mdeforge): Want to eventually keep this separate
-} AxMesh;
+typedef struct AxTexture AxTexture;
+typedef struct AxDrawData AxDrawData;
 
 struct AxRenderCommands
 {
@@ -26,57 +15,44 @@ struct AxRenderCommands
     AxRect DrawRegion;
 };
 
-struct OpenGLInfo
+typedef struct AxOpenGLInfo
 {
     bool ModernContext;
 
     char *Vendor;
     char *Renderer;
-    char *Version;
-    char *ShadingLanguageVersion;
-};
-
-struct OpenGLProgramCommon
-{
-    uint32_t ProgramHandle;
-
-    uint32_t VertexPID;
-    uint32_t VertexNID;
-    uint32_t VertexUVID;
-    uint32_t VertexColorID;
-    uint32_t VertexLightIndex;
-    uint32_t VertexTextureIndex;
-
-    uint32_t SamplerCount;
-    uint32_t Samples[16];
-};
-
-struct ShaderToy
-{
-    uint32_t ProgramHandle;
-    uint32_t iMouse;
-    uint32_t iResolution;           // viewport resolution (in pixels)
-    uint32_t iTime;                 // shader playback time (in seconds)
-};
-
-struct OpenGL
-{
-    AxMesh Mesh;
-    //struct ZBiasShaderProgram ZBiasProgram; // TODO(mdeforge): Big hack for now
-    struct ShaderToy ShaderProgram; // TODO(mdeforge): Big hack for now
-    struct AxRenderCommands RenderCommands;
-    bool SupportsSRGBFramebuffer;
-};
+    char *GLVersion;
+    char *GLSLVersion;
+} AxOpenGLData;
 
 #define AXON_OPENGL_API_NAME "AxonOpenGLAPI"
 
 struct AxOpenGLAPI
 {
-    struct OpenGL *(*Create)(void);
-    void (*Init)(struct OpenGL *OpenGL, AxWindow *Window);
-    void (*Destroy)(struct OpenGL *OpenGL);
-    struct OpenGLInfo (*GetInfo)(bool ModernContext);
-    struct AxRenderCommands *(*BeginFrame)(struct OpenGL *OpenGL, uint32_t WindowWidth, uint32_t WindowHeight, AxRect DrawRegion);
-    void (*EndFrame)(struct OpenGL *OpenGL, struct AxRenderCommands *Commands);
-    //AxMesh *(CreateMesh)(void);
+    // Creates the OpenGL rendering backend, loads extensions, and 
+    void (*Create)(AxWindow *Window);
+    
+    // Destroys the OpenGL rendering backend
+    void (*Destroy)(void);
+
+    // Get information about the current OpenGL Context
+    struct AxOpenGLInfo (*GetInfo)(bool ModernContext);
+
+    // Updates the viewport and clears the buffer
+    void (*NewFrame)(void);
+
+    // TODO(mdeforge): Consider moving to a pipeline API?
+    // Add a drawable to the target draw data
+    //void (*AddDrawable)(AxDrawData DrawData, const AxDrawVert *Vertices, const AxDrawIndex *Indices, const int32_t VertexCount, const int32_t IndexCount);
+
+    // Pass this into the backend renderer. Valid after Render() until next call to NewFrame().
+    struct AxDrawData *(*GetDrawData)(void);
+
+    // 
+    void (*Render)(AxDrawData *DrawData);
+
+    //struct AxTexture *(*CreateTexture)(struct AxRenderContext *Context, int32_t Width, int32_t Height, void *Data);
+
+    // Exchanges the front and back buffers in the current pixel format for the window referenced
+    void (*SwapBuffers)(void);
 };
