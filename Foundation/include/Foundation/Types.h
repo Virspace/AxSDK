@@ -70,6 +70,16 @@ typedef struct AxRect
     int32_t Bottom;
 } AxRect;
 
+typedef union AxVert
+{
+    struct
+    {
+        float X, Y, Z;
+    };
+
+    float XYZ[3];
+} AxVert;
+
 typedef union AxVec2
 {
     struct
