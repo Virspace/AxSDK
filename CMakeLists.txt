@@ -53,3 +53,4 @@ add_subdirectory(Foundation)
 set_target_properties(Foundation PROPERTIES FOLDER Foundation)
 
 add_subdirectory(Plugins)
+add_subdirectory(Internal)
