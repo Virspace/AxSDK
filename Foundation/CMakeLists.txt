@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(Foundation VERSION 1.0.0 LANGUAGES C)
+project(Foundation VERSION 1.0.0 LANGUAGES C CXX)
 
 #if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     include(CTest) # Enable unit testing via "make test" once the code has been compiled.
@@ -29,7 +29,6 @@ target_sources(Foundation
         include/Foundation/Types.h
         include/Foundation/LinkedList.h
         src/APIRegistry.c
-        src/Win32AxArray.c
         #src/ImageLoader.c
         src/HashTable.c
         #src/Maths.c
