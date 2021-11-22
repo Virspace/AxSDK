@@ -408,5 +408,5 @@ inline double CalcRatio2D(AxVec2 A, AxVec2 B, AxVec2 Q)
 
 inline double Distance2D(AxVec2 A, AxVec2 B)
 {
-    return (sqrt(pow(B.X - A.X, 2) + pow(B.Y - A.Y, 2)));
+    return (sqrt(pow(B.X - A.X, 2.0) + pow(B.Y - A.Y, 2.0)));
 }
