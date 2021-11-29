@@ -11,6 +11,7 @@
 #include "Foundation/APIRegistry.h"
 #include "Foundation/Math.h"
 #include "Foundation/Platform.h"
+#include "Foundation/Camera.h"
 
 #define AXARRAY_IMPLEMENTATION
 #include "Foundation/AxArray.h"
@@ -65,6 +66,8 @@ struct AxPlatformAPI *PlatformAPI;
 typedef struct AxTexture
 {
     GLuint ID;
+    uint32_t Width;
+    uint32_t Height;
 } AxTexture;
 
 // typedef struct AxMesh
@@ -84,9 +87,12 @@ typedef struct AxViewport
 struct OpenGLData
 {
     GLuint ShaderHandle;
+    GLuint IMGUIShaderHandle;
+    GLuint AttribLocationTexture;
     GLuint AttribLocationVertexPos;
     GLuint AttribLocationVertexUV;
     GLuint AttribLocationVertexColor;
+    GLuint AttribLocationProjectMatrix;
     uint32_t VBOHandle;
     uint32_t ElementsHandle;
     bool SupportsSRGBFramebuffer;
@@ -195,60 +201,40 @@ internal GLuint CreateProgram(char *HeaderCode, char *VertexCode, char *Fragment
 internal bool CreateDeviceObjects(/*struct OpenGLData* Data*/)
 {
     char *Header = "";
-    //char *VertexCode = 
-    //    "#version 460 core\n\
-    //    layout (location = 0) in vec3 Position;\n\
-    //    //layout (location = 1) in vec3 Color;\n\
-    //    //layout (location = 2) in vec2 UV;\n\
-    //    \n\
-    //    //out vec3 FragColor;\n\
-    //    //out vec2 FragUV;\n\
-    //    \n\
-    //    void main()\n\
-    //    {\n\
-    //        gl_Position = vec4(Position, 1.0f);\n\
-    //        //FragColor = Color;\n\
-    //        //FragUV = UV;\n\
-    //    };";
-
-    //char *FragmentCode = 
-    //    "#version 460 core\n\
-    //    out vec4 OutColor;\n\
-    //    \n\
-    //    //in vec3 FragColor;\n\
-    //    //in vec2 FragUV;\n\
-    //    //\n\
-    //    //uniform sampler2D texture1;\n\
-    //    //\n\
-    //    void main()\n\
-    //    {\n\
-    //        OutColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n\
-    //        //OutColor = vec4(FragColor, 1.0);\n\
-    //    };";
 
     char* VertexCode = "#version 460 core\n\
-        layout (location = 0) in vec3 aPos;\n\
+        layout (location = 0) in vec3 Position;\n\
+        layout (location = 1) in vec2 UV;\n\
+        layout (location = 2) in vec4 Color;\n\
+        uniform mat4 ProjMtx;\n\
+        out vec2 Frag_UV;\n\
+        out vec4 Frag_Color;\n\
         void main()\n\
         {\n\
-           gl_Position = vec4(aPos, 1.0);\n\
+            Frag_UV = UV;\n\
+            Frag_Color = Color;\n\
+            //gl_Position = vec4(Position, 1.0);\n\
+            gl_Position = ProjMtx * vec4(Position.xy, 0, 1);\n\
         }";
 
     char* FragmentCode = "#version 460 core\n\
-        out vec4 FragColor;\n\
+        in vec2 Frag_UV;\n\
+        in vec4 Frag_Color;\n\
+        uniform sampler2D Texture;\n\
+        layout (location = 0) out vec4 Out_Color;\n\
         void main()\n\
         {\n\
-           FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n\
+           Out_Color = Frag_Color * texture(Texture, Frag_UV.st);\n\
         }";
 
     Data->ShaderHandle = CreateProgram(Header, VertexCode, FragmentCode);
 
     // TODO(mdeforge): glGetUniformLocation for Texture
-    Data->AttribLocationVertexPos = glGetAttribLocation(Data->ShaderHandle, "aPos");
-    //Data->AttribLocationVertexColor = glGetAttribLocation(Data->ShaderHandle, "Color");
-    //Data->AttribLocationVertexUV = glGetAttribLocation(Data->ShaderHandle, "UV");
-
-    //GLint resLoc = glGetProgramResourceLocation(OpenGLData->ShaderHandle, GL_UNIFORM, "iResolution");
-    //GLint mouseLoc = glGetProgramResourceLocation(OpenGLData->ShaderHandle, GL_UNIFORM, "iMouse");
+    Data->AttribLocationTexture = glGetUniformLocation(Data->ShaderHandle, "Texture");
+    Data->AttribLocationProjectMatrix = glGetUniformLocation(Data->ShaderHandle, "ProjMtx");
+    Data->AttribLocationVertexPos = glGetAttribLocation(Data->ShaderHandle, "Position");
+    Data->AttribLocationVertexUV = glGetAttribLocation(Data->ShaderHandle, "UV");
+    Data->AttribLocationVertexColor = glGetAttribLocation(Data->ShaderHandle, "Color");
 
     // Create buffers
     glGenBuffers(1, &Data->VBOHandle);
@@ -327,20 +313,36 @@ internal void Win32SetPixelFormat(/*struct OpenGLData *Data,*/ HDC WindowDC)
     SetPixelFormat(WindowDC, SuggestedPixelFormatIndex, &SuggestedPixelFormat);
 }
 
-internal void SetupRenderState(/*struct OpenGLData *Data,*/ AxDrawData *DrawData, GLuint VAO)
+internal void SetupRenderState(AxDrawData *DrawData, int FramebufferWidth, int FramebufferHeight, GLuint VAO)
 {
     // TODO(mdeforge): Each object is probably going to want its own render setup
-    
+
     // Enable alpha blending and scissor test, disable face culling and depth test
     glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glBlendEquation(GL_FUNC_ADD);
+    glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     glDisable(GL_CULL_FACE);
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_STENCIL_TEST);
     glEnable(GL_SCISSOR_TEST);
+    glDisable(GL_PRIMITIVE_RESTART);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
-    // TODO(mdeforge): Setup view port, orthographic projection matrix
-    //glViewport(0, 0, (GLsizei)DrawData->DisplaySize.X, (GLsizei)DrawData->DisplaySize.Y);
+    // Setup view port, orthographic projection matrix
+    glViewport(0, 0, (GLsizei)FramebufferWidth, (GLsizei)FramebufferHeight);
+
+    float L = (float)DrawData->DisplayPos.X;
+    float R = (float)DrawData->DisplayPos.X + (float)DrawData->DisplaySize.X;
+    float B = (float)DrawData->DisplayPos.Y;
+    float T = (float)DrawData->DisplayPos.Y + (float)DrawData->DisplaySize.Y;
+
+    AxMat4x4f OrthoProjection = AxCameraAPI->CalcOrthographicProjection(L, R, B, T, 0.1f, 100.0f);
+    OrthoProjection = Transpose(OrthoProjection);
+
+    glUseProgram(Data->ShaderHandle);
+    glUniform1i(Data->AttribLocationTexture, 0);
+    glUniformMatrix4fv(Data->AttribLocationProjectMatrix, 1, GL_FALSE, &OrthoProjection.E[0][0]);
+
     // float AspectRatio = (float)WindowWidth / (float)WindowHeight;
     // AxMat4x4Inv ProjectionMatrix = PerspectiveProjection(AspectRatio, 0.1f, 0.50f, 100.0f);
 
@@ -362,27 +364,21 @@ internal void SetupRenderState(/*struct OpenGLData *Data,*/ AxDrawData *DrawData
     // Bind the VAO first
     glBindVertexArray(VAO);
 
-    // Buffer Vertex Data
-    glBindBuffer(GL_ARRAY_BUFFER, Data->VBOHandle);
-
-    // Position Attribute
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-
-    // UV Attribute
-    //glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(AxDrawVert), (void*)(3 * sizeof(float)));
-    //glEnableVertexAttribArray(1);
-
-    // Color Attribute
-    //glVertexAttribPointer(2, 4, GL_UNSIGNED_BYTE, GL_FALSE, sizeof(AxDrawVert), (void*)(5 * sizeof(float)));
-    //glEnableVertexAttribArray(2);
-
     // Buffer Element Data
+    glBindBuffer(GL_ARRAY_BUFFER, Data->VBOHandle);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Data->ElementsHandle);
 
-    // NOTE(mdeforge): Dangerous
-    //glBindBuffer(GL_ARRAY_BUFFER, 0);
-    //glBindVertexArray(0);
+    // Position Attribute
+    glEnableVertexAttribArray(Data->AttribLocationVertexPos);
+    glVertexAttribPointer(Data->AttribLocationVertexPos, 3, GL_FLOAT, GL_FALSE, sizeof(AxDrawVert), (GLvoid *)offsetof(AxDrawVert, Position));
+
+    // UV Attribute
+    glEnableVertexAttribArray(Data->AttribLocationVertexUV);
+    glVertexAttribPointer(Data->AttribLocationVertexUV, 2, GL_FLOAT, GL_FALSE, sizeof(AxDrawVert), (GLvoid *)offsetof(AxDrawVert, UV));
+
+    // Color Attribute
+    glEnableVertexAttribArray(Data->AttribLocationVertexColor);
+    glVertexAttribPointer(Data->AttribLocationVertexColor, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(AxDrawVert), (GLvoid *)offsetof(AxDrawVert, Color));
 }
 
 internal void Win32LoadWGLExtensions(/*struct OpenGLData *Data*/)
@@ -470,6 +466,7 @@ internal void Win32LoadWGLExtensions(/*struct OpenGLData *Data*/)
     DestroyWindow(DummyWindow);
 }
 
+static GLuint VAO = 0;
 void Create(AxWindow *Window)
 {
     Assert(Window && "Create passed NULL Window pointer!");
@@ -514,6 +511,9 @@ void Create(AxWindow *Window)
 
     // Create default viewport
     Viewport = calloc(1, sizeof(struct AxViewport));
+
+    // Create default vertex array object
+    glGenVertexArrays(1, &VAO);
 }
 
 void NewFrame(void)
@@ -526,59 +526,103 @@ void NewFrame(void)
             CreateDeviceObjects(Data);
         }
     }
+
+    //glViewport(0, 0, (GLsizei)DrawData->DisplaySize.X, (GLsizei)DrawData->DisplaySize.Y);
+    glClearColor(0.42f, 0.51f, 0.54f, 0.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
 }
 
-static bool IsFirstTime = true;
 void RenderDrawData(AxDrawData *DrawData)
 {
     // TODO(mdeforge): Avoid rendering when minimized
 
-    // TODO(mdeforge): Maybe don't check for this every time and only setup RenderState once?
-    GLuint VAO = 0;
-    if (IsFirstTime)
-    {
-        glGenVertexArrays(1, &VAO);
-        SetupRenderState(DrawData, VAO);
-        glBindVertexArray(VAO);
+    int FramebufferWidth = (int)(DrawData->DisplaySize.X * DrawData->FramebufferScale.X);
+    int FramebufferHeight = (int)(DrawData->DisplaySize.Y * DrawData->FramebufferScale.Y);
+    if (FramebufferWidth <= 0 || FramebufferHeight <= 0) {
+        return;
     }
 
+    // Backup GL state
+    GLenum last_active_texture; glGetIntegerv(GL_ACTIVE_TEXTURE, (GLint*)&last_active_texture);
+    glActiveTexture(GL_TEXTURE0);
+    GLuint last_program; glGetIntegerv(GL_CURRENT_PROGRAM, (GLint*)&last_program);
+    GLuint last_texture; glGetIntegerv(GL_TEXTURE_BINDING_2D, (GLint*)&last_texture);
+#ifdef IMGUI_IMPL_OPENGL_MAY_HAVE_BIND_SAMPLER
+    GLuint last_sampler; if (bd->GlVersion >= 330) { glGetIntegerv(GL_SAMPLER_BINDING, (GLint*)&last_sampler); } else { last_sampler = 0; }
+#endif
+    GLuint last_array_buffer; glGetIntegerv(GL_ARRAY_BUFFER_BINDING, (GLint*)&last_array_buffer);
+#ifdef IMGUI_IMPL_OPENGL_USE_VERTEX_ARRAY
+    GLuint last_vertex_array_object; glGetIntegerv(GL_VERTEX_ARRAY_BINDING, (GLint*)&last_vertex_array_object);
+#endif
+#ifdef IMGUI_IMPL_HAS_POLYGON_MODE
+    GLint last_polygon_mode[2]; glGetIntegerv(GL_POLYGON_MODE, last_polygon_mode);
+#endif
+    GLint last_viewport[4]; glGetIntegerv(GL_VIEWPORT, last_viewport);
+    GLint last_scissor_box[4]; glGetIntegerv(GL_SCISSOR_BOX, last_scissor_box);
+    GLenum last_blend_src_rgb; glGetIntegerv(GL_BLEND_SRC_RGB, (GLint*)&last_blend_src_rgb);
+    GLenum last_blend_dst_rgb; glGetIntegerv(GL_BLEND_DST_RGB, (GLint*)&last_blend_dst_rgb);
+    GLenum last_blend_src_alpha; glGetIntegerv(GL_BLEND_SRC_ALPHA, (GLint*)&last_blend_src_alpha);
+    GLenum last_blend_dst_alpha; glGetIntegerv(GL_BLEND_DST_ALPHA, (GLint*)&last_blend_dst_alpha);
+    GLenum last_blend_equation_rgb; glGetIntegerv(GL_BLEND_EQUATION_RGB, (GLint*)&last_blend_equation_rgb);
+    GLenum last_blend_equation_alpha; glGetIntegerv(GL_BLEND_EQUATION_ALPHA, (GLint*)&last_blend_equation_alpha);
+    GLboolean last_enable_blend = glIsEnabled(GL_BLEND);
+    GLboolean last_enable_cull_face = glIsEnabled(GL_CULL_FACE);
+    GLboolean last_enable_depth_test = glIsEnabled(GL_DEPTH_TEST);
+    GLboolean last_enable_stencil_test = glIsEnabled(GL_STENCIL_TEST);
+    GLboolean last_enable_scissor_test = glIsEnabled(GL_SCISSOR_TEST);
+
+    // TODO(mdeforge): Maybe don't check for this every time and only setup RenderState once?
+    SetupRenderState(DrawData, FramebufferWidth, FramebufferHeight, VAO);
+
+    // Will project scissor/clipping rectangles into framebuffer space
+    AxVec2 ClipOff = DrawData->DisplayPos;
+    AxVec2 ClipScale = DrawData->FramebufferScale;
+
     // Render command lists
+    size_t a = ArraySize(DrawData->CommandList);
     for (int i = 0; i < ArraySize(DrawData->CommandList); i++)
     {
-        AxDrawList *DrawList = DrawData->CommandList[i];
-        const AxDrawVert *VertexBuffer = DrawList->VertexBuffer;
-        const AxDrawIndex *IndexBuffer = DrawList->IndexBuffer;
-        
+        const AxDrawList *DrawList = &DrawData->CommandList[i];
+
+        // If the draw list dirty, buffer data
+        //if (DrawList->IsDirty)
+        //{
+            const AxDrawVert *VertexBuffer = DrawList->VertexBuffer;
+            const AxDrawIndex *IndexBuffer = DrawList->IndexBuffer;
+            // TODO(mdeforge): SubData???
+            // TODO(mdeforge): Better to do at DrawList level like before or at command level?
+            // Upload vertex and index buffers
+            glBufferData(GL_ARRAY_BUFFER, ArraySizeInBytes(VertexBuffer), VertexBuffer, GL_STREAM_DRAW);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, ArraySizeInBytes(IndexBuffer), IndexBuffer, GL_STREAM_DRAW);
+            //DrawList->IsDirty = false;
+        //}
+
+        size_t CommandBufferSize = ArraySize(DrawList->CommandBuffer);
         for (int j = 0; j < ArraySize(DrawList->CommandBuffer); j++)
         {
-            AxDrawCommand *Command = &DrawList->CommandBuffer[j];
+            const AxDrawCommand *Command = &DrawList->CommandBuffer[j];
             if (Command)
             {
-                // NOTE(mdeforge): This needs to occur AFTER SetupRenderState
-                // since SetupRenderState is binding the buffers...
-                
-                // TODO(mdeforge): Re-evaluate given the above note
-                
-                // If the draw list dirty, buffer data
-                if (DrawList->IsDirty)
-                {
-                    // Upload vertex and index buffers
-                    // TODO(mdeforge): SubData???
-                    // TODO(mdeforge): Better to do at DrawList level like before or at command level?
-                    glBufferData(GL_ARRAY_BUFFER, ArraySizeInBytes(VertexBuffer), VertexBuffer, GL_STATIC_DRAW);
-                    glBufferData(GL_ELEMENT_ARRAY_BUFFER, ArraySizeInBytes(IndexBuffer), IndexBuffer, GL_STATIC_DRAW);
-                    DrawList->IsDirty = false;
-                }
-           
                 // Project scissor/clipping rectangles into framebuffer space
+                AxVec2 ClipMin = {
+                    (Command->ClipRect.X - ClipOff.X) * ClipScale.X,
+                    (Command->ClipRect.Y - ClipOff.Y) * ClipScale.Y
+                };
+
+                AxVec2 ClipMax = {
+                    (Command->ClipRect.Z - ClipOff.X) * ClipScale.X,
+                    (Command->ClipRect.W - ClipOff.Y) * ClipScale.Y
+                };
+
+                if (ClipMax.X < ClipMin.X || ClipMax.Y < ClipMin.Y) {
+                    continue;
+                }
 
                 // Apply scissor/clipping rectangle (Y is inverted in OpenGL)
-                //glScissor
+                glScissor((int)ClipMin.X, (int)(FramebufferHeight - ClipMax.Y), (int)(ClipMax.X - ClipMin.X), (int)(ClipMax.Y - ClipMin.Y));
 
                 // Bind texture and draw
-                //glBindTexture(GL_TEXTURE_2D, (GLuint)Command->TextureID);
-                glUseProgram(Data->ShaderHandle);
-                
+                glBindTexture(GL_TEXTURE_2D, (GLuint)Command->TextureID);
                 glDrawElementsBaseVertex(
                     GL_TRIANGLES,
                     (GLsizei)Command->ElementCount,
@@ -589,16 +633,56 @@ void RenderDrawData(AxDrawData *DrawData)
             }
         }
     }
+
+    // TODO(mdeforge): Oh boy...
+    // Clean up this save/restore state business. How IMGUI specific is this? Should it be brought to the surface in AxEditor?
+    // Fix the render glitch (test on my computer as well)
+    // Add OpenGL version ifdefs
+    // Create render paths (get ready for non immediate mode stuff)
+
+    // Restore modified GL state
+    glUseProgram(last_program);
+    glBindTexture(GL_TEXTURE_2D, last_texture);
+#ifdef IMGUI_IMPL_OPENGL_MAY_HAVE_BIND_SAMPLER
+    if (bd->GlVersion >= 330)
+        glBindSampler(0, last_sampler);
+#endif
+    glActiveTexture(last_active_texture);
+#ifdef IMGUI_IMPL_OPENGL_USE_VERTEX_ARRAY
+    glBindVertexArray(last_vertex_array_object);
+#endif
+    glBindBuffer(GL_ARRAY_BUFFER, last_array_buffer);
+    glBlendEquationSeparate(last_blend_equation_rgb, last_blend_equation_alpha);
+    glBlendFuncSeparate(last_blend_src_rgb, last_blend_dst_rgb, last_blend_src_alpha, last_blend_dst_alpha);
+    if (last_enable_blend) glEnable(GL_BLEND); else glDisable(GL_BLEND);
+    if (last_enable_cull_face) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
+    if (last_enable_depth_test) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
+    if (last_enable_stencil_test) glEnable(GL_STENCIL_TEST); else glDisable(GL_STENCIL_TEST);
+    if (last_enable_scissor_test) glEnable(GL_SCISSOR_TEST); else glDisable(GL_SCISSOR_TEST);
+#ifdef IMGUI_IMPL_OPENGL_MAY_HAVE_PRIMITIVE_RESTART
+    if (bd->GlVersion >= 310) { if (last_enable_primitive_restart) glEnable(GL_PRIMITIVE_RESTART); else glDisable(GL_PRIMITIVE_RESTART); }
+#endif
+
+#ifdef IMGUI_IMPL_HAS_POLYGON_MODE
+    glPolygonMode(GL_FRONT_AND_BACK, (GLenum)last_polygon_mode[0]);
+#endif
+    glViewport(last_viewport[0], last_viewport[1], (GLsizei)last_viewport[2], (GLsizei)last_viewport[3]);
+    glScissor(last_scissor_box[0], last_scissor_box[1], (GLsizei)last_scissor_box[2], (GLsizei)last_scissor_box[3]);
 }
 
 void Render(AxDrawData *DrawData)
 {
-    //glViewport(0, 0, (GLsizei)DrawData->DisplaySize.X, (GLsizei)DrawData->DisplaySize.Y);
-    glViewport(0, 0, 1920, 1080);
-    glClearColor(0.42f, 0.51f, 0.54f, 0.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
+    glViewport(0, 0, (GLsizei)DrawData->DisplaySize.X, (GLsizei)DrawData->DisplaySize.Y);
+    // glClearColor(0.42f, 0.51f, 0.54f, 0.0f);
+    // glClear(GL_COLOR_BUFFER_BIT);
 
     RenderDrawData(DrawData);
+
+    // Check for errors
+    GLenum err;
+    while((err = glGetError()) != GL_NO_ERROR) {
+      printf("GL Error: %d\n", err);
+    }
 }
 
 static struct AxOpenGLInfo GetInfo(bool ModernContext)
@@ -629,30 +713,46 @@ void AxSwapBuffers(void)
     SwapBuffers(wglGetCurrentDC());
 }
 
-// static AxTexture *CreateTexture(struct OpenGL *OpenGL, int32_t Width, int32_t Height, void *Data)
-// {
-//     Assert(OpenGL && "CreateTexture passed NULL OpenGL Pointer!");
+static AxTexture *CreateTexture(const uint32_t Width, const uint32_t Height, const void *Pixels)
+{
+    //Assert(OpenGL && "CreateTexture passed NULL OpenGL Pointer!");
 
-//     AxTexture *Texture = calloc(1, sizeof(AxTexture));
-//     if (!Texture) {
-//         return (NULL);
-//     }
+    AxTexture *Texture = calloc(1, sizeof(AxTexture));
+    if (!Texture) {
+        return (NULL);
+    }
 
-//     glGenTextures(1, &Texture->ID);
-//     glBindTexture(GL_TEXTURE_2D, Texture->ID);
+    // GLint LastTexture;
+    // glGetIntegerv(GL_TEXTURE_BINDING_2D, &LastTexture);
 
-//     // Setup filtering parameters
-//     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-//     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-//     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); // This is required on WebGL for non power-of-two textures
-//     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE); // Same
+    glGenTextures(1, &Texture->ID);
+    glBindTexture(GL_TEXTURE_2D, Texture->ID);
 
-//     // Upload pixels into texture
-//     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, Width, Height, 0, GL_RGBA, GL_UNSIGNED_BYTE, Data);
-//     glGenerateMipmap(GL_TEXTURE_2D);
+    // Setup filtering parameters
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); // This is required on WebGL for non power-of-two textures
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE); // Same
 
-//     return (Texture);
-// }
+    // Upload pixels into texture
+#if defined(GL_UNPACK_ROW_LENGTH) && !defined(__EMSCRIPTEN__)
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+#endif
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, Width, Height, 0, GL_RGBA, GL_UNSIGNED_BYTE, Pixels);
+    //glGenerateMipmap(GL_TEXTURE_2D);
+
+    // Restore state
+    //glBindTexture(GL_TEXTURE_2D, LastTexture);
+
+    return (Texture);
+}
+
+static uint32_t TextureID(const struct AxTexture *Texture)
+{
+    Assert(Texture);
+
+    return ((Texture) ? Texture->ID : 0);
+}
 
 static void Destroy(void)
 {
@@ -666,6 +766,8 @@ struct AxOpenGLAPI *AxOpenGLAPI = &(struct AxOpenGLAPI) {
     .NewFrame = NewFrame,
     .GetDrawData = GetDrawData,
     .Render = Render,
+    .CreateTexture = CreateTexture,
+    .TextureID = TextureID,
     .SwapBuffers = AxSwapBuffers
 };
 
