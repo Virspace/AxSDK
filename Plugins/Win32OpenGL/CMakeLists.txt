@@ -45,6 +45,7 @@ target_compile_features(Win32OpenGL PRIVATE c_std_11)
 target_compile_definitions(Win32OpenGL
 	PRIVATE
         GL_GLEXT_PROTOTYPES
+        AXON_LINKS_FOUNDATION
 )
 
 include_directories("$<JOIN:$<TARGET_PROPERTY:AxWindow,INCLUDE_DIRECTORIES>,;>")
