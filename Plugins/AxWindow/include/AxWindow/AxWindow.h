@@ -3,7 +3,6 @@
 #include "Foundation/Types.h"
 
 // Key codes
-#define AX_KEY_ESC 0x001
 #define AX_KEY_1 0x002
 #define AX_KEY_2 0x003
 #define AX_KEY_3 0x004
@@ -40,6 +39,17 @@
 #define AX_KEY_X 0x02D
 #define AX_KEY_Y 0x015
 #define AX_KEY_Z 0x02C
+
+#define AX_KEY_BACKSPACE 0x00E
+#define AX_KEY_DELETE 0x153
+#define AX_KEY_END 0x14F
+#define AX_KEY_ENTER 0x01C
+#define AX_KEY_ESCAPE 0x001
+#define AX_KEY_HOME 0x147
+#define AX_KEY_INSERT 0x152
+#define AX_KEY_PAGE_DOWN 0x151
+#define AX_KEY_PAGE_UP 0x149
+#define AX_KEY_PAUSE 0x045
 #define AX_KEY_UP 0x148
 #define AX_KEY_DOWN 0x150
 #define AX_KEY_LEFT 0x14B
@@ -49,8 +59,10 @@
 #define AX_KEY_LEFT_SHIFT 0x02A
 #define AX_KEY_RIGHT_SHIFT 0x036
 #define AX_KEY_SPACE 0x039
+#define AX_KEY_TAB 0x00F
 #define AX_KEY_LEFT_CTRL 0x01D
 #define AX_KEY_RIGHT_CTRL 0x11D
+
 #define AX_KEY_NUMPAD_0 0x052
 #define AX_KEY_NUMPAD_1 0x04F
 #define AX_KEY_NUMPAD_2 0x050
@@ -63,6 +75,19 @@
 #define AX_KEY_NUMPAD_9 0x049
 #define AX_KEY_NUMPAD_ENTER 0x11C
 #define AX_KEY_NUMPAD_DECIMAL 0x053
+
+// Mouse buttons
+#define AX_MOUSE_BUTTON_1      0
+#define AX_MOUSE_BUTTON_2      1
+#define AX_MOUSE_BUTTON_3      2
+#define AX_MOUSE_BUTTON_LAST   AX_MOUSE_BUTTON_3
+#define AX_MOUSE_BUTTON_LEFT   AX_MOUSE_BUTTON_1 // Alias
+#define AX_MOUSE_BUTTON_RIGHT  AX_MOUSE_BUTTON_2 // Alias
+#define AX_MOUSE_BUTTON_MIDDLE AX_MOUSE_BUTTON_3 // Alias
+
+// Mouse button states
+#define AX_RELEASE             0
+#define AX_PRESS               1
 
 // Window style flags
 enum AxWindowStyle
@@ -224,7 +249,19 @@ struct AxWindowAPI
      * @brief 
      * 
      */
+    int32_t (*GetMouseButton)(const AxWindow *Window, int32_t Button);
+
+    /**
+     * @brief 
+     * 
+     */
     void (*SetCursorMode)(AxWindow *Window, enum AxCursorMode CursorMode);
+
+    /**
+     * @brief 
+     * 
+     */
+    enum AxCursorMode (*GetCursorMode)(AxWindow *Window);
 
     /**
      * @brief 
