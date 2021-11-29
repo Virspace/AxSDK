@@ -31,7 +31,7 @@ struct AxOpenGLAPI
 {
     // Creates the OpenGL rendering backend, loads extensions, and 
     void (*Create)(AxWindow *Window);
-    
+
     // Destroys the OpenGL rendering backend
     void (*Destroy)(void);
 
@@ -41,17 +41,14 @@ struct AxOpenGLAPI
     // Updates the viewport and clears the buffer
     void (*NewFrame)(void);
 
-    // TODO(mdeforge): Consider moving to a pipeline API?
-    // Add a drawable to the target draw data
-    //void (*AddDrawable)(AxDrawData DrawData, const AxDrawVert *Vertices, const AxDrawIndex *Indices, const int32_t VertexCount, const int32_t IndexCount);
-
     // Pass this into the backend renderer. Valid after Render() until next call to NewFrame().
     struct AxDrawData *(*GetDrawData)(void);
 
-    // 
+    // Render DrawData
     void (*Render)(AxDrawData *DrawData);
 
-    //struct AxTexture *(*CreateTexture)(struct AxRenderContext *Context, int32_t Width, int32_t Height, void *Data);
+    struct AxTexture *(*CreateTexture)(const uint32_t Width, const uint32_t Height, const void *Pixels);
+    uint32_t (*TextureID)(const struct AxTexture *Texture);
 
     // Exchanges the front and back buffers in the current pixel format for the window referenced
     void (*SwapBuffers)(void);
