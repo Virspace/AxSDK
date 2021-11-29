@@ -15,14 +15,11 @@ void DrawListAddDrawable(AxDrawList *DrawList, const AxDrawVert *Vertices, const
         .IndexOffset = ArraySize(DrawList->IndexBuffer),   // Size of the buffer up until this point
         .ElementCount = ArraySize(Indices)
     };
-    size_t Size = DrawCommand.IndexOffset;
+
     ArrayPush(DrawList->CommandBuffer, DrawCommand);
     ArrayPushArray(DrawList->VertexBuffer, Vertices);
     ArrayPushArray(DrawList->IndexBuffer, Indices);
     DrawList->IsDirty = true;
-    //DrawList->VertexCount += VertexCount;
-    //DrawList->IndexCount += IndexCount;
-    Size = DrawCommand.IndexOffset;
 }
 
 void DrawListAddQuad(AxDrawList *DrawList, const AxVert TopRight, const AxVert BottomRight, const AxVert BottomLeft, const AxVert TopLeft)
@@ -31,11 +28,12 @@ void DrawListAddQuad(AxDrawList *DrawList, const AxVert TopRight, const AxVert B
 
     AxDrawVert *Vertices = NULL;
     AxDrawIndex *Indices = NULL;
+    AxUV UV1 = (AxUV) { .U = 0, .V = 0 };
 
-    ArrayPush(Vertices, (AxDrawVert){ .Position = TopRight });
-    ArrayPush(Vertices, (AxDrawVert){ .Position = BottomRight });
-    ArrayPush(Vertices, (AxDrawVert){ .Position = BottomLeft });
-    ArrayPush(Vertices, (AxDrawVert){ .Position = TopLeft });
+    ArrayPush(Vertices, ((AxDrawVert){ .Position = TopRight, .UV = UV1, .Color = 0 }));
+    ArrayPush(Vertices, ((AxDrawVert){ .Position = BottomRight, .UV = UV1, .Color = 0 }));
+    ArrayPush(Vertices, ((AxDrawVert){ .Position = BottomLeft, .UV = UV1, .Color = 0 }));
+    ArrayPush(Vertices, ((AxDrawVert){ .Position = TopLeft, .UV = UV1, .Color = 0 }));
 
     ArrayPush(Indices, 0);
     ArrayPush(Indices, 1);
