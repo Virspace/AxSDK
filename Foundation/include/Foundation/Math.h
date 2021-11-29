@@ -224,6 +224,19 @@ static AxMat4x4 Translate(AxMat4x4 A, AxVec3 T)
     return(R);
 }
 
+static AxMat4x4f Transpose(const AxMat4x4f Matrix)
+{
+    AxMat4x4f Result = {0};
+    for (int i = 0; i < 4; ++i)
+    {
+        for (int j = 0; j < 4; ++j) {
+            Result.E[j][i] = Matrix.E[i][j];
+        }
+    }
+
+    return (Result);
+}
+
 inline AxMat4x4 XRotation(double Angle)
 {
     double c = Cos(Angle);
