@@ -94,6 +94,8 @@ struct AxWindow
     enum AxKeyboardMode KeyboardMode;
     // Virtual cursor position
     AxVec2 VirtualCursorPos;
+    // Mouse button state
+    char MouseButtons[AX_MOUSE_BUTTON_LAST];
 };
 
 static AxRect RectToAxRect(RECT Rect)
@@ -250,9 +252,46 @@ static LRESULT CALLBACK Win32MainWindowCallback(HWND Hwnd, UINT Message, WPARAM 
             if (!ScanCode) {
                 ScanCode = MapVirtualKey((UINT)WParam, MAPVK_VK_TO_VSC);
             }
-
-
         } break;
+
+        case WM_LBUTTONDOWN:
+        case WM_RBUTTONDOWN:
+        case WM_MBUTTONDOWN:
+        case WM_LBUTTONUP:
+        case WM_RBUTTONUP:
+        case WM_MBUTTONUP:
+        {
+            int Button, Action;
+
+            if (Message == WM_LBUTTONDOWN || Message == WM_LBUTTONUP) {
+                Button = AX_MOUSE_BUTTON_LEFT;
+            } else if (Message == WM_RBUTTONDOWN || Message == WM_RBUTTONUP) {
+                Button = AX_MOUSE_BUTTON_RIGHT;
+            } else if (Message == WM_MBUTTONDOWN || Message == WM_MBUTTONUP) {
+                Button = AX_MOUSE_BUTTON_MIDDLE;
+            }
+
+            if (Message == WM_LBUTTONDOWN || Message == WM_RBUTTONDOWN ||
+                Message == WM_MBUTTONDOWN)
+            {
+                Action = AX_PRESS;
+            }
+            else
+            {
+                Action = AX_RELEASE;
+            }
+
+            Window->MouseButtons[Button] = (char)Action;
+
+            // for (int i = 0; i <= AX_MOUSE_BUTTON_LAST; ++i)
+            // {
+            //     if (Window->MouseButtons[i] == AX_PRESS) {
+            //         break;
+            //     }
+
+            //     //SetCapture(Window->Platform.Win32.Handle);
+            // }
+        }
 
         // NOTE(mdeforge): WM_MOUSEMOVE is only received when the mouse moves INSIDE the window OR while "captured"
         // https://docs.microsoft.com/en-us/windows/win32/learnwin32/mouse-movement
@@ -657,6 +696,8 @@ static void Init(void)
 
 static void DestroyWindow_(AxWindow *Window)
 {
+    Assert(Window);
+    
     if (Window == NULL) {
         return;
     }
@@ -870,6 +911,17 @@ static void GetMouseCoords(const AxWindow *Window, AxVec2 *Position)
     // }
 }
 
+static int32_t GetMouseButton(const AxWindow *Window, int32_t Button)
+{
+    Assert(Window);
+
+    if (Button < AX_MOUSE_BUTTON_1 || Button > AX_MOUSE_BUTTON_LAST) {
+        return AX_RELEASE;
+    }
+
+    return (Window->MouseButtons[Button]);
+}
+
 // TODO(mdeforge): Update cursor image using enable/disable cursor functions
 static void SetCursorMode(AxWindow *Window, enum AxCursorMode CursorMode)
 {
@@ -878,6 +930,13 @@ static void SetCursorMode(AxWindow *Window, enum AxCursorMode CursorMode)
     // TODO(mdeforge): Validate CursorMode?
     Window->CursorMode = CursorMode;
     UpdateCursorImage(Window);
+}
+
+static enum AxCursorMode GetCursorMode(AxWindow *Window)
+{
+  Assert(Window != NULL);
+
+  return (Window->CursorMode);
 }
 
 static void SetKeyboardMode(AxWindow *Window, enum AxKeyboardMode KeyboardMode)
@@ -900,7 +959,9 @@ struct AxWindowAPI *WindowAPI = &(struct AxWindowAPI) {
     .SetWindowVisible = SetWindowVisible,
     .PlatformData = PlatformData,
     .GetMouseCoords = GetMouseCoords,
+    .GetMouseButton = GetMouseButton,
     .SetCursorMode = SetCursorMode,
+    .GetCursorMode = GetCursorMode,
     .SetKeyboardMode = SetKeyboardMode,
     // .EnableCursor = EnableCursor,
     // .DisableCursor = DisableCursor
