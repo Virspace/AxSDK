@@ -80,6 +80,16 @@ typedef union AxVert
     float XYZ[3];
 } AxVert;
 
+typedef union AxUV
+{
+    struct
+    {
+        float U, V;
+    };
+
+    float UV[2];
+} AxUV;
+
 typedef union AxVec2
 {
     struct
@@ -115,13 +125,6 @@ typedef union AxVec3
     double XYZ[3];
 } AxVec3;
 
-typedef struct AxTransform
-{
-    AxVec3 Position;
-    AxVec3 Rotation;
-    AxVec3 Scale;
-} AxTransform;
-
 typedef union AxVec4
 {
   struct
@@ -146,6 +149,11 @@ typedef struct AxMat4x4
     double E[4][4]; // ROW MAJOR!
 } AxMat4x4;
 
+typedef struct AxMat4x4f
+{
+    float E[4][4];
+} AxMat4x4f;
+
 typedef struct AxMat4x4Inv
 {
     AxMat4x4 Forward;
@@ -163,6 +171,13 @@ typedef struct AxClock
 {
     int64_t TimeStamp;
 } AxClock;
+
+typedef struct AxTransform
+{
+    AxVec3 Position;
+    AxVec3 Rotation;
+    AxVec3 Scale;
+} AxTransform;
 
 // Banned functions
 
