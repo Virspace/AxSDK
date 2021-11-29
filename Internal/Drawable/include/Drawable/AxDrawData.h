@@ -9,10 +9,11 @@ typedef struct AxDrawData
     bool Valid;
     size_t TotalIndexCount;
     size_t TotalVertexCount;
-    AxDrawList **CommandList;
+    AxDrawList *CommandList;
+    AxVec2 DisplayPos;
     AxVec2 DisplaySize;
     AxVec2 FramebufferScale;
 } AxDrawData;
 
-void DrawDataAddDrawList(AxDrawData *DrawData, AxDrawList *DrawList);
+void DrawDataAddDrawList(AxDrawData *DrawData, const AxDrawList DrawList);
 void DrawDataClear(AxDrawData *DrawData);

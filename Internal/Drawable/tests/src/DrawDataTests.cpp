@@ -62,7 +62,7 @@ protected:
         }
 
         for (int i = 0; i < 3; i++) {
-            DrawDataAddDrawList(&DrawData, &DrawLists[i]);
+            DrawDataAddDrawList(&DrawData, DrawLists[i]);
         }
     }
 

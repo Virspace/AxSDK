@@ -3,14 +3,13 @@
 #include "Foundation/Types.h"
 
 typedef struct AxDrawCommand AxDrawCommand;
-
 typedef uint32_t AxDrawIndex;
 
 typedef struct AxDrawVert
 {
     AxVert Position;
-    //AxVec2 UV;
-    //uint32_t Color; // TODO(mdeforge): Store as hex, or something? Provide convert functions?
+    AxUV UV;
+    uint32_t Color; // TODO(mdeforge): Store as hex, or something? Provide convert functions?
 } AxDrawVert;
 
 // TODO(mdeforge): Rename buffer to something else, Array?
@@ -22,9 +21,6 @@ typedef struct AxDrawList
     AxDrawVert    *VertexBuffer;           // Vertex Buffer
     AxDrawIndex   *IndexBuffer;            // Index Buffer
     bool          IsDirty;                 // Triggers upload of the buffers to GPU
-
-    //size_t VertexCount;
-    //size_t IndexCount;
 } AxDrawList;
 
 void DrawListAddDrawable(AxDrawList *DrawList, const AxDrawVert *Vertices, const AxDrawIndex *Indices, const size_t VertexCount, const size_t IndexCount);
