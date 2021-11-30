@@ -68,14 +68,6 @@ typedef struct AxMonitorPlatformData
     };
 } AxMonitorPlatformData;
 
-struct AxDisplayMode
-{
-    int32_t Width;
-    int32_t Height;
-    int32_t RefreshRateHz;
-    AxVec3 BitDepth;
-};
-
 struct AxWindow
 {
     // Window title
@@ -153,7 +145,7 @@ static enum AxKeyModifier GetKeyModifiers(void)
 
 static DWORD GetWindowStyle(const AxWindow *Window)
 {
-    Assert(Window != NULL);
+    Assert(Window);
     if (!Window) {
         return (0);
     }
@@ -187,7 +179,7 @@ static DWORD GetWindowStyle(const AxWindow *Window)
 
 static void UpdateCursorImage(const AxWindow *Window)
 {
-    Assert(Window != NULL);
+    Assert(Window);
 
     if (Window->CursorMode == AX_CURSOR_NORMAL) {
         SetCursor(LoadCursor(0, IDC_ARROW));
@@ -257,22 +249,29 @@ static LRESULT CALLBACK Win32MainWindowCallback(HWND Hwnd, UINT Message, WPARAM 
         case WM_LBUTTONDOWN:
         case WM_RBUTTONDOWN:
         case WM_MBUTTONDOWN:
+        case WM_XBUTTONDOWN:
         case WM_LBUTTONUP:
         case WM_RBUTTONUP:
         case WM_MBUTTONUP:
+        case WM_XBUTTONUP:
         {
             int Button, Action;
 
+            // XBUTTON1 and XBUTTON2 are often located on the sides of the mouse, near the base.
             if (Message == WM_LBUTTONDOWN || Message == WM_LBUTTONUP) {
                 Button = AX_MOUSE_BUTTON_LEFT;
             } else if (Message == WM_RBUTTONDOWN || Message == WM_RBUTTONUP) {
                 Button = AX_MOUSE_BUTTON_RIGHT;
             } else if (Message == WM_MBUTTONDOWN || Message == WM_MBUTTONUP) {
                 Button = AX_MOUSE_BUTTON_MIDDLE;
+            } else if (GET_XBUTTON_WPARAM(WParam) == XBUTTON1) {
+                Button = AX_MOUSE_BUTTON_4;
+            } else {
+                Button = AX_MOUSE_BUTTON_5;
             }
 
             if (Message == WM_LBUTTONDOWN || Message == WM_RBUTTONDOWN ||
-                Message == WM_MBUTTONDOWN)
+                Message == WM_MBUTTONDOWN || Message == WM_XBUTTONDOWN)
             {
                 Action = AX_PRESS;
             }
@@ -281,16 +280,15 @@ static LRESULT CALLBACK Win32MainWindowCallback(HWND Hwnd, UINT Message, WPARAM 
                 Action = AX_RELEASE;
             }
 
+            // TODO(mdeforge): More detection needed here, sticky keys? caps lock?
+            // TODO(mdeforge): Click callback?
             Window->MouseButtons[Button] = (char)Action;
 
-            // for (int i = 0; i <= AX_MOUSE_BUTTON_LAST; ++i)
-            // {
-            //     if (Window->MouseButtons[i] == AX_PRESS) {
-            //         break;
-            //     }
+            if (Message == WM_XBUTTONDOWN || Message == WM_XBUTTONUP) {
+                return TRUE;
+            }
 
-            //     //SetCapture(Window->Platform.Win32.Handle);
-            // }
+            return (0);
         }
 
         // NOTE(mdeforge): WM_MOUSEMOVE is only received when the mouse moves INSIDE the window OR while "captured"
@@ -615,7 +613,7 @@ static bool Win32RegisterWindowClass()
 // NOTE(mdeforge): Basically does what GetDpiForWindow() does, but is compatible back to Windows 8.1
 static UINT GetNearestMonitorDPI(const AxWindow *Window)
 {
-    Assert(Window != NULL);
+    Assert(Window);
 
     UINT XDPI, YDPI;
     HANDLE MonitorHandle = MonitorFromWindow((HWND)Window->Platform.Win32.Handle, MONITOR_DEFAULTTONEAREST);
@@ -626,7 +624,7 @@ static UINT GetNearestMonitorDPI(const AxWindow *Window)
 
 static bool CreateNativeWindow(AxWindow *Window)
 {
-    Assert(Window != NULL);
+    Assert(Window);
 
     if (!Window) {
         return (false);
@@ -712,7 +710,7 @@ static void DestroyWindow_(AxWindow *Window)
     }
 }
 
-static AxWindow *CreateWindow_(const char *Title, int32_t X, int32_t Y, int32_t Width, int32_t Height, AxDisplay *Display, enum AxWindowStyle Style)
+static AxWindow *CreateWindow_(const char *Title, int32_t X, int32_t Y, int32_t Width, int32_t Height, enum AxWindowStyle Style)
 {
     Assert(Title != NULL);
 
@@ -757,7 +755,7 @@ static AxWindow *CreateWindow_(const char *Title, int32_t X, int32_t Y, int32_t 
 
 static void PollEvents(AxWindow *Window)
 {
-    Assert(Window != NULL);
+    Assert(Window);
 
     MSG Message = {0};
 
@@ -806,7 +804,7 @@ static void PollEvents(AxWindow *Window)
 
 static bool HasRequestedClose(AxWindow *Window)
 {
-    Assert(Window != NULL);
+    Assert(Window);
 
     if (Window)
     {
@@ -818,22 +816,26 @@ static bool HasRequestedClose(AxWindow *Window)
     return (false);
 }
 
-static AxRect WindowRect(AxWindow *Window)
+static void GetWindowPosition(AxWindow *Window, int32_t *X, int32_t *Y)
 {
-    Assert(Window != NULL);
+    Assert(Window);
 
-    RECT Rect = { 0 };
-    
-    if (Window) {
+    *X = 0;
+    *Y = 0;
+
+    if (Window)
+    {
+        RECT Rect = { 0 };
         GetClientRect((HWND)Window->Platform.Win32.Handle, &Rect);
-    }
 
-    return (RectToAxRect(Rect));
+        *X = Rect.left;
+        *Y = Rect.top;
+    }
 }
 
 static void SetWindowPosition(AxWindow *Window, int32_t X, int32_t Y)
 {
-    Assert(Window != NULL);
+    Assert(Window);
 
     if (Window->Style & AX_WINDOW_STYLE_FULLSCREEN) {
         return;
@@ -852,9 +854,26 @@ static void SetWindowPosition(AxWindow *Window, int32_t X, int32_t Y)
     Window->Rect = Rect;
 }
 
+static void GetWindowSize(AxWindow *Window, int32_t *Width, int32_t *Height)
+{
+    Assert(Window);
+
+    *Width = 0;
+    *Height = 0;
+
+    if (Window)
+    {
+        RECT Rect = { 0 };
+        GetClientRect((HWND)Window->Platform.Win32.Handle, &Rect);
+
+        *Width = Rect.right - Rect.left;
+        *Height = Rect.bottom - Rect.top;
+    }
+}
+
 static void SetWindowSize(AxWindow *Window, int32_t Width, int32_t Height)
 {
-    Assert(Window != NULL);
+    Assert(Window);
 
     if (Window->Style & AX_WINDOW_STYLE_FULLSCREEN) {
         return;
@@ -874,7 +893,7 @@ static void SetWindowSize(AxWindow *Window, int32_t Width, int32_t Height)
 
 static void SetWindowVisible(AxWindow *Window, bool IsVisible)
 {
-    Assert(Window != NULL);
+    Assert(Window);
 
     if (IsVisible) {
         ShowWindow((HWND)Window->Platform.Win32.Handle, SW_SHOW);
@@ -883,9 +902,9 @@ static void SetWindowVisible(AxWindow *Window, bool IsVisible)
     }
 }
 
-static AxWindowPlatformData PlatformData(const AxWindow *Window)
+static AxWindowPlatformData GetPlatformData(const AxWindow *Window)
 {
-    Assert(Window != NULL);
+    Assert(Window);
 
     AxWindowPlatformData Data = {0};
     if (Window) {
@@ -897,12 +916,13 @@ static AxWindowPlatformData PlatformData(const AxWindow *Window)
 
 static void GetMouseCoords(const AxWindow *Window, AxVec2 *Position)
 {
-    Assert(Window != NULL);
+    Assert(Window);
 
     if (Position) {
         *Position = (AxVec2){0};
     }
 
+    // TODO(mdeforge): Does cursor mode have an effect on this?
     // if (Window->CursorMode == AX_CURSOR_DISABLED)
     // {
     //     if (Position) {
@@ -925,7 +945,7 @@ static int32_t GetMouseButton(const AxWindow *Window, int32_t Button)
 // TODO(mdeforge): Update cursor image using enable/disable cursor functions
 static void SetCursorMode(AxWindow *Window, enum AxCursorMode CursorMode)
 {
-    Assert(Window != NULL);
+    Assert(Window);
 
     // TODO(mdeforge): Validate CursorMode?
     Window->CursorMode = CursorMode;
@@ -934,14 +954,14 @@ static void SetCursorMode(AxWindow *Window, enum AxCursorMode CursorMode)
 
 static enum AxCursorMode GetCursorMode(AxWindow *Window)
 {
-  Assert(Window != NULL);
+  Assert(Window);
 
   return (Window->CursorMode);
 }
 
 static void SetKeyboardMode(AxWindow *Window, enum AxKeyboardMode KeyboardMode)
 {
-    Assert(Window != NULL);
+    Assert(Window);
 
     // TODO(mdeforge): Validate KeyboardMode?
     Window->KeyboardMode = KeyboardMode;
@@ -953,11 +973,12 @@ struct AxWindowAPI *WindowAPI = &(struct AxWindowAPI) {
     .DestroyWindow = DestroyWindow_,
     .PollEvents = PollEvents,
     .HasRequestedClose = HasRequestedClose,
-    .WindowRect = WindowRect,
+    .GetWindowPosition = GetWindowPosition,
     .SetWindowPosition = SetWindowPosition,
+    .GetWindowSize = GetWindowSize,
     .SetWindowSize = SetWindowSize,
     .SetWindowVisible = SetWindowVisible,
-    .PlatformData = PlatformData,
+    .GetPlatformData = GetPlatformData,
     .GetMouseCoords = GetMouseCoords,
     .GetMouseButton = GetMouseButton,
     .SetCursorMode = SetCursorMode,
@@ -970,7 +991,7 @@ struct AxWindowAPI *WindowAPI = &(struct AxWindowAPI) {
 AXON_DLL_EXPORT void LoadPlugin(struct AxAPIRegistry *APIRegistry, bool Load)
 {
     HMODULE ShcoreHandle = LoadLibrary("shcore");
-    GetDpiForMonitor = GetProcAddress(ShcoreHandle, "GetDpiForMonitor");
+    GetDpiForMonitor = (GetDpiForMonitorPtr)GetProcAddress(ShcoreHandle, "GetDpiForMonitor");
 
     if (APIRegistry)
     {

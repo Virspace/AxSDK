@@ -80,7 +80,12 @@
 #define AX_MOUSE_BUTTON_1      0
 #define AX_MOUSE_BUTTON_2      1
 #define AX_MOUSE_BUTTON_3      2
-#define AX_MOUSE_BUTTON_LAST   AX_MOUSE_BUTTON_3
+#define AX_MOUSE_BUTTON_4      3
+#define AX_MOUSE_BUTTON_5      4
+#define AX_MOUSE_BUTTON_6      5
+#define AX_MOUSE_BUTTON_7      6
+#define AX_MOUSE_BUTTON_8      7
+#define AX_MOUSE_BUTTON_LAST   AX_MOUSE_BUTTON_8
 #define AX_MOUSE_BUTTON_LEFT   AX_MOUSE_BUTTON_1 // Alias
 #define AX_MOUSE_BUTTON_RIGHT  AX_MOUSE_BUTTON_2 // Alias
 #define AX_MOUSE_BUTTON_MIDDLE AX_MOUSE_BUTTON_3 // Alias
@@ -184,12 +189,10 @@ struct AxWindowAPI
      * @param Y The vertical position of the window.
      * @param Width The width of the window.
      * @param Height The height of the window.
-     * @param Display The 
      * @param StyleFlags A bitmask of AxWindowStyle.
      * @return An opaque pointer to a window.
      */
-    AxWindow *(*CreateWindow)(const char *Title, int32_t X, int32_t Y, int32_t Width, int32_t Height,
-        AxDisplay *Display, enum AxWindowStyle StyleFlags);
+    AxWindow *(*CreateWindow)(const char *Title, int32_t X, int32_t Y, int32_t Width, int32_t Height, enum AxWindowStyle StyleFlags);
 
     /**
      * @brief Destroys the target window.
@@ -198,92 +201,108 @@ struct AxWindowAPI
     void (*DestroyWindow)(AxWindow *Window);
 
     /**
-     * @brief 
-     * 
+     * @brief Polls the events of the target window.
+     * @param Window The target window.
      */
     void (*PollEvents)(AxWindow *Window);
 
     /**
-     * @brief 
-     * 
+     * @brief Checks if the target window has requested to close.
+     * @param Window The target window.
+     * @return True if the target window has requested a close, otherwise false.
      */
     bool (*HasRequestedClose)(AxWindow *Window);
 
     /**
-     * @brief 
-     * 
+     * @brief Gets the position of the target window.
+     * @param Window The target window.
+     * @param X The X position of the target window.
+     * @param Y The Y position of the target window.
      */
-    AxRect (*WindowRect)(AxWindow *Window);
+    void (*GetWindowPosition)(AxWindow *Window, int32_t *X, int32_t *Y);
 
     /**
-     * @brief 
-     * 
+     * @brief Sets the position of the target window.
+     * @param Window The target window.
+     * @param X The desired X position of the target window.
+     * @param Y The desired Y position of the target window.
      */
     void (*SetWindowPosition)(AxWindow *Window, int32_t X, int32_t Y);
 
     /**
-     * @brief 
-     * 
+     * @brief Gets the size of the target window.
+     * @param Window The target window.
+     * @param Width The Width of the target window.
+     * @param Height The Height of the target window.
+     */
+    void (*GetWindowSize)(AxWindow *Window, int32_t *Width, int32_t *Height);
+
+    /**
+     * @brief Sets the size of the target window.
+     * @param Window The target window.
+     * @param Width The desired width of the target window.
+     * @param Height The desired height of the target window.
      */
     void (*SetWindowSize)(AxWindow *Window, int32_t Width, int32_t Height);
 
     /**
-     * @brief 
-     * 
+     * @brief Sets the visibility of the target window.
+     * @param Window The target window.
+     * @param IsVisible The desired visibility of the target window.
      */
     void (*SetWindowVisible)(AxWindow *Window, bool IsVisible);
 
     /**
      * @brief Returns platform window data
-     * 
+     * @param Window The target window.
+     * @return The platform data for the target window if target is valid, otherwise a zero-initialized AxWindowPlatformData struct.
      */
-    AxWindowPlatformData (*PlatformData)(const AxWindow *Window);
+    AxWindowPlatformData (*GetPlatformData)(const AxWindow *Window);
 
     /**
-     * @brief 
-     * 
+     * @brief Gets the mouse coordinates of the target window.
+     * @param Window The target window.
+     * @param Position To be filled out by GetMouseCoords.
      */
     void (*GetMouseCoords)(const AxWindow *Window, AxVec2 *Position);
 
     /**
-     * @brief 
-     * 
+     * @brief Gets the state of the target mouse button on the target window.
+     * @param Window The target window.
+     * @param Button The target button.
+     * @return An integer representing the AxKeyState of the button.
      */
     int32_t (*GetMouseButton)(const AxWindow *Window, int32_t Button);
 
     /**
-     * @brief 
-     * 
+     * @brief Sets the cursor mode of the target window.
+     * @param Window The target window.
+     * @param CursorMode The desired AxCursorMode.
      */
     void (*SetCursorMode)(AxWindow *Window, enum AxCursorMode CursorMode);
 
     /**
-     * @brief 
-     * 
+     * @brief Gets the cursor mode of the target window.
+     * @param Window The target window.
      */
     enum AxCursorMode (*GetCursorMode)(AxWindow *Window);
 
     /**
-     * @brief 
-     * 
+     * @brief Sets the keyboard mode of the target window.
+     * @param Window The target window.
+     * @param KeyboardMode The desired KeyboardMode of the target window.
      */
     void (*SetKeyboardMode)(AxWindow *Window, enum AxKeyboardMode KeyboardMode);
 
-    /**
-     * @brief 
-     * 
-     */
-    
-
     // /**
-    //  * @brief 
-    //  * 
+    //  * @brief Enables the cursor on the target window.
+    //  * @param The target window.
     //  */
     // void (*EnableCursor)(const AxWindow *Window);
 
     // /**
-    //  * @brief 
-    //  * 
+    //  * @brief Disables the cursor on the target window.
+    //  * @param The target window.
     //  */
     // void (*DisableCursor)(const AxWindow *Window);
 };
