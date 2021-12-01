@@ -5,11 +5,12 @@
 typedef struct AxDrawCommand AxDrawCommand;
 typedef uint32_t AxDrawIndex;
 
+// TODO(mdeforge): Consider making this an opaque data structure so the user can define their own.
 typedef struct AxDrawVert
 {
     AxVert Position;
     AxUV UV;
-    uint32_t Color; // TODO(mdeforge): Store as hex, or something? Provide convert functions?
+    uint32_t Color; // RGBA, 4 bytes each
 } AxDrawVert;
 
 // TODO(mdeforge): Rename buffer to something else, Array?
