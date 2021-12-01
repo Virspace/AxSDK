@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(Win32OpenGL VERSION 1.0.0 LANGUAGES C)
+project(AxOpenGL VERSION 1.0.0 LANGUAGES C)
 include(CTest) # Enable unit testing via "make test" once the code has been compiled.
 
 #
@@ -7,33 +7,20 @@ include(CTest) # Enable unit testing via "make test" once the code has been comp
 #
 
 # Add the library
-add_library(Win32OpenGL SHARED)
-add_library(Virspace::Win32OpenGL ALIAS Win32OpenGL)
+add_library(AxOpenGL SHARED)
+add_library(Virspace::AxOpenGL ALIAS AxOpenGL)
 
 # Add sources to target
-target_sources(Win32OpenGL
+target_sources(AxOpenGL
     PRIVATE
-        include/Win32OpenGL/RendererOpenGL.h
+        include/AxOpenGL/AxOpenGL.h
         include/GL/gl3w.h
         include/GL/glcorearb.h
         src/gl3w.c
         #include/glad/glad.h
         #include/KHR/khrplatform.h
         #src/glad.c
-        src/Win32OpenGL.c
-        #src/imgui/imconfig.h
-        #src/imgui/imgui.cpp
-        #src/imgui/imgui.h
-        #src/imgui/imgui_demo.cpp
-        #src/imgui/imgui_draw.cpp
-        #src/imgui/imgui_impl_opengl3.cpp
-        #src/imgui/imgui_impl_opengl3.h
-        #src/imgui/imgui_internal.h
-        #src/imgui/imgui_tables.cpp
-        #src/imgui/imgui_widgets.cpp
-        #src/imgui/imstb_rectpack.h
-        #src/imgui/imstb_textedit.h
-        #src/imgui/imstb_truetype.h
+        src/AxOpenGLWin32.c
 )
 
 #
@@ -41,8 +28,8 @@ target_sources(Win32OpenGL
 #
 
 # Add compiler features and definitions
-target_compile_features(Win32OpenGL PRIVATE c_std_11)
-target_compile_definitions(Win32OpenGL
+target_compile_features(AxOpenGL PRIVATE c_std_11)
+target_compile_definitions(AxOpenGL
 	PRIVATE
         GL_GLEXT_PROTOTYPES
         AXON_LINKS_FOUNDATION
@@ -51,16 +38,16 @@ target_compile_definitions(Win32OpenGL
 include_directories("$<JOIN:$<TARGET_PROPERTY:AxWindow,INCLUDE_DIRECTORIES>,;>")
 
 # Specify include directories to use when compiling a given target
-target_include_directories(Win32OpenGL
+target_include_directories(AxOpenGL
     PUBLIC
-        $<INSTALL_INTERFACE:include/Win32OpenGL> # Used for working with an 'install tree'
+        $<INSTALL_INTERFACE:include/AxOpenGL> # Used for working with an 'install tree'
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> # Used for working with a 'build tree'
     PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/include/Win32OpenGL
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/AxOpenGL
 )
 
 # Link dependencies
-target_link_libraries(Win32OpenGL
+target_link_libraries(AxOpenGL
     PUBLIC
         Virspace::Foundation
     PRIVATE
@@ -73,15 +60,15 @@ target_link_libraries(Win32OpenGL
 #
 
 # Set the install destination for cmake files
-set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/Win32OpenGL)
+set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/AxOpenGL)
 
 # Install include directory
 include(GNUInstallDirs)
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 # Specify the name of the export set the targets belong to
-install(TARGETS Win32OpenGL
-    EXPORT Win32OpenGLTargets
+install(TARGETS AxOpenGL
+    EXPORT AxOpenGLTargets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/$<CONFIG>
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/$<CONFIG>
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}/$<CONFIG>
@@ -89,8 +76,8 @@ install(TARGETS Win32OpenGL
 )
 
 # Export the targets to a script
-install(EXPORT Win32OpenGLTargets
-    FILE Win32OpenGLTargets.cmake
+install(EXPORT AxOpenGLTargets
+    FILE AxOpenGLTargets.cmake
     NAMESPACE Virspace::
     DESTINATION ${INSTALL_CONFIGDIR}
 )
@@ -98,8 +85,8 @@ install(EXPORT Win32OpenGLTargets
 # Generate a config file that includes the exports
 include(CMakePackageConfigHelpers)
 configure_package_config_file(
-    ${CMAKE_CURRENT_LIST_DIR}/cmake/Win32OpenGLConfig.cmake.in
-    ${CMAKE_CURRENT_BINARY_DIR}/cmake/Win32OpenGLConfig.cmake
+    ${CMAKE_CURRENT_LIST_DIR}/cmake/AxOpenGLConfig.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/cmake/AxOpenGLConfig.cmake
     INSTALL_DESTINATION ${INSTALL_CONFIGDIR}
     NO_SET_AND_CHECK_MACRO
     NO_CHECK_REQUIRED_COMPONENTS_MACRO
@@ -107,21 +94,21 @@ configure_package_config_file(
 
 # Generate the version file for the config file
 write_basic_package_version_file(
-    ${CMAKE_CURRENT_BINARY_DIR}/cmake/Win32OpenGLConfigVersion.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/cmake/AxOpenGLConfigVersion.cmake
     VERSION ${PROJECT_VERSION}
     COMPATIBILITY SameMajorVersion
 )
 
 # Install the Config, ConfigVersion and custom Find Module
 install(FILES
-    #${CMAKE_CURRENT_LIST_DIR}/FindWin32OpenGL.cmake
-    ${CMAKE_CURRENT_BINARY_DIR}/cmake/Win32OpenGLConfig.cmake
-    ${CMAKE_CURRENT_BINARY_DIR}/cmake/Win32OpenGLConfigVersion.cmake
+    #${CMAKE_CURRENT_LIST_DIR}/FindAxOpenGL.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/cmake/AxOpenGLConfig.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/cmake/AxOpenGLConfigVersion.cmake
     DESTINATION ${INSTALL_CONFIGDIR}
 )
 
 # Make this project available from the build directory
-export(EXPORT Win32OpenGLTargets
-    FILE ${CMAKE_CURRENT_BINARY_DIR}/Win32OpenGLTargets.cmake
+export(EXPORT AxOpenGLTargets
+    FILE ${CMAKE_CURRENT_BINARY_DIR}/AxOpenGLTargets.cmake
     NAMESPACE Virspace::
 )
