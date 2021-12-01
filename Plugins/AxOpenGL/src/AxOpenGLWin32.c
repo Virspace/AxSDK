@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include "GL/gl3w.h"
 
-#include "RendererOpenGL.h"
+#include "AxOpenGL.h"
 #include "Drawable/AxDrawData.h"
 #include "Drawable/AxDrawCommand.h"
 #include "Drawable/AxDrawList.h"
