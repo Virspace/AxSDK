@@ -315,7 +315,12 @@ internal void Win32SetPixelFormat(/*struct OpenGLData *Data,*/ HDC WindowDC)
 
 internal void SetupRenderState(AxDrawData *DrawData, int FramebufferWidth, int FramebufferHeight, GLuint VAO)
 {
-    // TODO(mdeforge): Each object is probably going to want its own render setup
+    // NOTE(mdeforge): This is currently setup for orthographic sprite drawing since the immediate focus is 2D sprites.
+
+    // TODO(mdeforge): Instead of each object going through it's own render setup, batch like objects as a part of the
+    // same AxDrawData. The editor should help achieve this. All objects with the same VAO should be together.
+
+    // TODO(mdeforge): Create the concept of a camera and organize ortho vs perp based on camera
 
     // Enable alpha blending and scissor test, disable face culling and depth test
     glEnable(GL_BLEND);
@@ -358,8 +363,6 @@ internal void SetupRenderState(AxDrawData *DrawData, int FramebufferWidth, int F
     // AxMat4x4 MVP = Mat4x4Mul(ProjectionMatrix.Forward, ModelView);
 
     //glProgramUniformMatrix4fv(Program->ProgramHandle, FullTransformMatrixLocation, 1, GL_FALSE, &MVP.E[0][0]);
-
-    // TODO(mdeforge): Everything below here pretty much just needs to happen once...
 
     // Bind the VAO first
     glBindVertexArray(VAO);
@@ -478,7 +481,7 @@ void Create(AxWindow *Window)
     Win32LoadWGLExtensions(Data);
 
     // Get device context for Window
-    AxWin32WindowData Win32WindowData = WindowAPI->PlatformData(Window).Win32;
+    AxWin32WindowData Win32WindowData = WindowAPI->GetPlatformData(Window).Win32;
     HDC DeviceContext = GetDC((HWND)Win32WindowData.Handle);
 
     // Set pixel format for the device
@@ -542,36 +545,6 @@ void RenderDrawData(AxDrawData *DrawData)
         return;
     }
 
-    // Backup GL state
-    GLenum last_active_texture; glGetIntegerv(GL_ACTIVE_TEXTURE, (GLint*)&last_active_texture);
-    glActiveTexture(GL_TEXTURE0);
-    GLuint last_program; glGetIntegerv(GL_CURRENT_PROGRAM, (GLint*)&last_program);
-    GLuint last_texture; glGetIntegerv(GL_TEXTURE_BINDING_2D, (GLint*)&last_texture);
-#ifdef IMGUI_IMPL_OPENGL_MAY_HAVE_BIND_SAMPLER
-    GLuint last_sampler; if (bd->GlVersion >= 330) { glGetIntegerv(GL_SAMPLER_BINDING, (GLint*)&last_sampler); } else { last_sampler = 0; }
-#endif
-    GLuint last_array_buffer; glGetIntegerv(GL_ARRAY_BUFFER_BINDING, (GLint*)&last_array_buffer);
-#ifdef IMGUI_IMPL_OPENGL_USE_VERTEX_ARRAY
-    GLuint last_vertex_array_object; glGetIntegerv(GL_VERTEX_ARRAY_BINDING, (GLint*)&last_vertex_array_object);
-#endif
-#ifdef IMGUI_IMPL_HAS_POLYGON_MODE
-    GLint last_polygon_mode[2]; glGetIntegerv(GL_POLYGON_MODE, last_polygon_mode);
-#endif
-    GLint last_viewport[4]; glGetIntegerv(GL_VIEWPORT, last_viewport);
-    GLint last_scissor_box[4]; glGetIntegerv(GL_SCISSOR_BOX, last_scissor_box);
-    GLenum last_blend_src_rgb; glGetIntegerv(GL_BLEND_SRC_RGB, (GLint*)&last_blend_src_rgb);
-    GLenum last_blend_dst_rgb; glGetIntegerv(GL_BLEND_DST_RGB, (GLint*)&last_blend_dst_rgb);
-    GLenum last_blend_src_alpha; glGetIntegerv(GL_BLEND_SRC_ALPHA, (GLint*)&last_blend_src_alpha);
-    GLenum last_blend_dst_alpha; glGetIntegerv(GL_BLEND_DST_ALPHA, (GLint*)&last_blend_dst_alpha);
-    GLenum last_blend_equation_rgb; glGetIntegerv(GL_BLEND_EQUATION_RGB, (GLint*)&last_blend_equation_rgb);
-    GLenum last_blend_equation_alpha; glGetIntegerv(GL_BLEND_EQUATION_ALPHA, (GLint*)&last_blend_equation_alpha);
-    GLboolean last_enable_blend = glIsEnabled(GL_BLEND);
-    GLboolean last_enable_cull_face = glIsEnabled(GL_CULL_FACE);
-    GLboolean last_enable_depth_test = glIsEnabled(GL_DEPTH_TEST);
-    GLboolean last_enable_stencil_test = glIsEnabled(GL_STENCIL_TEST);
-    GLboolean last_enable_scissor_test = glIsEnabled(GL_SCISSOR_TEST);
-
-    // TODO(mdeforge): Maybe don't check for this every time and only setup RenderState once?
     SetupRenderState(DrawData, FramebufferWidth, FramebufferHeight, VAO);
 
     // Will project scissor/clipping rectangles into framebuffer space
@@ -582,20 +555,20 @@ void RenderDrawData(AxDrawData *DrawData)
     size_t a = ArraySize(DrawData->CommandList);
     for (int i = 0; i < ArraySize(DrawData->CommandList); i++)
     {
-        const AxDrawList *DrawList = &DrawData->CommandList[i];
+        AxDrawList *DrawList = &DrawData->CommandList[i];
 
         // If the draw list dirty, buffer data
-        //if (DrawList->IsDirty)
-        //{
+        if (DrawList->IsDirty)
+        {
             const AxDrawVert *VertexBuffer = DrawList->VertexBuffer;
             const AxDrawIndex *IndexBuffer = DrawList->IndexBuffer;
             // TODO(mdeforge): SubData???
             // TODO(mdeforge): Better to do at DrawList level like before or at command level?
             // Upload vertex and index buffers
-            glBufferData(GL_ARRAY_BUFFER, ArraySizeInBytes(VertexBuffer), VertexBuffer, GL_STREAM_DRAW);
-            glBufferData(GL_ELEMENT_ARRAY_BUFFER, ArraySizeInBytes(IndexBuffer), IndexBuffer, GL_STREAM_DRAW);
-            //DrawList->IsDirty = false;
-        //}
+            glBufferData(GL_ARRAY_BUFFER, ArraySizeInBytes(VertexBuffer), VertexBuffer, GL_STATIC_DRAW);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, ArraySizeInBytes(IndexBuffer), IndexBuffer, GL_STATIC_DRAW);
+            DrawList->IsDirty = false;
+        }
 
         size_t CommandBufferSize = ArraySize(DrawList->CommandBuffer);
         for (int j = 0; j < ArraySize(DrawList->CommandBuffer); j++)
@@ -633,41 +606,6 @@ void RenderDrawData(AxDrawData *DrawData)
             }
         }
     }
-
-    // TODO(mdeforge): Oh boy...
-    // Clean up this save/restore state business. How IMGUI specific is this? Should it be brought to the surface in AxEditor?
-    // Fix the render glitch (test on my computer as well)
-    // Add OpenGL version ifdefs
-    // Create render paths (get ready for non immediate mode stuff)
-
-    // Restore modified GL state
-    glUseProgram(last_program);
-    glBindTexture(GL_TEXTURE_2D, last_texture);
-#ifdef IMGUI_IMPL_OPENGL_MAY_HAVE_BIND_SAMPLER
-    if (bd->GlVersion >= 330)
-        glBindSampler(0, last_sampler);
-#endif
-    glActiveTexture(last_active_texture);
-#ifdef IMGUI_IMPL_OPENGL_USE_VERTEX_ARRAY
-    glBindVertexArray(last_vertex_array_object);
-#endif
-    glBindBuffer(GL_ARRAY_BUFFER, last_array_buffer);
-    glBlendEquationSeparate(last_blend_equation_rgb, last_blend_equation_alpha);
-    glBlendFuncSeparate(last_blend_src_rgb, last_blend_dst_rgb, last_blend_src_alpha, last_blend_dst_alpha);
-    if (last_enable_blend) glEnable(GL_BLEND); else glDisable(GL_BLEND);
-    if (last_enable_cull_face) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
-    if (last_enable_depth_test) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
-    if (last_enable_stencil_test) glEnable(GL_STENCIL_TEST); else glDisable(GL_STENCIL_TEST);
-    if (last_enable_scissor_test) glEnable(GL_SCISSOR_TEST); else glDisable(GL_SCISSOR_TEST);
-#ifdef IMGUI_IMPL_OPENGL_MAY_HAVE_PRIMITIVE_RESTART
-    if (bd->GlVersion >= 310) { if (last_enable_primitive_restart) glEnable(GL_PRIMITIVE_RESTART); else glDisable(GL_PRIMITIVE_RESTART); }
-#endif
-
-#ifdef IMGUI_IMPL_HAS_POLYGON_MODE
-    glPolygonMode(GL_FRONT_AND_BACK, (GLenum)last_polygon_mode[0]);
-#endif
-    glViewport(last_viewport[0], last_viewport[1], (GLsizei)last_viewport[2], (GLsizei)last_viewport[3]);
-    glScissor(last_scissor_box[0], last_scissor_box[1], (GLsizei)last_scissor_box[2], (GLsizei)last_scissor_box[3]);
 }
 
 void Render(AxDrawData *DrawData)
