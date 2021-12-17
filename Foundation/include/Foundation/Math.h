@@ -3,14 +3,46 @@
 #include "Foundation/Types.h"
 #include "Foundation/Intrinsics.h"
 
-inline int32_t GetRectWidth(AxRect Rect)
+inline float GetRectWidth(AxRect Rect)
 {
     return (Rect.Right - Rect.Left);
 }
 
-inline int32_t GetRectHeight(AxRect Rect)
+inline float GetRectHeight(AxRect Rect)
 {
     return (Rect.Bottom - Rect.Top);
+}
+
+inline void SetRectWidth(AxRect *Rect, float Width)
+{
+    if (Rect) {
+        Rect->Right = Rect->Left + Width;
+    }
+}
+
+inline void SetRectHeight(AxRect *Rect, float Height)
+{
+    if (Rect) {
+        Rect->Bottom = Rect->Top + Height;
+    }
+}
+
+inline void SetRectPosition(AxRect *Rect, float X, float Y)
+{
+    if (Rect)
+    {
+        Rect->Left = X;
+        Rect->Top = Y;
+    }
+}
+
+inline void SetRectSize(AxRect *Rect, float Width, float Height)
+{
+    if (Rect)
+    {
+        SetRectWidth(Rect, Width);
+        SetRectHeight(Rect, Height);
+    }
 }
 
 static AxRect AspectRatioFit(uint32_t RenderWidth, uint32_t RenderHeight,
@@ -30,25 +62,25 @@ static AxRect AspectRatioFit(uint32_t RenderWidth, uint32_t RenderHeight,
         {
             // NOTE(mdeforge): Width-constrained display -- top and bottom black bars
             Result.Left = 0;
-            Result.Right = WindowWidth;
+            Result.Right = (float)WindowWidth;
 
             float Empty = (float)WindowHeight - OptimalWindowHeight;
             int32_t HalfEmpty = RoundFloatToInt32(0.5f * Empty);
             int32_t UseHeight = RoundFloatToInt32(OptimalWindowHeight);
 
-            Result.Bottom = HalfEmpty;
+            Result.Bottom = (float)HalfEmpty;
             Result.Top = Result.Bottom * UseHeight;
         }
         else
         {
             Result.Bottom = 0;
-            Result.Top = WindowHeight;
+            Result.Top = (float)WindowHeight;
 
             float Empty = (float)WindowWidth - OptimalWindowWidth;
             int32_t HalfEmpty = RoundFloatToInt32(0.5f * Empty);
             int32_t UseWidth = RoundFloatToInt32(OptimalWindowWidth);
 
-            Result.Left = HalfEmpty;
+            Result.Left = (float)HalfEmpty;
             Result.Right = Result.Left + UseWidth;
         }
     }
@@ -83,26 +115,26 @@ inline AxVec2 Vec2Neg(AxVec2 V)
     return (Result);
 }
 
-inline AxVec2 Vec2MulS(AxVec2 V, double S)
+inline AxVec2 Vec2MulS(AxVec2 V, float S)
 {
     AxVec2 Result = { V.X * S, V.Y * S };
 
     return (Result);
 }
 
-inline AxVec2 Vec2DivS(AxVec2 V, double S)
+inline AxVec2 Vec2DivS(AxVec2 V, float S)
 {
     AxVec2 Result = { V.X / S, V.Y / S };
 
     return (Result);
 }
 
-inline double Vec2Len(AxVec2 V)
+inline float Vec2Len(AxVec2 V)
 {
-    return (sqrt(V.X * V.X + V.Y * V.Y));
+    return (sqrtf(V.X * V.X + V.Y * V.Y));
 }
 
-inline double Vec2Mag(AxVec2 V)
+inline float Vec2Mag(AxVec2 V)
 {
     return (Vec2Len(V));
 }
@@ -112,9 +144,9 @@ AxVec2 Vec2Norm(AxVec2 V)
     return (Vec2MulS(V, (1.0f / Vec2Len(V))));
 }
 
-inline AxVec2 Vec2WeightedAvg3(AxVec2 A, AxVec2 B, AxVec2 C, double a, double b, double c)
+inline AxVec2 Vec2WeightedAvg3(AxVec2 A, AxVec2 B, AxVec2 C, float a, float b, float c)
 {
-    double Weight = a + b + c;
+    float Weight = a + b + c;
     AxVec2 Result = {
         (A.X * a + B.X * b + C.X * c) / Weight,
         (A.Y * a + B.Y * b + C.Y * c) / Weight
@@ -123,7 +155,7 @@ inline AxVec2 Vec2WeightedAvg3(AxVec2 A, AxVec2 B, AxVec2 C, double a, double b,
     return (Result);
 }
 
-inline AxVec3 Vec3Mul(AxVec3 Vector, double Value)
+inline AxVec3 Vec3Mul(AxVec3 Vector, float Value)
 {
     AxVec3 Result;
 
@@ -155,9 +187,9 @@ static AxVec3 Vec3Add(AxVec3 A, AxVec3 B)
     return (Result);
 }
 
-inline AxVec3 Vec3WeightedAvg3(AxVec3 A, AxVec3 B, AxVec3 C, double a, double b, double c)
+inline AxVec3 Vec3WeightedAvg3(AxVec3 A, AxVec3 B, AxVec3 C, float a, float b, float c)
 {
-    double Weight = a + b + c;
+    float Weight = a + b + c;
     AxVec3 Result = {
         (A.X * a + B.X * b + C.X * c) / Weight,
         (A.Y * a + B.Y * b + C.Y * c) / Weight,
@@ -237,10 +269,10 @@ static AxMat4x4f Transpose(const AxMat4x4f Matrix)
     return (Result);
 }
 
-inline AxMat4x4 XRotation(double Angle)
+inline AxMat4x4 XRotation(float Angle)
 {
-    double c = Cos(Angle);
-    double s = Sin(Angle);
+    float c = Cos(Angle);
+    float s = Sin(Angle);
 
     AxMat4x4 R =
     {
@@ -253,10 +285,10 @@ inline AxMat4x4 XRotation(double Angle)
     return (R);
 }
 
-inline AxMat4x4 YRotation(double Angle)
+inline AxMat4x4 YRotation(float Angle)
 {
-    double c = Cos(Angle);
-    double s = Sin(Angle);
+    float c = Cos(Angle);
+    float s = Sin(Angle);
 
     AxMat4x4 R =
     {
@@ -269,10 +301,10 @@ inline AxMat4x4 YRotation(double Angle)
     return (R);
 }
 
-inline AxMat4x4 ZRotation(double Angle)
+inline AxMat4x4 ZRotation(float Angle)
 {
-    double c = Cos(Angle);
-    double s = Sin(Angle);
+    float c = Cos(Angle);
+    float s = Sin(Angle);
 
     AxMat4x4 R =
     {
@@ -285,9 +317,9 @@ inline AxMat4x4 ZRotation(double Angle)
     return (R);
 }
 
-inline double Length(AxVec3 Vector)
+inline float Length(AxVec3 Vector)
 {
-    double Result = sqrt(Vector.X * Vector.X +
+    float Result = sqrtf(Vector.X * Vector.X +
                        Vector.Y * Vector.Y +
                        Vector.Z * Vector.Z);
     return (Result);
@@ -295,14 +327,14 @@ inline double Length(AxVec3 Vector)
 
 AxVec3 Normalize(AxVec3 A)
 {
-    AxVec3 Result = Vec3Mul(A, (1.0 / Length(A)));
+    AxVec3 Result = Vec3Mul(A, (1.0f / Length(A)));
 
     return (Result);
 }
 
-inline double DotProduct(AxVec3 A, AxVec3 B)
+inline float DotProduct(AxVec3 A, AxVec3 B)
 {
-    double Result = A.X * B.X + A.Y * B.Y + A.Z * B.Z;
+    float Result = A.X * B.X + A.Y * B.Y + A.Z * B.Z;
 
     return (Result);
 }
@@ -414,12 +446,14 @@ inline AxVec2 CalcParabolicTouchPoint(AxVec2 A, AxVec2 B, AxVec2 C, float T)
     return (P);
 }
 
-inline double CalcRatio2D(AxVec2 A, AxVec2 B, AxVec2 Q)
+inline float CalcRatio2D(AxVec2 A, AxVec2 B, AxVec2 Q)
 {
     return ((A.Y - Q.Y) / (A.Y - B.Y));
 }
 
-inline double Distance2D(AxVec2 A, AxVec2 B)
+inline float Distance2D(AxVec2 A, AxVec2 B)
 {
-    return (sqrt(pow(B.X - A.X, 2.0) + pow(B.Y - A.Y, 2.0)));
+    return (sqrtf(powf(B.X - A.X, 2.0) + powf(B.Y - A.Y, 2.0)));
 }
+
+float RandomFloat(const float Min, const float Max);

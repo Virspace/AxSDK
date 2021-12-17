@@ -93,10 +93,10 @@ struct AxWindow
 static AxRect RectToAxRect(RECT Rect)
 {
     AxRect Result = {
-        .Left = Rect.left,
-        .Top = Rect.top,
-        .Right = Rect.right,
-        .Bottom = Rect.bottom
+        .Left = (float)Rect.left,
+        .Top = (float)Rect.top,
+        .Right = (float)Rect.right,
+        .Bottom = (float)Rect.bottom
     };
 
     return (Result);
@@ -105,10 +105,10 @@ static AxRect RectToAxRect(RECT Rect)
 static RECT AxRectToRect(AxRect Rect)
 {
     RECT Result = {
-        .left = Rect.Left,
-        .top = Rect.Top,
-        .right = Rect.Right,
-        .bottom = Rect.Bottom
+        .left = (int)Rect.Left,
+        .top = (int)Rect.Top,
+        .right = (int)Rect.Right,
+        .bottom = (int)Rect.Bottom
     };
 
     return (Result);

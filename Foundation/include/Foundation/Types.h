@@ -56,18 +56,12 @@
 // TODO(mdeforge): Move to utilities
 #define FOURCC(String) (((u32)(String[0]) << 0) | ((u32)(String[1]) << 8) | ((u32)(String[2]) << 16) | ((u32)(String[3]) << 24))
 
-// This helps keep internal and external functions organized in source files
-// NOTE(mdeforge): This clashes with Google Test's "internal" namespace, so avoid defining it where gtest is used
-#if !defined(GOOGLETEST_INCLUDE_GTEST_GTEST_H_)
-#define internal static
-#endif
-
 typedef struct AxRect
 {
-    int32_t Left;
-    int32_t Top;
-    int32_t Right;
-    int32_t Bottom;
+    float Left;
+    float Top;
+    float Right;
+    float Bottom;
 } AxRect;
 
 typedef union AxVert
@@ -94,35 +88,35 @@ typedef union AxVec2
 {
     struct
     {
-        double X, Y;
+        float X, Y;
     };
 
     struct
     {
-        double U, V;
+        float Width, Height;
     };
 
-    double XY[2];
+    float XY[2];
 } AxVec2;
 
 typedef union AxVec3
 {
     struct
     {
-        double X, Y, Z;
+        float X, Y, Z;
     };
 
     struct
     {
-        double U, V, W;
+        float U, V, W;
     };
 
     struct
     {
-        double R, G, B;
+        float R, G, B;
     };
 
-    double XYZ[3];
+    float XYZ[3];
 } AxVec3;
 
 typedef union AxVec4
@@ -134,19 +128,19 @@ typedef union AxVec4
         AxVec3 XYZ;
         struct
         {
-            double X, Y, Z;
+            float X, Y, Z;
         };
     };
 
-    double W;
+    float W;
   };
 
-  double E[4];
+  float E[4];
 } AxVec4;
 
 typedef struct AxMat4x4
 {
-    double E[4][4]; // ROW MAJOR!
+    float E[4][4]; // ROW MAJOR!
 } AxMat4x4;
 
 typedef struct AxMat4x4f
