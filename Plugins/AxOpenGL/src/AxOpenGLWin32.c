@@ -51,7 +51,7 @@ int32_t Win32OpenGLAttribs[] =
     WGL_CONTEXT_MAJOR_VERSION_ARB, 4,
     WGL_CONTEXT_MINOR_VERSION_ARB, 6,
     WGL_CONTEXT_FLAGS_ARB, WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB
-    #if AXON_INTERNAL
+    #if AXON_static
     | WGL_CONTEXT_DEBUG_BIT_ARB
     #endif
     ,
@@ -123,7 +123,7 @@ inline bool IsWhitespace(char C)
     return(Result);
 }
 
-internal bool CheckShader(GLuint Handle, const char *Description)
+static bool CheckShader(GLuint Handle, const char *Description)
 {
     GLint Status = 0, LogLength = 0;
     glGetShaderiv(Handle, GL_COMPILE_STATUS, &Status);
@@ -145,7 +145,7 @@ internal bool CheckShader(GLuint Handle, const char *Description)
     return ((GLboolean)Status == GL_TRUE);
 }
 
-internal bool CheckProgram(GLuint Handle, const char *Description)
+static bool CheckProgram(GLuint Handle, const char *Description)
 {
     GLint Status = 0, LogLength = 0;
     glGetProgramiv(Handle, GL_LINK_STATUS, &Status);
@@ -167,7 +167,7 @@ internal bool CheckProgram(GLuint Handle, const char *Description)
     return ((GLboolean)Status == GL_TRUE);
 }
 
-internal GLuint CreateProgram(char *HeaderCode, char *VertexCode, char *FragmentCode)
+static GLuint CreateProgram(char *HeaderCode, char *VertexCode, char *FragmentCode)
 {
     // Create Shaders
     GLuint VertexShaderID = glCreateShader(GL_VERTEX_SHADER);
@@ -198,7 +198,7 @@ internal GLuint CreateProgram(char *HeaderCode, char *VertexCode, char *Fragment
 }
 
 // TODO(mdeforge): Maybe move this to a script file since not being able to do multiline string literals in C sucks
-internal bool CreateDeviceObjects(/*struct OpenGLData* Data*/)
+static bool CreateDeviceObjects(/*struct OpenGLData* Data*/)
 {
     char *Header = "";
 
@@ -243,7 +243,7 @@ internal bool CreateDeviceObjects(/*struct OpenGLData* Data*/)
     return (true);
 }
 
-internal void DestroyDeviceObjects(/*struct OpenGLData *Data*/)
+static void DestroyDeviceObjects(/*struct OpenGLData *Data*/)
 {
     if (Data->VBOHandle)
     {
@@ -264,13 +264,13 @@ internal void DestroyDeviceObjects(/*struct OpenGLData *Data*/)
     }
 }
 
-internal bool IsValidArray(GLuint Index)
+static bool IsValidArray(GLuint Index)
 {
     bool Result = (Index != -1);
     return(Result);
 }
 
-internal void Win32SetPixelFormat(/*struct OpenGLData *Data,*/ HDC WindowDC)
+static void Win32SetPixelFormat(/*struct OpenGLData *Data,*/ HDC WindowDC)
 {
     int SuggestedPixelFormatIndex = 0;
     GLuint ExtendedPick = 0;
@@ -313,7 +313,7 @@ internal void Win32SetPixelFormat(/*struct OpenGLData *Data,*/ HDC WindowDC)
     SetPixelFormat(WindowDC, SuggestedPixelFormatIndex, &SuggestedPixelFormat);
 }
 
-internal void SetupRenderState(AxDrawData *DrawData, int FramebufferWidth, int FramebufferHeight, GLuint VAO)
+static void SetupRenderState(AxDrawData *DrawData, int FramebufferWidth, int FramebufferHeight, GLuint VAO)
 {
     // NOTE(mdeforge): This is currently setup for orthographic sprite drawing since the immediate focus is 2D sprites.
 
@@ -384,7 +384,7 @@ internal void SetupRenderState(AxDrawData *DrawData, int FramebufferWidth, int F
     glVertexAttribPointer(Data->AttribLocationVertexColor, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(AxDrawVert), (GLvoid *)offsetof(AxDrawVert, Color));
 }
 
-internal void Win32LoadWGLExtensions(/*struct OpenGLData *Data*/)
+static void Win32LoadWGLExtensions(/*struct OpenGLData *Data*/)
 {
     // Before we can load extensions we need a dummy OpenGL context which is
     // created used a dummy window. We do this because you can only set a 
@@ -501,7 +501,7 @@ void Create(AxWindow *Window)
     }
 
     if (wglMakeCurrent((HDC)DeviceContext, RenderContext)) {
-        wglSwapIntervalEXT(-1); // Disable vsync
+        wglSwapIntervalEXT(0); // Disable vsync
     }
 
     // Load OpenGL Extensions

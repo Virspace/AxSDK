@@ -11,17 +11,17 @@ inline int32_t RoundFloatToInt32(float f)
     return (_mm_cvtss_si32(_mm_set_ss(f)));
 }
 
-inline double Cos(double Angle)
+inline float Cos(float Angle)
 {
-    return (cos(Angle));
+    return (cosf(Angle));
 }
 
-inline double Sin(double Angle)
+inline float Sin(float Angle)
 {
-    return (sin(Angle));
+    return (sinf(Angle));
 }
 
-inline double ATan2(double Y, double X)
+inline float ATan2(float Y, float X)
 {
-    return (atan2(Y, X));
+    return (atan2f(Y, X));
 }

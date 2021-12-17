@@ -33,7 +33,7 @@ target_sources(Foundation
         src/Camera.c
         #src/ImageLoader.c
         src/HashTable.c
-        #src/Maths.c
+        src/Math.c
         src/Plugin.c
         src/Win32Platform.c
         src/LinkedList.c
