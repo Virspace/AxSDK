@@ -32,9 +32,10 @@ add_executable(FoundationTests)
 target_sources(FoundationTests
     PRIVATE
         src/main.cpp
-        src/HashmapTests.cpp
         src/AxArrayTests.cpp
         src/CameraTests.cpp
+        src/HashmapTests.cpp
+        src/MathTests.cpp
 )
 
 #
