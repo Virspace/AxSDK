@@ -3,9 +3,13 @@
 
 // TODO(mdeforge): Use better rand function
 
+void SeedRandom(uint32_t Seed)
+{
+    srand(Seed);
+}
+
 float RandomFloat(const float Min, const float Max)
 {
-    srand(time(NULL));
     return ((float)rand() / (RAND_MAX) * (Max - Min) + Min);
 }
 
