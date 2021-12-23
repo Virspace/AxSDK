@@ -49,8 +49,8 @@ endif()
 #set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/Bin)
 #set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/Bin)
 
-add_subdirectory(Foundation)
+add_subdirectory(foundation)
 set_target_properties(Foundation PROPERTIES FOLDER Foundation)
 
-add_subdirectory(Plugins)
-add_subdirectory(Internal)
+add_subdirectory(plugins)
+add_subdirectory(internal)
