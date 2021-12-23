@@ -428,4 +428,6 @@ inline float Distance2D(AxVec2 A, AxVec2 B)
     return (sqrtf(powf(B.X - A.X, 2.0) + powf(B.Y - A.Y, 2.0)));
 }
 
+void SeedRandom(uint32_t Seed);
+
 float RandomFloat(const float Min, const float Max);
