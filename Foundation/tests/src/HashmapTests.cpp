@@ -82,11 +82,11 @@ TEST_F(HashMapTest, KeyDoesNotExist)
 
 TEST_F(HashMapTest, Collision)
 {
-    HashInsertString(Table, "1", "First address");
-    HashInsertString(Table, "2", "Second address");
-    HashInsertString(Table, "Hel", "Third address");
-    HashInsertString(Table, "Cau", "Fourth address");
-    HashInsertString(Table, "Dbs", "Fifth address");
+    HashInsert(Table, "1", "First address");
+    HashInsert(Table, "2", "Second address");
+    HashInsert(Table, "Hel", "Third address");
+    HashInsert(Table, "Cau", "Fourth address");
+    HashInsert(Table, "Dbs", "Fifth address");
 
     char *Result1 = (char *)HashTableSearch(Table, "Hel");
     EXPECT_STREQ(Result1, "Third address");
@@ -100,11 +100,11 @@ TEST_F(HashMapTest, Collision)
 
 //TEST_F(HashMapTest, HashDelete)
 //{
-//    HashInsertString(Table, "1", "First address");
-//    HashInsertString(Table, "2", "Second address");
-//    HashInsertString(Table, "Hel", "Third address");
-//    HashInsertString(Table, "Cau", "Fourth address");
-//    HashInsertString(Table, "Dbs", "Fifth address");
+//    HashInsert(Table, "1", "First address");
+//    HashInsert(Table, "2", "Second address");
+//    HashInsert(Table, "Hel", "Third address");
+//    HashInsert(Table, "Cau", "Fourth address");
+//    HashInsert(Table, "Dbs", "Fifth address");
 //
 //    HashDelete(Table, "2");
 //    EXPECT_STREQ((char *)HashTableSearch(Table, "2"), NULL);
@@ -238,7 +238,7 @@ TEST_F(HashMapTest, Iterate)
     HashInsert(Table, "1", "First address");
     HashInsert(Table, "2", "Second address");
 
-    int32_t Length = GetHashTableLength(Table);
+    size_t Length = GetHashTableLength(Table);
     EXPECT_EQ(Length, 2);
 
     const char *Result1 = (char *)GetHashTableEntry(Table, 0);
