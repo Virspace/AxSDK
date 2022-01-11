@@ -20,6 +20,7 @@ target_sources(Foundation
         include/Foundation/Application.h
         include/Foundation/AxArray.h
         include/Foundation/Camera.h
+        include/Foundation/Hash.h
         include/Foundation/HashTable.h
         #include/Foundation/ImageLoader.h
         include/Foundation/Intrinsics.h
@@ -32,6 +33,7 @@ target_sources(Foundation
         src/APIRegistry.c
         src/Camera.c
         #src/ImageLoader.c
+        src/Hash.c
         src/HashTable.c
         src/Math.c
         src/Plugin.c
