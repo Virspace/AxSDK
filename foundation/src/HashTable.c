@@ -1,22 +1,20 @@
-#include <string.h>
 #include "HashTable.h"
+#include "Hash.h"
+#include <string.h>
 
 #define _CRTDBG_MAP_ALLOC
 #include <stdlib.h>
 #include <crtdbg.h>
 
-#define FNV_OFFSET 14695981039346656037UL
-#define FNV_PRIME 1099511628211UL
-
 #define DEFAULT_CAPACITY 16
 
+// NOTE(mdeforge): Inspired by https://github.com/benhoyt/ht
 // TODO(mdeforge): Evaluate would should be int32_t vs int64_t vs size_t
 
 typedef struct HashEntry
 {
     char *Key;              // Key is NULL if entry is empty
     void *Value;
-    size_t Size;
 } HashEntry;
 
 typedef struct HashTable
@@ -26,19 +24,7 @@ typedef struct HashTable
     HashEntry *Entries;     // Hash entries
 } HashTable;
 
-// 64-bit FNV1a hash for null-terminated key
-uint64_t HashFunction(const char *Key)
-{
-    uint64_t Hash = FNV_OFFSET;
-    for (const char* p = Key; *p; p++) {
-        Hash ^= (uint64_t)(unsigned char)(*p);
-        Hash *= FNV_PRIME;
-    }
-
-    return (Hash);
-}
-
-static inline size_t FindIndex(int Hash, size_t BucketCount)
+static inline size_t FindIndex(uint64_t Hash, size_t BucketCount)
 {
     return ((size_t)(Hash & (uint64_t)BucketCount - 1));
 }
@@ -89,7 +75,7 @@ void *HashTableSearch(HashTable *Table, const char *Key)
     }
 
     // Get hash and index
-    uint64_t Hash = HashFunction(Key);
+    uint64_t Hash = HashStringFNV1a(Key, FNV1_64_INIT);
     size_t Index = FindIndex(Hash, Table->Capacity);
 
     // Loop until we find an empty entry
@@ -111,10 +97,10 @@ void *HashTableSearch(HashTable *Table, const char *Key)
     return(NULL);
 }
 
-bool HashInsertEntry(HashEntry *Entries, size_t Capacity, const char *Key, void *Value, size_t *EntryLength)
+const char *HashInsertEntry(HashEntry *Entries, size_t Capacity, const char *Key, void *Value, size_t *EntryLength)
 {
     // Get hash and index
-    uint64_t Hash = HashFunction(Key);
+    uint64_t Hash = HashStringFNV1a(Key, FNV1_64_INIT);
     size_t Index = FindIndex(Hash, Capacity);
 
     // Loop until we find an empty entry
@@ -179,7 +165,7 @@ bool HashTableExpand(HashTable *Table)
     return (true);
 }
 
-bool HashInsert(HashTable *Table, const char *Key, void *Value)
+const char *HashInsert(HashTable *Table, const char *Key, void *Value)
 {
     //Assert(Value != NULL);
     if (!Table) { //  || !Value
@@ -198,12 +184,7 @@ bool HashInsert(HashTable *Table, const char *Key, void *Value)
     return(HashInsertEntry(Table->Entries, Table->Capacity, Key, Value, &Table->Length));
 }
 
-bool HashInsertString(HashTable *Table, const char *Key, void *Value)
-{
-    return(HashInsert(Table, Key, Value, strlen(Value) + 1));
-}
-
-int32_t GetHashTableLength(HashTable *Table)
+size_t GetHashTableLength(HashTable *Table)
 {
     return (Table->Length);
 }
