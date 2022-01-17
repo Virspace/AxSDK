@@ -2,6 +2,6 @@
 
 find_package(Foundation CONFIG REQUIRED)
 
-if(NOT TARGET Virspace::Window)
-	include(${CMAKE_CURRENT_LIST_DIR}/WindowTargets.cmake)
+if(NOT TARGET Virspace::AxWindow)
+	include(${CMAKE_CURRENT_LIST_DIR}/AxWindowTargets.cmake)
 endif()
