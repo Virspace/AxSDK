@@ -1,0 +1,7 @@
+@PACKAGE_INIT@
+
+find_package(Foundation CONFIG REQUIRED)
+
+if(NOT TARGET Virspace::AxAudio)
+	include(${CMAKE_CURRENT_LIST_DIR}/AxAudioTargets.cmake)
+endif()
