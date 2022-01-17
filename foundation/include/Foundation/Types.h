@@ -173,6 +173,26 @@ typedef struct AxTransform
     AxVec3 Scale;
 } AxTransform;
 
+typedef enum AxTupleType { AX_TUPLE_INT, AX_TUPLE_FLOAT, AX_TUPLE_STRING } AxTupleType;
+
+typedef struct AxTupleItem
+{
+    AxTupleType Type;
+    union
+    {
+        int ValInt;
+        float ValFloat;
+        char *ValString;
+    };
+} AxTupleItem;
+
+// TODO(mdeforge): Consider moving this outside of Types.h so that we can use an AxArray to back this
+typedef struct AxTuple
+{
+    size_t NumItems;
+    AxTupleItem *Items;
+} AxTuple;
+
 // Banned functions
 
 /*
