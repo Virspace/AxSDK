@@ -8,7 +8,7 @@ typedef struct AxApplication AxApplication;
 
 struct AxApplicationAPI
 {
-    AxApplication  *(*Create)(int argc, char **argv);
-    bool              (*Tick)(AxApplication *App);
-    void              (*Destroy)(AxApplication *App);
+    AxApplication *(*Create)(int argc, char **argv);
+    bool (*Tick)(AxApplication *App);
+    void (*Destroy)(AxApplication *App);
 };
