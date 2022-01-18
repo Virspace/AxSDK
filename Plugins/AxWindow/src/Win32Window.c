@@ -25,6 +25,7 @@
 //                 in order to avoid collision with their #defined names...
 #include <windows.h>
 #include <VersionHelpers.h>
+#include <commdlg.h>
 #undef CreateWindow
 
 typedef HRESULT (WINAPI *GetDpiForMonitorPtr)(HMONITOR Monitor, int DPIType, UINT * XDPI, UINT *YDPI);
@@ -967,6 +968,52 @@ static void SetKeyboardMode(AxWindow *Window, enum AxKeyboardMode KeyboardMode)
     Window->KeyboardMode = KeyboardMode;
 }
 
+static bool OpenFileDialog(const AxWindow *Window, const char *Filter, char *FileName, uint32_t FileNameSize)
+{
+    Assert(Window);
+
+    OPENFILENAME OpenFileName;
+    ZeroMemory(&OpenFileName, sizeof(OPENFILENAME));
+    OpenFileName.lStructSize = sizeof(OPENFILENAME);
+    OpenFileName.hwndOwner = (HWND)Window->Platform.Win32.Handle;
+    OpenFileName.lpstrFile = FileName;
+    OpenFileName.nMaxFile = (DWORD)FileNameSize;
+    OpenFileName.lpstrFilter = Filter;
+    OpenFileName.nFilterIndex = 1;
+    OpenFileName.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+
+    if (GetOpenFileName(&OpenFileName) == TRUE)
+    {
+        FileName = OpenFileName.lpstrFile;
+        return (true);
+    }
+
+    return (false);
+}
+
+static bool SaveFileDialog(const AxWindow *Window, const char *Filter, char *FileName, uint32_t FileNameSize)
+{
+    Assert(Window);
+
+    OPENFILENAME OpenFileName;
+    ZeroMemory(&OpenFileName, sizeof(OPENFILENAME));
+    OpenFileName.lStructSize = sizeof(OPENFILENAME);
+    OpenFileName.hwndOwner = (HWND)Window->Platform.Win32.Handle;
+    OpenFileName.lpstrFile = FileName;
+    OpenFileName.nMaxFile = (DWORD)FileNameSize;
+    OpenFileName.lpstrFilter = Filter;
+    OpenFileName.nFilterIndex = 1;
+    OpenFileName.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+
+    if (GetSaveFileName(&OpenFileName) == TRUE)
+    {
+        FileName = OpenFileName.lpstrFile;
+        return (true);
+    }
+
+    return (false);
+}
+
 struct AxWindowAPI *WindowAPI = &(struct AxWindowAPI) {
     .Init = Init,
     .CreateWindow = CreateWindow_,
@@ -984,6 +1031,8 @@ struct AxWindowAPI *WindowAPI = &(struct AxWindowAPI) {
     .SetCursorMode = SetCursorMode,
     .GetCursorMode = GetCursorMode,
     .SetKeyboardMode = SetKeyboardMode,
+    .OpenFileDialog = OpenFileDialog,
+    .SaveFileDialog = SaveFileDialog
     // .EnableCursor = EnableCursor,
     // .DisableCursor = DisableCursor
 };

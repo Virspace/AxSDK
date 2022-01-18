@@ -305,4 +305,7 @@ struct AxWindowAPI
     //  * @param The target window.
     //  */
     // void (*DisableCursor)(const AxWindow *Window);
+
+    bool (*OpenFileDialog)(const AxWindow *Window, const char *Filter, char *FileName, uint32_t FileNameSize);
+    bool (*SaveFileDialog)(const AxWindow *Window, const char *Filter, char *FileName, uint32_t FileNameSize);
 };
