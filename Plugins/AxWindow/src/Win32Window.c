@@ -11,14 +11,15 @@
 //#include <stdlib.h>
 //#include <crtdbg.h>
 
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-
 // From hidusage.h
 #define HID_USAGE_PAGE_GENERIC                          ((unsigned short) 0x01) // Generic Desktop Controls Usage Pages
 #define HID_USAGE_GENERIC_MOUSE                         ((unsigned short) 0x02) // Generic Mouse
 #define HID_USAGE_GENERIC_KEYBOARD                      ((unsigned short) 0x06) // Generic Keyboard
+#define STRICT_TYPED_ITEMIDS
+
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 
 #include <windows.h>
 #include <commdlg.h>
@@ -1016,6 +1017,12 @@ static bool SaveFileDialog(const AxWindow *Window, const char *Title, const char
     return (false);
 }
 
+INT CALLBACK BrowseCallbackProc(HWND hwnd, UINT uMsg, LPARAM lp, LPARAM pData)
+{
+    if (uMsg == BFFM_INITIALIZED) SendMessage(hwnd, BFFM_SETSELECTION, TRUE, pData);
+    return 0;
+}
+
 static bool OpenFolderDialog(const AxWindow *Window, const char *Message, const char *InitialDirectory, char *FolderName, uint32_t FolderNameSize)
 {
     Assert(Window);
@@ -1027,6 +1034,8 @@ static bool OpenFolderDialog(const AxWindow *Window, const char *Message, const 
     BrowseInfo.pidlRoot = NULL;
     BrowseInfo.lpszTitle = (Message) ? Message : TEXT("Open Folder");
     BrowseInfo.ulFlags = BIF_NEWDIALOGSTYLE;
+    BrowseInfo.lParam = (LPARAM)InitialDirectory;
+    BrowseInfo.lpfn = BrowseCallbackProc;
 
     LPITEMIDLIST IDL = SHBrowseForFolder(&BrowseInfo);
     if (IDL != NULL)
