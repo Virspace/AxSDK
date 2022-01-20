@@ -969,8 +969,6 @@ static void SetKeyboardMode(AxWindow *Window, enum AxKeyboardMode KeyboardMode)
 
 static bool OpenFileDialog(const AxWindow *Window, const char *Title, const char *Filter, const char *InitialDirectory, char *FileName, uint32_t FileNameSize)
 {
-    Assert(Window);
-
     OPENFILENAME OpenFileName;
     ZeroMemory(&OpenFileName, sizeof(OPENFILENAME));
     OpenFileName.lStructSize = sizeof(OPENFILENAME);
@@ -994,8 +992,6 @@ static bool OpenFileDialog(const AxWindow *Window, const char *Title, const char
 
 static bool SaveFileDialog(const AxWindow *Window, const char *Title, const char *Filter, const char *InitialDirectory, char *FileName, uint32_t FileNameSize)
 {
-    Assert(Window);
-
     OPENFILENAME OpenFileName;
     ZeroMemory(&OpenFileName, sizeof(OPENFILENAME));
     OpenFileName.lStructSize = sizeof(OPENFILENAME);
@@ -1019,14 +1015,15 @@ static bool SaveFileDialog(const AxWindow *Window, const char *Title, const char
 
 INT CALLBACK BrowseCallbackProc(HWND hwnd, UINT uMsg, LPARAM lp, LPARAM pData)
 {
-    if (uMsg == BFFM_INITIALIZED) SendMessage(hwnd, BFFM_SETSELECTION, TRUE, pData);
+    if (uMsg == BFFM_INITIALIZED) {
+        SendMessage(hwnd, BFFM_SETSELECTION, TRUE, pData);
+    }
+
     return 0;
 }
 
 static bool OpenFolderDialog(const AxWindow *Window, const char *Message, const char *InitialDirectory, char *FolderName, uint32_t FolderNameSize)
 {
-    Assert(Window);
-
     BROWSEINFO BrowseInfo;
     ZeroMemory(&BrowseInfo, sizeof(BROWSEINFO));
     BrowseInfo.hwndOwner = (HWND)Window->Platform.Win32.Handle;
@@ -1045,6 +1042,35 @@ static bool OpenFolderDialog(const AxWindow *Window, const char *Message, const 
     }
 
     return (false);
+}
+
+static enum AxMessageBoxResponse CreateMessageBox(const AxWindow *Window, const char *Message, const char *Title, enum AxMessageBoxFlags Type)
+{
+    uint32_t Flags = 0;
+    if (Type & AX_MESSAGEBOX_TYPE_ABORTRETRYIGNORE) { Flags |= MB_ABORTRETRYIGNORE; }
+    if (Type & AX_MESSAGEBOX_TYPE_CANCELTRYCONTINUE) { Flags |= MB_CANCELTRYCONTINUE; }
+    if (Type & AX_MESSAGEBOX_TYPE_HELP) { Flags |= MB_HELP; }
+    if (Type & AX_MESSAGEBOX_TYPE_OK) { Flags |= MB_OK; }
+    if (Type & AX_MESSAGEBOX_TYPE_OKCANCEL) { Flags |= MB_OKCANCEL; }
+    if (Type & AX_MESSAGEBOX_TYPE_RETRYCANCEL) { Flags |= MB_RETRYCANCEL; }
+    if (Type & AX_MESSAGEBOX_TYPE_YESNO) { Flags |= MB_YESNO; }
+    if (Type & AX_MESSAGEBOX_TYPE_YESNOCANCEL) { Flags |= MB_YESNOCANCEL; }
+    if (Type & AX_MESSAGEBOX_ICON_EXCLAMATION) { Flags |= MB_ICONEXCLAMATION; }
+    if (Type & AX_MESSAGEBOX_ICON_WARNING) { Flags |= MB_ICONWARNING; }
+    if (Type & AX_MESSAGEBOX_ICON_INFORMATION) { Flags |= MB_ICONINFORMATION; }
+    if (Type & AX_MESSAGEBOX_ICON_QUESTION) { Flags |= MB_ICONQUESTION; }
+    if (Type & AX_MESSAGEBOX_ICON_STOP) { Flags |= MB_ICONSTOP; }
+    if (Type & AX_MESSAGEBOX_ICON_ERROR) { Flags |= MB_ICONERROR; }
+    if (Type & AX_MESSAGEBOX_DEFBUTTON1) { Flags |= MB_DEFBUTTON1; }
+    if (Type & AX_MESSAGEBOX_DEFBUTTON2) { Flags |= MB_DEFBUTTON2; }
+    if (Type & AX_MESSAGEBOX_DEFBUTTON3) { Flags |= MB_DEFBUTTON3; }
+    if (Type & AX_MESSAGEBOX_DEFBUTTON4) { Flags |= MB_DEFBUTTON4; }
+    if (Type & AX_MESSAGEBOX_APPLMODAL) { Flags |= MB_APPLMODAL; }
+    if (Type & AX_MESSAGEBOX_SYSTEMMODAL) { Flags |= MB_SYSTEMMODAL; }
+    if (Type & AX_MESSAGEBOX_TASKMODAL) { Flags |= MB_TASKMODAL; }
+
+    enum AxMessageBoxResponse Result = (enum AxMessageBoxResponse)MessageBox((HWND)Window->Platform.Win32.Handle, Message, Title, Flags);
+    return (Result);
 }
 
 struct AxWindowAPI *WindowAPI = &(struct AxWindowAPI) {
@@ -1066,7 +1092,8 @@ struct AxWindowAPI *WindowAPI = &(struct AxWindowAPI) {
     .SetKeyboardMode = SetKeyboardMode,
     .OpenFileDialog = OpenFileDialog,
     .SaveFileDialog = SaveFileDialog,
-    .OpenFolderDialog = OpenFolderDialog
+    .OpenFolderDialog = OpenFolderDialog,
+    .CreateMessageBox = CreateMessageBox
     // .EnableCursor = EnableCursor,
     // .DisableCursor = DisableCursor
 };

@@ -106,6 +106,45 @@ enum AxWindowStyle
     AX_WINDOW_STYLE_FULLSCREEN = 1 << 6, // Fullscreen Borderless
 };
 
+// MessageBox button flags
+enum AxMessageBoxResponse
+{
+    AX_MESSAGEBOX_RESPONSE_OK           = 1,
+    AX_MESSAGEBOX_RESPONSE_CANCEL       = 2,
+    AX_MESSAGEBOX_RESPONSE_ABORT        = 3,
+    AX_MESSAGEBOX_RESPONSE_RETRY        = 4,
+    AX_MESSAGEBOX_RESPONSE_IGNORE       = 5,
+    AX_MESSAGEBOX_RESPONSE_YES          = 6,
+    AX_MESSAGEBOX_RESPONSE_NO           = 7,
+    AX_MESSAGEBOX_RESPONSE_TRYAGAIN     = 10,
+    AX_MESSAGEBOX_RESPONSE_CONTINUE     = 11
+};
+
+enum AxMessageBoxFlags
+{
+    AX_MESSAGEBOX_TYPE_ABORTRETRYIGNORE   = 1 << 0,
+    AX_MESSAGEBOX_TYPE_CANCELTRYCONTINUE  = 1 << 1,
+    AX_MESSAGEBOX_TYPE_HELP               = 1 << 2,
+    AX_MESSAGEBOX_TYPE_OK                 = 1 << 3,
+    AX_MESSAGEBOX_TYPE_OKCANCEL           = 1 << 4,
+    AX_MESSAGEBOX_TYPE_RETRYCANCEL        = 1 << 5,
+    AX_MESSAGEBOX_TYPE_YESNO              = 1 << 6,
+    AX_MESSAGEBOX_TYPE_YESNOCANCEL        = 1 << 7,
+    AX_MESSAGEBOX_ICON_EXCLAMATION        = 1 << 8,
+    AX_MESSAGEBOX_ICON_WARNING            = 1 << 9,
+    AX_MESSAGEBOX_ICON_INFORMATION        = 1 << 10,
+    AX_MESSAGEBOX_ICON_QUESTION           = 1 << 11,
+    AX_MESSAGEBOX_ICON_STOP               = 1 << 12,
+    AX_MESSAGEBOX_ICON_ERROR              = 1 << 13,
+    AX_MESSAGEBOX_DEFBUTTON1              = 1 << 14,
+    AX_MESSAGEBOX_DEFBUTTON2              = 1 << 15,
+    AX_MESSAGEBOX_DEFBUTTON3              = 1 << 16,
+    AX_MESSAGEBOX_DEFBUTTON4              = 1 << 17,
+    AX_MESSAGEBOX_APPLMODAL               = 1 << 18,
+    AX_MESSAGEBOX_SYSTEMMODAL             = 1 << 19,
+    AX_MESSAGEBOX_TASKMODAL               = 1 << 20
+};
+
 // Key modifer flags
 enum AxKeyModifier
 {
@@ -308,7 +347,7 @@ struct AxWindowAPI
 
     /**
      * @brief Opens a File Open dialog.
-     * @param Window The target window to lock focus on, can be NULL.
+     * @param Window A handle to the owner window of the dialog to be created. If this parameter is NULL, the dialog will no owner window.
      * @param Title The title of the dialog box, NULL sets default.
      * @param Filter The file types to filter on, e.g. "Supported Files(*.ms, *.txt, *.cpp, *.h)\0*.ms;*.txt;*.cpp;*.h\0";
      * @param IntialDirectory Sets the initial directory to open the file open dialog in, can be NULL.
@@ -319,7 +358,7 @@ struct AxWindowAPI
 
     /**
      * @brief Opens a File Save dialog.
-     * @param Window The target window to lock focus on, can be NULL.
+     * @param Window A handle to the owner window of the dialog to be created. If this parameter is NULL, the dialog will no owner window.
      * @param Title The title of the dialog box, NULL sets default.
      * @param Filter The file types to filter on, e.g. "Supported Files(*.ms, *.txt, *.cpp, *.h)\0*.ms;*.txt;*.cpp;*.h\0";
      * @param IntialDirectory Sets the initial directory to open the file save dialog in, can be NULL.
@@ -330,11 +369,20 @@ struct AxWindowAPI
 
     /**
      * @brief Opens a basic File Open dialog.
-     * @param Window The target window to lock focus on, can be NULL.
+     * @param Window A handle to the owner window of the dialog to be created. If this parameter is NULL, the dialog will no owner window.
      * @param Message The message above the file tree, can be NULL.
      * @param InitialDirectory Sets the initial directory for the open folder dialog, can be NULL.
      * @param FolderName Pointer to character array that returns folder name.
      * @param FolderNameSize Size of zero-initialized character array for folder name.
      */
     bool (*OpenFolderDialog)(const AxWindow *Window, const char *Message, const char *InitialDirectory, char *FolderName, uint32_t FolderNameSize);
+
+    /**
+     * @brief Opens a Message Box.
+     * @param Window A handle to the owner window of the message box to be created. If this parameter is NULL, the message box has no owner window.
+     * @param Message The message above the file tree, can be NULL.
+     * @param Title The title of the dialog box, NULL sets default.
+     * @param Type The contents and behavior of the dialog box set by a combination of AxMessageBoxFlags flags.
+     */
+    enum AxMessageBoxResponse (*CreateMessageBox)(const AxWindow *Window, const char *Message, const char *Title, enum AxMessageBoxFlags Type);
 };
