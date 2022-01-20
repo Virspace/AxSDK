@@ -20,12 +20,10 @@
 #define HID_USAGE_GENERIC_MOUSE                         ((unsigned short) 0x02) // Generic Mouse
 #define HID_USAGE_GENERIC_KEYBOARD                      ((unsigned short) 0x06) // Generic Keyboard
 
-// NOTE(mdeforge): Special thanks to the Win32 API for making me use _'s for
-//                 my CreateWindow, DestroyWindow, and UpdateWindow functions
-//                 in order to avoid collision with their #defined names...
 #include <windows.h>
-#include <VersionHelpers.h>
 #include <commdlg.h>
+#include <shlobj_core.h>
+
 #undef CreateWindow
 
 typedef HRESULT (WINAPI *GetDpiForMonitorPtr)(HMONITOR Monitor, int DPIType, UINT * XDPI, UINT *YDPI);
@@ -968,7 +966,7 @@ static void SetKeyboardMode(AxWindow *Window, enum AxKeyboardMode KeyboardMode)
     Window->KeyboardMode = KeyboardMode;
 }
 
-static bool OpenFileDialog(const AxWindow *Window, const char *Filter, char *FileName, uint32_t FileNameSize)
+static bool OpenFileDialog(const AxWindow *Window, const char *Title, const char *Filter, const char *InitialDirectory, char *FileName, uint32_t FileNameSize)
 {
     Assert(Window);
 
@@ -978,9 +976,11 @@ static bool OpenFileDialog(const AxWindow *Window, const char *Filter, char *Fil
     OpenFileName.hwndOwner = (HWND)Window->Platform.Win32.Handle;
     OpenFileName.lpstrFile = FileName;
     OpenFileName.nMaxFile = (DWORD)FileNameSize;
-    OpenFileName.lpstrFilter = Filter;
+    OpenFileName.lpstrFilter = (Filter) ? Filter : TEXT("All files\0*.*\0\0");
     OpenFileName.nFilterIndex = 1;
     OpenFileName.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+    OpenFileName.lpstrInitialDir = InitialDirectory;
+    OpenFileName.lpstrTitle = (Title) ? Title : TEXT("Open File");
 
     if (GetOpenFileName(&OpenFileName) == TRUE)
     {
@@ -991,7 +991,7 @@ static bool OpenFileDialog(const AxWindow *Window, const char *Filter, char *Fil
     return (false);
 }
 
-static bool SaveFileDialog(const AxWindow *Window, const char *Filter, char *FileName, uint32_t FileNameSize)
+static bool SaveFileDialog(const AxWindow *Window, const char *Title, const char *Filter, const char *InitialDirectory, char *FileName, uint32_t FileNameSize)
 {
     Assert(Window);
 
@@ -1001,13 +1001,37 @@ static bool SaveFileDialog(const AxWindow *Window, const char *Filter, char *Fil
     OpenFileName.hwndOwner = (HWND)Window->Platform.Win32.Handle;
     OpenFileName.lpstrFile = FileName;
     OpenFileName.nMaxFile = (DWORD)FileNameSize;
-    OpenFileName.lpstrFilter = Filter;
+    OpenFileName.lpstrFilter = (Filter) ? Filter : TEXT("All files\0*.*\0\0");
     OpenFileName.nFilterIndex = 1;
     OpenFileName.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+    OpenFileName.lpstrInitialDir = InitialDirectory;
+    OpenFileName.lpstrTitle = (Title) ? Title : TEXT("Save File");
 
     if (GetSaveFileName(&OpenFileName) == TRUE)
     {
         FileName = OpenFileName.lpstrFile;
+        return (true);
+    }
+
+    return (false);
+}
+
+static bool OpenFolderDialog(const AxWindow *Window, const char *Message, const char *InitialDirectory, char *FolderName, uint32_t FolderNameSize)
+{
+    Assert(Window);
+
+    BROWSEINFO BrowseInfo;
+    ZeroMemory(&BrowseInfo, sizeof(BROWSEINFO));
+    BrowseInfo.hwndOwner = (HWND)Window->Platform.Win32.Handle;
+    BrowseInfo.pszDisplayName = FolderName;
+    BrowseInfo.pidlRoot = NULL;
+    BrowseInfo.lpszTitle = (Message) ? Message : TEXT("Open Folder");
+    BrowseInfo.ulFlags = BIF_NEWDIALOGSTYLE;
+
+    LPITEMIDLIST IDL = SHBrowseForFolder(&BrowseInfo);
+    if (IDL != NULL)
+    {
+        SHGetPathFromIDList(IDL, FolderName);
         return (true);
     }
 
@@ -1032,7 +1056,8 @@ struct AxWindowAPI *WindowAPI = &(struct AxWindowAPI) {
     .GetCursorMode = GetCursorMode,
     .SetKeyboardMode = SetKeyboardMode,
     .OpenFileDialog = OpenFileDialog,
-    .SaveFileDialog = SaveFileDialog
+    .SaveFileDialog = SaveFileDialog,
+    .OpenFolderDialog = OpenFolderDialog
     // .EnableCursor = EnableCursor,
     // .DisableCursor = DisableCursor
 };
