@@ -311,8 +311,8 @@ struct AxWindowAPI
      * @param Window The target window to lock focus on, can be NULL.
      * @param Title The title of the dialog box, NULL sets default.
      * @param Filter The file types to filter on, e.g. "Supported Files(*.ms, *.txt, *.cpp, *.h)\0*.ms;*.txt;*.cpp;*.h\0";
-     * @param IntialDirectory The initial directory to open the file open dialog in.
-     * @param FileName Zero-intialized character array for filename.
+     * @param IntialDirectory Sets the initial directory to open the file open dialog in, can be NULL.
+     * @param FileName Pointer to character array that returns filename. Setting it sets default filename, otherwise should be zero-initialized.
      * @param FileNameSize Size of zero-initialized character array for filename.
      */
     bool (*OpenFileDialog)(const AxWindow *Window, const char *Title, const char *Filter, const char *InitialDirectory, char *FileName, uint32_t FileNameSize);
@@ -322,8 +322,8 @@ struct AxWindowAPI
      * @param Window The target window to lock focus on, can be NULL.
      * @param Title The title of the dialog box, NULL sets default.
      * @param Filter The file types to filter on, e.g. "Supported Files(*.ms, *.txt, *.cpp, *.h)\0*.ms;*.txt;*.cpp;*.h\0";
-     * @param IntialDirectory The initial directory to open the file save dialog in.
-     * @param FileName Zero-intialized character array for filename.
+     * @param IntialDirectory Sets the initial directory to open the file save dialog in, can be NULL.
+     * @param FileName Pointer to character array that returns filename. Setting it sets default filename, otherwise should be zero-initialized.
      * @param FileNameSize Size of zero-initialized character array for filename.
      */
     bool (*SaveFileDialog)(const AxWindow *Window, const char *Title, const char *Filter, const char *InitialDirectory, char *FileName, uint32_t FileNameSize);
@@ -332,8 +332,9 @@ struct AxWindowAPI
      * @brief Opens a basic File Open dialog.
      * @param Window The target window to lock focus on, can be NULL.
      * @param Message The message above the file tree, can be NULL.
-     * @param FolderName Zero-intialized character array for folder name.
+     * @param InitialDirectory Sets the initial directory for the open folder dialog, can be NULL.
+     * @param FolderName Pointer to character array that returns folder name.
      * @param FolderNameSize Size of zero-initialized character array for folder name.
      */
-    bool (*OpenFolderDialog)(const AxWindow *Window, const char *Message, char *FolderName, uint32_t FolderNameSize);
+    bool (*OpenFolderDialog)(const AxWindow *Window, const char *Message, const char *InitialDirectory, char *FolderName, uint32_t FolderNameSize);
 };
