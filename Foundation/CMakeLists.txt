@@ -20,6 +20,7 @@ target_sources(Foundation
         include/Foundation/Application.h
         include/Foundation/AxArray.h
         include/Foundation/Camera.h
+        include/Foundation/EditorPlugin.h
         include/Foundation/Hash.h
         include/Foundation/HashTable.h
         #include/Foundation/ImageLoader.h
@@ -27,7 +28,6 @@ target_sources(Foundation
         include/Foundation/Math.h
         include/Foundation/Platform.h
         include/Foundation/Plugin.h
-        include/Foundation/Strings.h
         include/Foundation/Types.h
         include/Foundation/LinkedList.h
         src/APIRegistry.c
@@ -60,12 +60,6 @@ target_include_directories(Foundation
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include/Foundation
 )
-
-# Link dependencies
-#target_link_libraries(Foundation
-#    PRIVATE
-#        Virspace::Foundation
-#)
 
 #
 # Install and Export
