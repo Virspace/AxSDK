@@ -192,10 +192,3 @@ typedef struct AxTuple
     size_t NumItems;
     AxTupleItem *Items;
 } AxTuple;
-
-typedef struct ImGuiContext ImGuiContext;
-typedef struct EditorPlugin
-{
-    void (*Init)(ImGuiContext *Context);
-    void (*Tick)(void);
-} EditorPlugin;
