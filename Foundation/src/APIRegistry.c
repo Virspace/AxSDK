@@ -2,7 +2,7 @@
 #include "Plugin.h"
 #include "Platform.h"
 #include "ImageLoader.h"
-#include "HashTable.h"
+#include "AxHashTable.h"
 #include <string.h>
 
 #define _CRTDBG_MAP_ALLOC
@@ -12,7 +12,7 @@
 struct AxAPIRegistry *AxonGlobalAPIRegistry;
 
 static const uint32_t InitialSize = 16;
-static struct HashTable *APIMap;
+static struct AxHashTable *APIMap;
 
 static void *APIMemory;
 static int32_t APIMemoryOffset;

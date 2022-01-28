@@ -1,6 +1,6 @@
 #include "Foundation/APIRegistry.h"
 #include "Foundation/Math.h"
-#include "Foundation/HashTable.h"
+#include "Foundation/AxHashTable.h"
 #include "Foundation/Platform.h"
 #include "AxAudio.h"
 #include <stdio.h>
@@ -15,8 +15,8 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 
-HashTable *SoundMap;
-HashTable *ChannelMap;
+AxHashTable *SoundMap;
+AxHashTable *ChannelMap;
 
 static void Init(void)
 {
@@ -34,6 +34,7 @@ static void Term(void)
 
 }
 
+// Use a compound literal to construct an unnamed object of API type in-place
 struct AxAudioAPI *WindowAPI = &(struct AxAudioAPI) {
     .Init = Init,
     .Update = Update,

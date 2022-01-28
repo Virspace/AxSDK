@@ -1,4 +1,4 @@
-#include "HashTable.h"
+#include "AxHashTable.h"
 #include "Hash.h"
 #include <string.h>
 
@@ -17,21 +17,21 @@ typedef struct HashEntry
     void *Value;
 } HashEntry;
 
-typedef struct HashTable
+typedef struct AxHashTable
 {
     size_t Capacity;       // Size of the Entries array
     size_t Length;         // Number of HashEntry's in the hash table
     HashEntry *Entries;     // Hash entries
-} HashTable;
+} AxHashTable;
 
 static inline size_t FindIndex(uint64_t Hash, size_t BucketCount)
 {
     return ((size_t)(Hash & (uint64_t)BucketCount - 1));
 }
 
-HashTable *CreateTable(size_t Capacity)
+AxHashTable *CreateTable(size_t Capacity)
 {
-    HashTable *Table = malloc(sizeof(HashTable));
+    AxHashTable *Table = malloc(sizeof(AxHashTable));
     if (Table == NULL) {
         return (NULL);
     }
@@ -49,7 +49,7 @@ HashTable *CreateTable(size_t Capacity)
     return(Table);
 }
 
-void DestroyTable(HashTable *Table)
+void DestroyTable(AxHashTable *Table)
 {
     // Free allocated keys
     for (size_t i = 0; i < Table->Capacity; i++)
@@ -68,7 +68,7 @@ void DestroyTable(HashTable *Table)
  * Searches for the key in the hash table.
  * @return NULL if it doesn't exist.
  */
-void *HashTableSearch(HashTable *Table, const char *Key)
+void *HashTableSearch(AxHashTable *Table, const char *Key)
 {
     if (Table == NULL) {
         return NULL;
@@ -139,7 +139,7 @@ const char *HashInsertEntry(HashEntry *Entries, size_t Capacity, const char *Key
     return (Key);
 }
 
-bool HashTableExpand(HashTable *Table)
+bool HashTableExpand(AxHashTable *Table)
 {
     size_t NewCapacity = Table->Capacity * 2;
 
@@ -165,7 +165,7 @@ bool HashTableExpand(HashTable *Table)
     return (true);
 }
 
-const char *HashInsert(HashTable *Table, const char *Key, void *Value)
+const char *HashInsert(AxHashTable *Table, const char *Key, void *Value)
 {
     //Assert(Value != NULL);
     if (!Table) { //  || !Value
@@ -184,16 +184,35 @@ const char *HashInsert(HashTable *Table, const char *Key, void *Value)
     return(HashInsertEntry(Table->Entries, Table->Capacity, Key, Value, &Table->Length));
 }
 
-size_t GetHashTableLength(HashTable *Table)
+size_t GetHashTableLength(AxHashTable *Table)
 {
     return (Table->Length);
 }
 
-void *GetHashTableEntry(HashTable *Table, int32_t Index)
+const char *GetHashTableKey(AxHashTable *Table, size_t Index)
 {
     // Loop until we find the entry at the index
     size_t NumEntry = 0;
-    for (int32_t i = 0; i < Table->Capacity; ++i)
+    for (size_t i = 0; i < Table->Capacity; ++i)
+    {
+        if (Table->Entries[i].Key != NULL)
+        {
+            if (NumEntry == Index) {
+                return (Table->Entries[i].Key);
+            }
+
+            NumEntry++;
+        }
+    }
+
+    return (NULL);
+}
+
+void *GetHashTableValue(AxHashTable *Table, size_t Index)
+{
+    // Loop until we find the entry at the index
+    size_t NumEntry = 0;
+    for (size_t i = 0; i < Table->Capacity; ++i)
     {
         if (Table->Entries[i].Key != NULL)
         {
@@ -208,7 +227,7 @@ void *GetHashTableEntry(HashTable *Table, int32_t Index)
     return (NULL);
 }
 
-//void HashDelete(HashTable *Table, const char *Key)
+//void HashDelete(AxHashTable *Table, const char *Key)
 //{
 //    
 //}
