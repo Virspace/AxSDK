@@ -3,7 +3,7 @@
 
 extern "C"
 {
-    #include "Foundation/HashTable.h"
+    #include "Foundation/AxHashTable.h"
     #include "Foundation/LinkedList.h"
 }
 
@@ -56,7 +56,7 @@ class LinkedListTest : public testing::Test
 class HashMapTest : public testing::Test
 {
     protected:
-        HashTable *Table;
+        AxHashTable *Table;
 
         void SetUp()
         {
@@ -241,8 +241,8 @@ TEST_F(HashMapTest, Iterate)
     size_t Length = GetHashTableLength(Table);
     EXPECT_EQ(Length, 2);
 
-    const char *Result1 = (char *)GetHashTableEntry(Table, 0);
-    const char *Result2 = (char *)GetHashTableEntry(Table, 1);
+    const char *Result1 = (char *)GetHashTableValue(Table, 0);
+    const char *Result2 = (char *)GetHashTableValue(Table, 1);
 
     EXPECT_STREQ(Result1, "Second address");
     EXPECT_STREQ(Result2, "First address");

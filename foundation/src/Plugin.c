@@ -1,11 +1,11 @@
 #include "Plugin.h"
 #include "APIRegistry.h"
 #include "Platform.h"
-#include "HashTable.h"
+#include "AxHashTable.h"
 #include <cassert>
 
 static const uint8_t InitialSize = 2;
-static HashTable *PluginMap;
+static AxHashTable *PluginMap;
 
 static bool PluginMapCreated = false;
 static uint64_t PluginHandleIndex = 0;

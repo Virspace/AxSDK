@@ -1,6 +1,6 @@
 #include "Foundation/APIRegistry.h"
 #include "Foundation/Math.h"
-#include "Foundation/HashTable.h"
+#include "Foundation/AxHashTable.h"
 #include "Foundation/Platform.h"
 #include "AxWindow.h"
 #include <stdio.h>
@@ -1073,6 +1073,7 @@ static enum AxMessageBoxResponse CreateMessageBox(const AxWindow *Window, const 
     return (Result);
 }
 
+// Use a compound literal to construct an unnamed object of API type in-place
 struct AxWindowAPI *WindowAPI = &(struct AxWindowAPI) {
     .Init = Init,
     .CreateWindow = CreateWindow_,

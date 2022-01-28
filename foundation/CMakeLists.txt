@@ -22,7 +22,7 @@ target_sources(Foundation
         include/Foundation/Camera.h
         include/Foundation/EditorPlugin.h
         include/Foundation/Hash.h
-        include/Foundation/HashTable.h
+        include/Foundation/AxHashTable.h
         #include/Foundation/ImageLoader.h
         include/Foundation/Intrinsics.h
         include/Foundation/Math.h
@@ -34,7 +34,7 @@ target_sources(Foundation
         src/Camera.c
         #src/ImageLoader.c
         src/Hash.c
-        src/HashTable.c
+        src/AxHashTable.c
         src/Math.c
         src/Plugin.c
         src/Win32Platform.c
