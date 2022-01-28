@@ -186,7 +186,8 @@ const char *HashInsert(AxHashTable *Table, const char *Key, void *Value)
 
 size_t GetHashTableLength(AxHashTable *Table)
 {
-    return (Table->Length);
+    Assert(Table && "AxHashTable is NULL!");
+    return ((Table) ? Table->Length : 0);
 }
 
 const char *GetHashTableKey(AxHashTable *Table, size_t Index)
