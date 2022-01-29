@@ -697,6 +697,7 @@ static void Destroy(void)
     SAFE_FREE(Data);
 }
 
+// Use a compound literal to construct an unnamed object of API type in-place
 struct AxOpenGLAPI *AxOpenGLAPI = &(struct AxOpenGLAPI) {
     .Create = Create,
     .Destroy = Destroy,
