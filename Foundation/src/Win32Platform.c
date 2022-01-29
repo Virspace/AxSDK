@@ -3,7 +3,45 @@
 #endif
 
 #include <Windows.h>
+#include <ShObjIdl.h>
+#include <shellapi.h>
+#include "AxHashTable.h"
 #include "platform.h"
+
+static AxHashTable *DLLMap; // <Path, Pointer>
+
+/* ========================================================================
+   Axon Path
+   ======================================================================== */
+
+static bool FileExists(const char *Path)
+{
+    uint32_t result = GetFileAttributes(Path);
+    if (result != 0xFFFFFFFF && !(result & FILE_ATTRIBUTE_DIRECTORY)) {
+        return (true);
+    }
+
+    return (false); 
+}
+
+static bool DirectoryExists(const char *Path)
+{
+    // bool exists = !dir.Len();
+    // if (!exists)
+    // {
+    //     Paths::NormalizeDirectory(dir);
+    //     uint32_t result = GetFileAttributesA(dir);
+    //     exists = (result != 0xFFFFFFFF && (result & FILE_ATTRIBUTE_DIRECTORY));
+    // }
+
+    // return exists;
+}
+
+static char *CurrentWorkingDirectory(void)
+{
+
+}
+
 
 /* ========================================================================
    Axon File
@@ -99,14 +137,43 @@ static void FileClose(AxFile File)
 }
 
 /* ========================================================================
+   Axon Directory
+   ======================================================================== */
+
+static bool CreateDir(const char *Path)
+{
+    return (CreateDirectory(Path, NULL));
+}
+
+static bool RemoveDir(const char *Path)
+{
+    SHFILEOPSTRUCT FileOp = { 0 };
+    FileOp.hwnd = NULL;
+    FileOp.wFunc = FO_DELETE;
+    FileOp.pFrom = TEXT(Path);
+    FileOp.fFlags = FOF_SILENT | FOF_NOCONFIRMATION;
+
+    if (SHFileOperation(&FileOp) == 0) {
+        return (true);
+    }
+
+    return (false);
+}
+
+/* ========================================================================
    Axon DLL
    ======================================================================== */
 
 static AxDLL DLLLoad(const char *Path)
 {
+    if (!DLLMap) {
+        DLLMap = CreateTable(10);
+    }
+
     uint64_t Handle = (uint64_t)LoadLibrary(Path);
-    if (Handle)
+    if (Handle) {
         return((AxDLL){ .Opaque = Handle });
+    }
 
     return((AxDLL){ .Opaque = 0 });
 }
@@ -114,6 +181,17 @@ static AxDLL DLLLoad(const char *Path)
 static void DLLUnload(AxDLL DLL)
 {
     FreeLibrary((HMODULE)DLL.Opaque);
+}
+
+static AxDLL DLLGet(const char *Path)
+{
+    if (DLLMap)
+    {
+        uint64_t Handle = (uint64_t)HashTableSearch(DLLMap, Path);
+        return ((AxDLL){ .Opaque = Handle });
+    }
+
+    return ((AxDLL){ .Opaque = 0 });
 }
 
 static bool DLLIsValid(AxDLL DLL)
@@ -161,9 +239,14 @@ struct AxPlatformAPI *AxPlatformAPI = &(struct AxPlatformAPI) {
         .Read = FileRead,
         .Close = FileClose
     },
+    .Directory = &(struct AxPlatformDirectoryAPI) {
+        .CreateDir = CreateDir,
+        .RemoveDir = RemoveDir
+    },
     .DLL =  &(struct AxPlatformDLLAPI) {
         .Load = DLLLoad,
         .Unload = DLLUnload,
+        .Get = DLLGet,
         .IsValid = DLLIsValid,
         .Symbol = DLLSymbol
     },
