@@ -62,9 +62,6 @@ struct AxPlatformDLLAPI
     // Unloads a given DLL
     void (*Unload)(AxDLL Handle);
 
-    // Returns an already loaded DLL, otherwise an invalid AxDLL
-    AxDLL (*Get)(const char *Path);
-
     // Checks to see if DLL is valid
     bool (*IsValid)(AxDLL Handle);
 
