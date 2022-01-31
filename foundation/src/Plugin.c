@@ -2,43 +2,99 @@
 #include "APIRegistry.h"
 #include "Platform.h"
 #include "AxHashTable.h"
-#include <cassert>
+#include "AxArray.h"
+#include "Hash.h"
 
-static const uint8_t InitialSize = 2;
-static AxHashTable *PluginMap;
+#define AXARRAY_IMPLEMENTATION
 
-static bool PluginMapCreated = false;
-static uint64_t PluginHandleIndex = 0;
+// NOTE(mdeforge): I'm still deciding if I want to get a hash by reading or
+// use Win32's FindFirstChangeNotification or ReadDirectoryChanges. One
+// advantange of at least FindFirst is that it can watch a whole directory,
+// presumably the one where all the plugins would be...
+#define DO_HASH 0
 
-static uint64_t Load(const char *Path, bool HotReload)
+struct AxPlugin
 {
-    assert(AxPlatformAPI && "AxonPlatformAPI is NULL");
+    char *Path;
+    uint64_t Hash;
+    AxDLL Handle;
+    bool IsHotReloadable;
+};
 
-    if (!PluginMapCreated)
-    {
-        PluginMap = CreateTable(InitialSize);
-        PluginMapCreated = true;
+static struct AxPlugin *PluginArray;
+static AxHashTable *PluginTable; // <Path, PluginInfo>
+static uint64_t HashVal = FNV1_64_INIT;
+
+static struct AxPlugin *Load(const char *Path, bool HotReload)
+{
+    if (!PluginTable) {
+        PluginTable = CreateTable(10);
     }
 
     struct AxPlatformDLLAPI *DLLAPI = AxPlatformAPI->DLL;
-    assert(DLLAPI && "DLLAPI is NULL");
+    struct AxPlatformFileAPI *FileAPI = AxPlatformAPI->File;
 
     AxDLL DLL = DLLAPI->Load(Path);
     if (DLLAPI->IsValid(DLL))
     {
-        axon_load_plugin_f *LoadPlugin = (axon_load_plugin_f *)DLLAPI->Symbol(DLL, "LoadPlugin");
+        AxLoadPluginF *LoadPlugin = (AxLoadPluginF *)DLLAPI->Symbol(DLL, "LoadPlugin");
         if (LoadPlugin)
         {
+            // Call the plugins LoadPlugin function
             LoadPlugin(AxonGlobalAPIRegistry, false);
-            PluginHandleIndex++;
 
-            return(PluginHandleIndex);
+            // Read DLL into buffer for hashing
+            uint64_t Hash = 0;
+            #if (DO_HASH)
+            AxFile DLLFile = FileAPI->OpenForRead(Path);
+            if (FileAPI->IsValid)
+            {
+                // Read DLL
+                size_t DLLFileSize = FileAPI->Size(DLLFile);
+                void *DLLFileBuffer = malloc(DLLFileSize);
+                FileAPI->Read(DLLFile, DLLFileBuffer, DLLFileSize);
+                FileAPI->Close(DLLFile);
+
+                // Hash the plugin
+                Hash = HashBufferFNV1a(DLLFileBuffer, DLLFileSize, HashVal);
+                free(DLLFileBuffer);
+            }
+            #endif
+
+            // Create info
+            struct AxPlugin Plugin = {
+                .Handle = DLL,
+                .Hash = Hash,
+                .IsHotReloadable = HotReload
+            };
+
+            // Add info to array and table
+            ArrayPush(PluginArray, Plugin);
+            HashInsert(PluginTable, Path, ArrayBack(PluginArray));
+
+            // Update HashVal for next use
+            HashVal = Hash;
+
+            return(ArrayBack(PluginArray));
         }
     }
 
-    return (0);
+    return (NULL);
+}
+
+static struct AxPlugin *GetPlugins(void)
+{
+    return (PluginArray);
+}
+
+static void Unload(AxPlugin *Plugin)
+{
+    if (Plugin) {
+        AxPlatformAPI->DLL->Unload(Plugin->Handle);
+    }
 }
 
 struct AxPluginAPI *AxPluginAPI = &(struct AxPluginAPI) {
-    .Load = Load
+    .Load = Load,
+    .Unload = Unload
 };

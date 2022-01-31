@@ -16,6 +16,14 @@ typedef struct AxDLL
 
 #define AXON_PLATFORM_API_NAME "AxonPlatformAPI"
 
+// Interface for paths
+struct AxPlatformPathAPI
+{
+    bool (*FileExists)(const char *Path);
+    bool (*DirectoryExists)(const char *Path);
+    char *(*CurrentWorkingDirectory)(void);
+};
+
 // Interface for File I/O
 struct AxPlatformFileAPI
 {
@@ -36,6 +44,13 @@ struct AxPlatformFileAPI
 
     // Closes the file.
     void (*Close)(AxFile File);
+};
+
+// Interface for Directories
+struct AxPlatformDirectoryAPI
+{
+    bool (*CreateDir)(const char *Path);
+    bool (*RemoveDir)(const char *Path);
 };
 
 // Interface for loading libraries
@@ -70,6 +85,7 @@ struct AxTimeAPI
 struct AxPlatformAPI
 {
     struct AxPlatformFileAPI *File;
+    struct AxPlatformDirectoryAPI *Directory;
     struct AxPlatformDLLAPI *DLL;
     struct AxTimeAPI *Time;
 };
