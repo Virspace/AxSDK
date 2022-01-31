@@ -2,9 +2,9 @@
 
 #include "Foundation/Types.h"
 
+struct AxPlugin;
 struct AxAPIRegistry;
 
-typedef struct AxPlugin AxPlugin;
 typedef void AxLoadPluginF(struct AxAPIRegistry *APIRegistry, bool Load);
 
 #define AXON_PLUGIN_API_NAME "AxonPluginAPI"
@@ -15,20 +15,28 @@ struct AxPluginAPI
     /**
      * Loads a shared library and adds it to the plugin map.
      * @param Path The full path to the shared library.
-     * @param HotReload If true, will hot reload when changes are detected (TODO)
+     * @param HotReload If true, will hot reload when changes are detected (TODO).
+     * @return Returns an AxPlugin object if successful, otherwise NULL.
      */
-    AxPlugin *(*Load)(const char *Path, bool HotReload);
+    struct AxPlugin *(*Load)(const char *Path, bool HotReload);
 
     /**
      * Unloads a shared library.
      * @param Plugin
      */
-    void (*Unload)(AxPlugin *Plugin);
+    void (*Unload)(struct AxPlugin *Plugin);
 
     /**
-     * Returns AxArray of Plugins
+     * Returns AxArray of Plugins.
      */
-    AxPlugin *(*GetPlugins)(void);
+    struct AxPlugin *(*GetPlugins)(void);
+
+    /**
+     * Returns an AxArray containing the full path to the target plugin.
+     * @param Plugin The target plugin.
+     * @return An AxArray containing the full path to the target plugin, otherwise NULL.
+     */
+    char *(*GetPath)(struct AxPlugin *Plugin);
 };
 
 #if defined(AXON_LINKS_FOUNDATION)
