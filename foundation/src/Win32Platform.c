@@ -8,8 +8,6 @@
 #include "AxHashTable.h"
 #include "platform.h"
 
-static AxHashTable *DLLMap; // <Path, Pointer>
-
 /* ========================================================================
    Axon Path
    ======================================================================== */
@@ -21,7 +19,7 @@ static bool FileExists(const char *Path)
         return (true);
     }
 
-    return (false); 
+    return (false);
 }
 
 static bool DirectoryExists(const char *Path)
@@ -91,10 +89,10 @@ static int64_t FileSetPosition(AxFile File, int64_t Position)
 static uint64_t FileSize(AxFile File)
 {
     Assert(FileIsValid(File));
-    
+
     LARGE_INTEGER LargeInt;
     GetFileSizeEx((HANDLE)File.Handle, &LargeInt);
-    
+
     return(LargeInt.QuadPart);
 }
 
@@ -166,32 +164,21 @@ static bool RemoveDir(const char *Path)
 
 static AxDLL DLLLoad(const char *Path)
 {
-    if (!DLLMap) {
-        DLLMap = CreateTable(10);
-    }
-
-    uint64_t Handle = (uint64_t)LoadLibrary(Path);
+    AxDLL DLL = { 0 };
+    void *Handle = LoadLibrary(Path);
     if (Handle) {
-        return((AxDLL){ .Opaque = Handle });
+        DLL.Opaque = (uint64_t)Handle;
     }
 
-    return((AxDLL){ .Opaque = 0 });
+    return(DLL);
 }
 
 static void DLLUnload(AxDLL DLL)
 {
-    FreeLibrary((HMODULE)DLL.Opaque);
-}
-
-static AxDLL DLLGet(const char *Path)
-{
-    if (DLLMap)
-    {
-        uint64_t Handle = (uint64_t)HashTableSearch(DLLMap, Path);
-        return ((AxDLL){ .Opaque = Handle });
+    HMODULE *Handle = (HMODULE *)DLL.Opaque;
+    if (Handle) {
+        FreeLibrary((HMODULE)DLL.Opaque);
     }
-
-    return ((AxDLL){ .Opaque = 0 });
 }
 
 static bool DLLIsValid(AxDLL DLL)
@@ -202,6 +189,7 @@ static bool DLLIsValid(AxDLL DLL)
 static void *DLLSymbol(AxDLL DLL, const char *SymbolName)
 {
     void *Symbol = (void *)GetProcAddress((HMODULE)DLL.Opaque, SymbolName);
+
     return(Symbol ? Symbol : NULL);
 }
 
@@ -246,7 +234,6 @@ struct AxPlatformAPI *AxPlatformAPI = &(struct AxPlatformAPI) {
     .DLL =  &(struct AxPlatformDLLAPI) {
         .Load = DLLLoad,
         .Unload = DLLUnload,
-        .Get = DLLGet,
         .IsValid = DLLIsValid,
         .Symbol = DLLSymbol
     },

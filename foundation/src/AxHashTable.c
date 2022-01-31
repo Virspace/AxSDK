@@ -2,10 +2,6 @@
 #include "Hash.h"
 #include <string.h>
 
-#define _CRTDBG_MAP_ALLOC
-#include <stdlib.h>
-#include <crtdbg.h>
-
 #define DEFAULT_CAPACITY 16
 
 // NOTE(mdeforge): Inspired by https://github.com/benhoyt/ht
@@ -125,7 +121,7 @@ const char *HashInsertEntry(HashEntry *Entries, size_t Capacity, const char *Key
     // Didn't find key, allocate and copy if needed, then insert it
     if (EntryLength != NULL)
     {
-        Key = strdup(Key); // Note(mdeforge): This malloc's, don't forget to free!
+        Key = _strdup(Key); // Note(mdeforge): This malloc's, don't forget to free!
         if (Key == NULL) {
             return (NULL);
         }
