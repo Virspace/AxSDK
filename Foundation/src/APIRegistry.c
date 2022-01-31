@@ -5,10 +5,6 @@
 #include "AxHashTable.h"
 #include <string.h>
 
-#define _CRTDBG_MAP_ALLOC
-#include <stdlib.h>
-#include <crtdbg.h>
-
 struct AxAPIRegistry *AxonGlobalAPIRegistry;
 
 static const uint32_t InitialSize = 16;

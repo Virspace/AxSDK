@@ -17,6 +17,8 @@
     The Size and Capacity of the array is stored in a header before the array itself.
 
     [Example]
+    #include "Foundation/AxArray.h"
+    #define AXARRAY_IMPLEMENTATION
     int main(void)
     {
         int *array = NULL;
@@ -126,7 +128,7 @@ template<class T> static T* ArrayReserveWrapper(T *A, size_t BlockSize, size_t N
 #define ArrayReserveWrapper ArrayReserve
 #endif
 
-#endif // INCLUDE_STB_DS_H
+#endif
 
 // [Implementation] ///////////////////////////////////////////
 
