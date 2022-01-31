@@ -4,6 +4,8 @@
 #include "AxHashTable.h"
 #include "AxArray.h"
 #include "Hash.h"
+#include <string.h>
+#include <stdio.h>
 
 #define AXARRAY_IMPLEMENTATION
 
@@ -87,7 +89,20 @@ static struct AxPlugin *GetPlugins(void)
     return (PluginArray);
 }
 
-static void Unload(AxPlugin *Plugin)
+static char *GetPath(struct AxPlugin *Plugin)
+{
+    if (!Plugin) {
+        return (NULL);
+    }
+
+    char *Buffer = { 0 };
+    ArraySetSize(Buffer, strlen(Plugin->Path));
+    sprintf(Buffer, "%s", Plugin->Path);
+
+    return (Buffer);
+}
+
+static void Unload(struct AxPlugin *Plugin)
 {
     if (Plugin) {
         AxPlatformAPI->DLL->Unload(Plugin->Handle);
@@ -96,5 +111,7 @@ static void Unload(AxPlugin *Plugin)
 
 struct AxPluginAPI *AxPluginAPI = &(struct AxPluginAPI) {
     .Load = Load,
-    .Unload = Unload
+    .Unload = Unload,
+    .GetPlugins = GetPlugins,
+    .GetPath = GetPath
 };
