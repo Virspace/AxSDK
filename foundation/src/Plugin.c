@@ -65,7 +65,7 @@ static struct AxPlugin *Load(const char *Path, bool HotReload)
 
             // Create info
             struct AxPlugin Plugin = {
-                .Path = strdup(Path),
+                .Path = _strdup(Path),
                 .Handle = DLL,
                 .Hash = Hash,
                 .IsHotReloadable = HotReload
@@ -85,9 +85,21 @@ static struct AxPlugin *Load(const char *Path, bool HotReload)
     return (NULL);
 }
 
-static struct AxPlugin **GetPlugins(void)
+static struct AxPlugin *GetPlugins(void)
 {
-    return (&PluginArray);
+    return (PluginArray);
+}
+
+static size_t GetNumPlugins(void)
+{
+    return (ArraySize(PluginArray));
+}
+
+static struct AxPlugin *GetPlugin(size_t Index)
+{
+    struct AxPlugin *Plugin = &PluginArray[Index];
+
+    return ((Plugin) ? Plugin : NULL);
 }
 
 static bool GetPath(struct AxPlugin *Plugin, char *Buffer, size_t BufferSize)
@@ -118,5 +130,7 @@ struct AxPluginAPI *AxPluginAPI = &(struct AxPluginAPI) {
     .Load = Load,
     .Unload = Unload,
     .GetPlugins = GetPlugins,
+    .GetNumPlugins = GetNumPlugins,
+    .GetPlugin = GetPlugin,
     .GetPath = GetPath
 };
