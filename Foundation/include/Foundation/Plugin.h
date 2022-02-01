@@ -29,7 +29,19 @@ struct AxPluginAPI
     /**
      * Returns pointer to an AxArray (pointer) of Plugins.
      */
-    struct AxPlugin **(*GetPlugins)(void);
+    struct AxPlugin *(*GetPlugins)(void);
+
+    /**
+     * Returns number of plugins.
+     * @return The number of plugins.
+     */
+    size_t (*GetNumPlugins)(void);
+
+    /**
+     * Returns a pointer to an AxPlugin given an index
+     * @return Returns an AxPlugin if given a valid index, otherwise NULL.
+     */
+    struct AxPlugin *(*GetPlugin)(size_t Index);
 
     /**
      * Returns a full path to the target plugin.
