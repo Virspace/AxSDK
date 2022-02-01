@@ -27,9 +27,9 @@ struct AxPluginAPI
     void (*Unload)(struct AxPlugin *Plugin);
 
     /**
-     * Returns AxArray of Plugins.
+     * Returns pointer to an AxArray (pointer) of Plugins.
      */
-    struct AxPlugin *(*GetPlugins)(void);
+    struct AxPlugin **(*GetPlugins)(void);
 
     /**
      * Returns a full path to the target plugin.

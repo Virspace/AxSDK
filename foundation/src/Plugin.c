@@ -84,9 +84,9 @@ static struct AxPlugin *Load(const char *Path, bool HotReload)
     return (NULL);
 }
 
-static struct AxPlugin *GetPlugins(void)
+static struct AxPlugin **GetPlugins(void)
 {
-    return (PluginArray);
+    return (&PluginArray);
 }
 
 static bool GetPath(struct AxPlugin *Plugin, char *Buffer, size_t BufferSize)
