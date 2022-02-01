@@ -32,11 +32,13 @@ struct AxPluginAPI
     struct AxPlugin *(*GetPlugins)(void);
 
     /**
-     * Returns an AxArray containing the full path to the target plugin.
+     * Returns a full path to the target plugin.
      * @param Plugin The target plugin.
-     * @return An AxArray containing the full path to the target plugin, otherwise NULL.
+     * @param Buffer Buffer to write the path into.
+     * @param BufferSize The size of the buffer.
+     * @return True if the BufferSize was large enough, otherwise false.
      */
-    char *(*GetPath)(struct AxPlugin *Plugin);
+    bool (*GetPath)(struct AxPlugin *Plugin, char *Buffer, size_t BufferSize);
 };
 
 #if defined(AXON_LINKS_FOUNDATION)

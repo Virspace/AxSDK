@@ -89,17 +89,21 @@ static struct AxPlugin *GetPlugins(void)
     return (PluginArray);
 }
 
-static char *GetPath(struct AxPlugin *Plugin)
+static bool GetPath(struct AxPlugin *Plugin, char *Buffer, size_t BufferSize)
 {
     if (!Plugin) {
-        return (NULL);
+        return (false);
     }
 
-    char *Buffer = { 0 };
-    ArraySetSize(Buffer, strlen(Plugin->Path));
+    // TODO(mdeforge): I kind of hate how this is done, really need a temp allocator
+    // or AxString. Reminder, remove stdio.h and string.h later
+    if (strlen(Plugin->Path) > BufferSize) {
+        return (false);
+    }
+
     sprintf(Buffer, "%s", Plugin->Path);
 
-    return (Buffer);
+    return (true);
 }
 
 static void Unload(struct AxPlugin *Plugin)
