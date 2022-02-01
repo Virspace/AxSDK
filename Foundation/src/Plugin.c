@@ -65,6 +65,7 @@ static struct AxPlugin *Load(const char *Path, bool HotReload)
 
             // Create info
             struct AxPlugin Plugin = {
+                .Path = strdup(Path),
                 .Handle = DLL,
                 .Hash = Hash,
                 .IsHotReloadable = HotReload
