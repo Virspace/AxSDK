@@ -1,9 +1,9 @@
 #pragma once
 
-typedef struct ImGuiContext ImGuiContext;
-typedef struct EditorPluginAPI
+struct ImGuiContext;
+struct EditorPluginAPI
 {
-    void (*Init)(ImGuiContext *Context);
+    void (*Init)(struct ImGuiContext *Context);
     void (*Tick)(void);
     void (*Term)(void);
-} EditorPluginAPI;
+}
