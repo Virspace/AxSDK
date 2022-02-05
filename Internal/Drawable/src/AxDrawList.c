@@ -5,11 +5,11 @@
 #include <string.h>
 #include "Foundation/AxArray.h"
 
-void DrawListAddDrawable(AxDrawList *DrawList, const AxDrawVert *Vertices, const AxDrawIndex *Indices, const size_t VertexCount, const size_t IndexCount)
+void DrawListAddDrawable(struct AxDrawList *DrawList, const struct AxDrawVert *Vertices, const AxDrawIndex *Indices, const size_t VertexCount, const size_t IndexCount)
 {
     Assert(DrawList);
 
-    AxDrawCommand DrawCommand = {
+    struct AxDrawCommand DrawCommand = {
         .TextureID = 0,
         .VertexOffset = ArraySize(DrawList->VertexBuffer), // Size of the buffer up until this point
         .IndexOffset = ArraySize(DrawList->IndexBuffer),   // Size of the buffer up until this point
@@ -22,18 +22,18 @@ void DrawListAddDrawable(AxDrawList *DrawList, const AxDrawVert *Vertices, const
     DrawList->IsDirty = true;
 }
 
-void DrawListAddQuad(AxDrawList *DrawList, const AxVert TopRight, const AxVert BottomRight, const AxVert BottomLeft, const AxVert TopLeft)
+void DrawListAddQuad(struct AxDrawList *DrawList, const AxVert TopRight, const AxVert BottomRight, const AxVert BottomLeft, const AxVert TopLeft)
 {
     Assert(DrawList);
 
-    AxDrawVert *Vertices = NULL;
+    struct AxDrawVert *Vertices = NULL;
     AxDrawIndex *Indices = NULL;
     AxUV UV1 = (AxUV) { .U = 0, .V = 0 };
 
-    ArrayPush(Vertices, ((AxDrawVert){ .Position = TopRight, .UV = UV1, .Color = 0 }));
-    ArrayPush(Vertices, ((AxDrawVert){ .Position = BottomRight, .UV = UV1, .Color = 0 }));
-    ArrayPush(Vertices, ((AxDrawVert){ .Position = BottomLeft, .UV = UV1, .Color = 0 }));
-    ArrayPush(Vertices, ((AxDrawVert){ .Position = TopLeft, .UV = UV1, .Color = 0 }));
+    ArrayPush(Vertices, ((struct AxDrawVert){ .Position = TopRight, .UV = UV1, .Color = 0 }));
+    ArrayPush(Vertices, ((struct AxDrawVert){ .Position = BottomRight, .UV = UV1, .Color = 0 }));
+    ArrayPush(Vertices, ((struct AxDrawVert){ .Position = BottomLeft, .UV = UV1, .Color = 0 }));
+    ArrayPush(Vertices, ((struct AxDrawVert){ .Position = TopLeft, .UV = UV1, .Color = 0 }));
 
     ArrayPush(Indices, 0);
     ArrayPush(Indices, 1);
@@ -48,7 +48,7 @@ void DrawListAddQuad(AxDrawList *DrawList, const AxVert TopRight, const AxVert B
     ArrayFree(Indices);
 }
 
-void DrawListAddRect(AxDrawList* DrawList, const AxRect *Rect)
+void DrawListAddRect(struct AxDrawList* DrawList, const AxRect *Rect)
 {
     const AxVert TopRight = { (float)Rect->Right, (float)Rect->Top, 0.0f };
     const AxVert BottomRight = { (float)Rect->Right, (float)Rect->Bottom, 0.0f };
@@ -58,7 +58,7 @@ void DrawListAddRect(AxDrawList* DrawList, const AxRect *Rect)
     DrawListAddQuad(DrawList, TopRight, BottomRight, BottomLeft, TopLeft);
 }
 
-void DrawListClear(AxDrawList *DrawList)
+void DrawListClear(struct AxDrawList *DrawList)
 {
     Assert(DrawList);
 
