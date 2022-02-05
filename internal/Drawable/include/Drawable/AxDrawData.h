@@ -2,18 +2,18 @@
 
 #include "Foundation/Types.h"
 
-typedef struct AxDrawList AxDrawList;
+struct AxDrawList;
 
-typedef struct AxDrawData
+struct AxDrawData
 {
     bool Valid;
     size_t TotalIndexCount;
     size_t TotalVertexCount;
-    AxDrawList *CommandList;
+    struct AxDrawList *CommandList;
     AxVec2 DisplayPos;
     AxVec2 DisplaySize;
     AxVec2 FramebufferScale;
-} AxDrawData;
+};
 
-void DrawDataAddDrawList(AxDrawData *DrawData, const AxDrawList DrawList);
-void DrawDataClear(AxDrawData *DrawData);
+void DrawDataAddDrawList(struct AxDrawData *DrawData, const struct AxDrawList DrawList);
+void DrawDataClear(struct AxDrawData *DrawData);

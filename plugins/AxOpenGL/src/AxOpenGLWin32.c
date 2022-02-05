@@ -373,15 +373,15 @@ static void SetupRenderState(AxDrawData *DrawData, int FramebufferWidth, int Fra
 
     // Position Attribute
     glEnableVertexAttribArray(Data->AttribLocationVertexPos);
-    glVertexAttribPointer(Data->AttribLocationVertexPos, 3, GL_FLOAT, GL_FALSE, sizeof(AxDrawVert), (GLvoid *)offsetof(AxDrawVert, Position));
+    glVertexAttribPointer(Data->AttribLocationVertexPos, 3, GL_FLOAT, GL_FALSE, sizeof(struct AxDrawVert), (GLvoid *)offsetof(struct AxDrawVert, Position));
 
     // UV Attribute
     glEnableVertexAttribArray(Data->AttribLocationVertexUV);
-    glVertexAttribPointer(Data->AttribLocationVertexUV, 2, GL_FLOAT, GL_FALSE, sizeof(AxDrawVert), (GLvoid *)offsetof(AxDrawVert, UV));
+    glVertexAttribPointer(Data->AttribLocationVertexUV, 2, GL_FLOAT, GL_FALSE, sizeof(struct AxDrawVert), (GLvoid *)offsetof(struct AxDrawVert, UV));
 
     // Color Attribute
     glEnableVertexAttribArray(Data->AttribLocationVertexColor);
-    glVertexAttribPointer(Data->AttribLocationVertexColor, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(AxDrawVert), (GLvoid *)offsetof(AxDrawVert, Color));
+    glVertexAttribPointer(Data->AttribLocationVertexColor, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(struct AxDrawVert), (GLvoid *)offsetof(struct AxDrawVert, Color));
 }
 
 static void Win32LoadWGLExtensions(/*struct OpenGLData *Data*/)
@@ -555,12 +555,12 @@ void RenderDrawData(AxDrawData *DrawData)
     size_t a = ArraySize(DrawData->CommandList);
     for (int i = 0; i < ArraySize(DrawData->CommandList); i++)
     {
-        AxDrawList *DrawList = &DrawData->CommandList[i];
+        struct AxDrawList *DrawList = &DrawData->CommandList[i];
 
         // If the draw list dirty, buffer data
         if (DrawList->IsDirty)
         {
-            const AxDrawVert *VertexBuffer = DrawList->VertexBuffer;
+            const struct AxDrawVert *VertexBuffer = DrawList->VertexBuffer;
             const AxDrawIndex *IndexBuffer = DrawList->IndexBuffer;
             // TODO(mdeforge): SubData???
             // TODO(mdeforge): Better to do at DrawList level like before or at command level?
@@ -573,7 +573,7 @@ void RenderDrawData(AxDrawData *DrawData)
         size_t CommandBufferSize = ArraySize(DrawList->CommandBuffer);
         for (int j = 0; j < ArraySize(DrawList->CommandBuffer); j++)
         {
-            const AxDrawCommand *Command = &DrawList->CommandBuffer[j];
+            const struct AxDrawCommand *Command = &DrawList->CommandBuffer[j];
             if (Command)
             {
                 // Project scissor/clipping rectangles into framebuffer space

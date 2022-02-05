@@ -3,7 +3,7 @@
 #include "Foundation/AxArray.h"
 #include <string.h>
 
-void DrawDataAddDrawList(AxDrawData *DrawData, const AxDrawList DrawList)
+void DrawDataAddDrawList(struct AxDrawData *DrawData, const struct AxDrawList DrawList)
 {
     DrawData->TotalVertexCount += ArraySize(DrawList.VertexBuffer);
     DrawData->TotalIndexCount += ArraySize(DrawList.IndexBuffer);
@@ -11,7 +11,7 @@ void DrawDataAddDrawList(AxDrawData *DrawData, const AxDrawList DrawList)
     ArrayPush(DrawData->CommandList, DrawList);
 }
 
-void DrawDataClear(AxDrawData *DrawData)
+void DrawDataClear(struct AxDrawData *DrawData)
 {
     for (int i = 0; i < ArraySize(DrawData->CommandList); ++i) {
         DrawListClear(&DrawData->CommandList[i]);
