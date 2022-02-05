@@ -68,10 +68,6 @@ protected:
 
     void TearDown()
     {
-        for (int i = 0; i < 3; i++) {
-            DrawListClear(&DrawLists[i]);
-        }
-
         DrawDataClear(&DrawData);
         ArrayFree(DrawLists);
     }
@@ -79,7 +75,8 @@ protected:
 
 TEST_F(DrawDataTest, CommandListSize)
 {
-    EXPECT_EQ(ArraySize(DrawData.CommandList), 3);
+    size_t Size = ArraySize(DrawData.CommandList);
+    EXPECT_EQ(Size, 3);
 }
 
 TEST_F(DrawDataTest, TotalVertexCount)
