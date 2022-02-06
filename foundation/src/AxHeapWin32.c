@@ -1,4 +1,5 @@
 #include "AxHeap.h"
+#include "AxHashTable.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
@@ -33,6 +34,8 @@ struct AxHeap
     AxHeapStats Stats;
 };
 
+static struct AxHashTable *HeapTable;
+
 static size_t RoundValueToNearestMultiple(size_t Value, size_t Multiple)
 {
     size_t Remainder = Value % Multiple;
@@ -51,10 +54,10 @@ static uint32_t GetSystemPageSize()
     return ((uint32_t)SystemInfo.dwPageSize);
 }
 
-static struct AxHeap *Create(size_t InitialSize, size_t MaxSize)
+static struct AxHeap *Create(const char *Name, size_t InitialSize, size_t MaxSize)
 {
     // Get system page size on this computer.
-    uint32_t PageSize = GetSystemPageSize(); 
+    uint32_t PageSize = GetSystemPageSize();
 
     // Round InitialSize up to the nearest multiple of the system page size.
     InitialSize = RoundValueToNearestMultiple(InitialSize, PageSize);
@@ -77,16 +80,25 @@ static struct AxHeap *Create(size_t InitialSize, size_t MaxSize)
     // The initial size determines the number of committed pages that are allocated initially for the heap.
     VirtualAlloc(BaseAddress, InitialSize, MEM_COMMIT, PAGE_READWRITE);
 
-    // TODO(mdeforge): So here we're taking up some of the initial memory, we need to factor this into the sizes above
+    // Construct the heap
     struct AxHeap *Heap = BaseAddress;
     if (Heap)
     {
         Heap->Heap = (uint8_t *)BaseAddress + sizeof(struct AxHeap);
+        Heap->Stats.Name = _strdup(Name);
         Heap->Stats.BytesUsed = 0; // TODO(mdeforge): Consider ByteOffset instead
         Heap->Stats.PageSize = PageSize;
         Heap->Stats.PageCount = InitialSize / PageSize;
         Heap->Stats.MaxPages = MaxSize / PageSize;
     }
+
+    // Lazy-initialize heap table
+    if (!HeapTable) {
+        HeapTable = CreateTable(3);
+    }
+
+    // Add heap to heap table
+    HashInsert(HeapTable, Name, Heap);
 
     return (Heap);
 }
@@ -132,8 +144,30 @@ static void Free(struct AxHeap *Heap, void *Ptr, size_t Size)
 
 }
 
+static size_t GetNumHeaps(void)
+{
+    Assert(HeapTable);
+    if (!HeapTable) {
+        return (0);
+    }
+
+    return (GetHashTableLength(HeapTable));
+}
+
+static struct AxHeap *GetHeap(size_t Index)
+{
+    Assert(HeapTable);
+    if (!HeapTable) {
+        return (NULL);
+    }
+
+    return (GetHashTableValue(HeapTable, Index));
+}
+
 struct AxHeapAPI *AxHeapAPI = &(struct AxHeapAPI) {
     .Create = Create,
     .Alloc = Alloc,
-    .Free = Free
+    .Free = Free,
+    .GetNumHeaps = GetNumHeaps,
+    .GetHeap = GetHeap
 };

@@ -6,6 +6,8 @@ struct AxHeap;
 
 typedef struct AxHeapStats
 {
+    char *Name;
+
     uint64_t BytesUsed;
     uint64_t PageCount;
     uint32_t PageSize;
@@ -23,11 +25,12 @@ struct AxHeapAPI
      * for a specified initial size of the maximum size. The system uses memory from the private
      * heap to store heap support structures, so not all of the specified heap size is available
      * to the process.
+     * @param Name The name of the heap
      * @param InitialSize The initial size of the heap.
      * @param MaxSize The maximum size of the heap.
      * @return A pointer to the heap, otherwise NULL.
      */
-    struct AxHeap *(*Create)(size_t InitialSize, size_t MaxSize);
+    struct AxHeap *(*Create)(char *Name, size_t InitialSize, size_t MaxSize);
 
     /**
      * If requests by HeapAlloc exceed the current size of committed pages, additional pages are
@@ -42,4 +45,16 @@ struct AxHeapAPI
      * 
      */
     void (*Free)(struct AxHeap *Heap, void *Ptr, size_t Size);
+
+    /**
+     * Returns number of AxHeaps managed by the API.
+     * @return The number of plugins.
+     */
+    size_t (*GetNumHeaps)(void);
+
+    /**
+     * Returns a pointer to an AxPlugin given an index
+     * @return Returns an AxPlugin if given a valid index, otherwise NULL.
+     */
+    struct AxHeap *(*GetHeap)(size_t Index);
 };
