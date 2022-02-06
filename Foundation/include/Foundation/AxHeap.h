@@ -19,6 +19,8 @@ typedef struct AxHeapStats
     uint8_t SegmentHead;         // Linked-list of segments owned by the heap.
 } AxHeapStats;
 
+#define AXON_HEAP_API_NAME "AxonHeapAPI"
+
 struct AxHeapAPI
 {
     /** Reserves space in the virtual address space of the process and allocates physical storage
@@ -58,3 +60,7 @@ struct AxHeapAPI
      */
     struct AxHeap *(*GetHeap)(size_t Index);
 };
+
+#if defined(AXON_LINKS_FOUNDATION)
+extern struct AxHeapAPI *AxHeapAPI;
+#endif
