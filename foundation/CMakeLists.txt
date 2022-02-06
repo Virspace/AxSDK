@@ -19,7 +19,7 @@ target_sources(Foundation
         include/Foundation/APIRegistry.h
         include/Foundation/Application.h
         include/Foundation/AxArray.h
-        include/Foundation/Camera.h
+        include/Foundation/AxCamera.h
         include/Foundation/EditorPlugin.h
         include/Foundation/Hash.h
         include/Foundation/AxHashTable.h
@@ -31,7 +31,7 @@ target_sources(Foundation
         include/Foundation/Types.h
         include/Foundation/LinkedList.h
         src/APIRegistry.c
-        src/Camera.c
+        src/AxCamera.c
         #src/ImageLoader.c
         src/Hash.c
         src/AxHashTable.c

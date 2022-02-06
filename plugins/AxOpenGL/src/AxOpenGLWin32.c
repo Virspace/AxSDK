@@ -11,7 +11,7 @@
 #include "Foundation/APIRegistry.h"
 #include "Foundation/Math.h"
 #include "Foundation/Platform.h"
-#include "Foundation/Camera.h"
+#include "Foundation/AxCamera.h"
 
 #define AXARRAY_IMPLEMENTATION
 #include "Foundation/AxArray.h"
@@ -323,9 +323,10 @@ static void SetupRenderState(AxDrawData *DrawData, int FramebufferWidth, int Fra
     // TODO(mdeforge): Create the concept of a camera and organize ortho vs perp based on camera
 
     // Enable alpha blending and scissor test, disable face culling and depth test
-    glEnable(GL_BLEND);
-    glBlendEquation(GL_FUNC_ADD);
-    glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+	// TODO(mdeforge): This is currently causing an issue but probably because I have to put back in textures
+    // glEnable(GL_BLEND);
+    // glBlendEquation(GL_FUNC_ADD);
+    // glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     glDisable(GL_CULL_FACE);
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_STENCIL_TEST);
@@ -592,7 +593,7 @@ void RenderDrawData(AxDrawData *DrawData)
                 }
 
                 // Apply scissor/clipping rectangle (Y is inverted in OpenGL)
-                glScissor((int)ClipMin.X, (int)(FramebufferHeight - ClipMax.Y), (int)(ClipMax.X - ClipMin.X), (int)(ClipMax.Y - ClipMin.Y));
+                //glScissor((int)ClipMin.X, (int)(FramebufferHeight - ClipMax.Y), (int)(ClipMax.X - ClipMin.X), (int)(ClipMax.Y - ClipMin.Y));
 
                 // Bind texture and draw
                 glBindTexture(GL_TEXTURE_2D, (GLuint)Command->TextureID);
@@ -610,9 +611,9 @@ void RenderDrawData(AxDrawData *DrawData)
 
 void Render(AxDrawData *DrawData)
 {
-    glViewport(0, 0, (GLsizei)DrawData->DisplaySize.X, (GLsizei)DrawData->DisplaySize.Y);
-    // glClearColor(0.42f, 0.51f, 0.54f, 0.0f);
-    // glClear(GL_COLOR_BUFFER_BIT);
+    //glViewport(0, 0, (GLsizei)DrawData->DisplaySize.X, (GLsizei)DrawData->DisplaySize.Y);
+    //glClearColor(0.42f, 0.51f, 0.54f, 0.0f);
+    //glClear(GL_COLOR_BUFFER_BIT);
 
     RenderDrawData(DrawData);
 
