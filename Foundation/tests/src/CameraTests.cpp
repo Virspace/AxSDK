@@ -3,7 +3,7 @@
 
 extern "C"
 {
-    #include "Foundation/Camera.h"
+    #include "Foundation/AxCamera.h"
 }
 
 TEST(CameraTest, OrthographicProjection)
