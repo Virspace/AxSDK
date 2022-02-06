@@ -20,6 +20,8 @@ target_sources(Foundation
         include/Foundation/Application.h
         include/Foundation/AxArray.h
         include/Foundation/AxCamera.h
+        include/Foundation/AxHeap.h
+        include/Foundation/AxLinearAllocator.h
         include/Foundation/EditorPlugin.h
         include/Foundation/Hash.h
         include/Foundation/AxHashTable.h
@@ -32,6 +34,8 @@ target_sources(Foundation
         include/Foundation/LinkedList.h
         src/APIRegistry.c
         src/AxCamera.c
+        src/AxHeapWin32.c
+        src/AxLinearAllocatorWin32.c
         #src/ImageLoader.c
         src/Hash.c
         src/AxHashTable.c
