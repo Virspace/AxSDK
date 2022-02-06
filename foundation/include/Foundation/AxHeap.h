@@ -32,7 +32,7 @@ struct AxHeapAPI
      * @param MaxSize The maximum size of the heap.
      * @return A pointer to the heap, otherwise NULL.
      */
-    struct AxHeap *(*Create)(char *Name, size_t InitialSize, size_t MaxSize);
+    struct AxHeap *(*Create)(const char *Name, size_t InitialSize, size_t MaxSize);
 
     /**
      * If requests by HeapAlloc exceed the current size of committed pages, additional pages are
