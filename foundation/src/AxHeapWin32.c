@@ -89,6 +89,8 @@ static struct AxHeap *Create(const char *Name, size_t InitialSize, size_t MaxSiz
         Heap->Header.PageSize = PageSize;
         Heap->Header.PageCount = InitialSize / PageSize;
         Heap->Header.MaxPages = MaxSize / PageSize;
+        Heap->Header.TotalReservedPages = InitialSize;
+        Heap->Header.TotalCommittedPages = 0;
         Heap->Heap = (uint8_t *)BaseAddress + sizeof(struct AxHeapHeader);
     }
 
