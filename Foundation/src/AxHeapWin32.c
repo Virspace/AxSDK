@@ -30,8 +30,8 @@ struct Bucket
 
 struct AxHeap
 {
-    uint8_t *Heap;
-    AxHeapStats Stats;
+    AxHeapHeader Header;
+    void *Heap;
 };
 
 static struct AxHashTable *HeapTable;
@@ -84,12 +84,12 @@ static struct AxHeap *Create(const char *Name, size_t InitialSize, size_t MaxSiz
     struct AxHeap *Heap = BaseAddress;
     if (Heap)
     {
-        Heap->Heap = (uint8_t *)BaseAddress + sizeof(struct AxHeap);
-        Heap->Stats.Name = _strdup(Name);
-        Heap->Stats.BytesUsed = 0; // TODO(mdeforge): Consider ByteOffset instead
-        Heap->Stats.PageSize = PageSize;
-        Heap->Stats.PageCount = InitialSize / PageSize;
-        Heap->Stats.MaxPages = MaxSize / PageSize;
+        Heap->Header.Name = _strdup(Name);
+        Heap->Header.BytesUsed = 0; // TODO(mdeforge): Consider ByteOffset instead
+        Heap->Header.PageSize = PageSize;
+        Heap->Header.PageCount = InitialSize / PageSize;
+        Heap->Header.MaxPages = MaxSize / PageSize;
+        Heap->Heap = (uint8_t *)BaseAddress + sizeof(struct AxHeapHeader);
     }
 
     // Lazy-initialize heap table
@@ -114,26 +114,26 @@ static void *Alloc(struct AxHeap *Heap, size_t Size)
 
     void *Result = NULL;
 
-    uint64_t HeapSize = Heap->Stats.PageCount * Heap->Stats.PageSize;
-    size_t RequestedSize = Heap->Stats.BytesUsed + Size;
+    uint64_t HeapSize = Heap->Header.PageCount * Heap->Header.PageSize;
+    size_t RequestedSize = Heap->Header.BytesUsed + Size;
     if (HeapSize >= RequestedSize)
     {
-        Heap->Stats.BytesUsed += Size; // Needs atomic
-        Result = Heap->Heap + Heap->Stats.BytesUsed;
+        Heap->Header.BytesUsed += Size; // Needs atomic
+        Result = (uint8_t *)Heap->Heap + Heap->Header.BytesUsed;
     }
     else
     {
-        uint64_t PagesNeeded = RoundValueToNearestMultiple(HeapSize + Size, Heap->Stats.PageSize);
-        uint64_t NewPages = PagesNeeded - Heap->Stats.PageCount;
+        uint64_t PagesNeeded = RoundValueToNearestMultiple(HeapSize + Size, Heap->Header.PageSize);
+        uint64_t NewPages = PagesNeeded - Heap->Header.PageCount;
 
         // Check if can commit another N page from the pages we already reserved
         // If we can, commit them, if we can't try and reserve them and grow if needed, if we can't then return null
 
-        VirtualAlloc(Heap->Heap + HeapSize, NewPages * Heap->Stats.PageSize, MEM_COMMIT, PAGE_READWRITE);
-        Heap->Stats.PageCount += NewPages; // Needs atomic
+        VirtualAlloc((uint8_t *)Heap->Heap + HeapSize, NewPages * Heap->Header.PageSize, MEM_COMMIT, PAGE_READWRITE);
+        Heap->Header.PageCount += NewPages; // Needs atomic
 
-        Heap->Stats.BytesUsed += Size; // Needs atomic
-        Result = Heap->Heap + Heap->Stats.BytesUsed;
+        Heap->Header.BytesUsed += Size; // Needs atomic
+        Result = (uint8_t *)Heap->Heap + Heap->Header.BytesUsed;
     }
 
     return (Result);
@@ -164,10 +164,18 @@ static struct AxHeap *GetHeap(size_t Index)
     return (GetHashTableValue(HeapTable, Index));
 }
 
+static const struct AxHeapHeader *GetHeapHeader(struct AxHeap *Heap)
+{
+    Assert(Heap);
+
+    return ((Heap) ? &Heap->Header : NULL);
+}
+
 struct AxHeapAPI *AxHeapAPI = &(struct AxHeapAPI) {
     .Create = Create,
     .Alloc = Alloc,
     .Free = Free,
     .GetNumHeaps = GetNumHeaps,
-    .GetHeap = GetHeap
+    .GetHeap = GetHeap,
+    .GetHeapHeader = GetHeapHeader
 };
