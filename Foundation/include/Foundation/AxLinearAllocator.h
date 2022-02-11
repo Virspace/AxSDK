@@ -18,16 +18,40 @@ struct AxLinearAllocator;
 
 struct AxLinearAllocatorStats
 {
-    uint64_t BytesUsed;
-    uint64_t PageCount;
+    size_t BytesUsed;
+    size_t MaxSize;
+    size_t PageCount;
 };
+
+#define AXON_LINEAR_ALLOCATOR_API_NAME "AxonLinearAllocatorAPI"
 
 struct AxLinearAllocatorAPI
 {
+    /**
+     * @param MaxSize
+     * @param BaseAddress
+     */
     struct AxLinearAllocator *(*Create)(size_t MaxSize, void *BaseAddress);
+
+    /**
+     * @param Allocator
+     */
     void (*Destroy)(struct AxLinearAllocator *Allocator);
+
+    /**
+     * @param Allocator
+     * @param Size
+     * @param File
+     * @param Line
+     */
     void *(*Alloc)(struct AxLinearAllocator *Allocator, size_t Size, const char *File, uint32_t Line);
-    void (*Free)(struct AxLinearAllocator *Allocator);
+
+    /**
+     * @param Allocator
+     * @param File
+     * @param Line
+     */
+    void (*Free)(struct AxLinearAllocator *Allocator, const char *File, uint32_t Line);
 };
 
 #if defined(AXON_LINKS_FOUNDATION)
