@@ -67,6 +67,7 @@ static struct AxLinearAllocator *Create(size_t MaxSize, void *BaseAddress)
     BaseAddress = VirtualAlloc(BaseAddress, MaxSize, MEM_RESERVE, PAGE_READWRITE);
 
     // Use some space at the beginning of the heap to store information
+    VirtualAlloc(BaseAddress, sizeof(struct AxLinearAllocator), MEM_COMMIT, PAGE_READWRITE);
     struct AxLinearAllocator *Allocator = BaseAddress;
 
     // Construct the heap
