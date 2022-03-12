@@ -2,12 +2,11 @@
 #include "APIRegistry.h"
 #include "Platform.h"
 #include "AxHashTable.h"
-#include "AxArray.h"
 #include "Hash.h"
-#include <string.h>
-#include <stdio.h>
+#include <string.h> // _strdup
 
 #define AXARRAY_IMPLEMENTATION
+#include "AxArray.h"
 
 // NOTE(mdeforge): I'm still deciding if I want to get a hash by reading or
 // use Win32's FindFirstChangeNotification or ReadDirectoryChanges. One
@@ -102,28 +101,23 @@ static struct AxPlugin *GetPlugin(size_t Index)
     return ((Plugin) ? Plugin : NULL);
 }
 
-static bool GetPath(struct AxPlugin *Plugin, char *Buffer, size_t BufferSize)
+static char *GetPath(struct AxPlugin *Plugin)
 {
     if (!Plugin) {
-        return (false);
+        return (NULL);
     }
 
-    // TODO(mdeforge): I kind of hate how this is done, really need a temp allocator
-    // or AxString. Reminder, remove stdio.h and string.h later
-    if (strlen(Plugin->Path) > BufferSize) {
-        return (false);
-    }
-
-    sprintf(Buffer, "%s", Plugin->Path);
-
-    return (true);
+    return(Plugin->Path);
 }
 
 static void Unload(struct AxPlugin *Plugin)
 {
-    if (Plugin) {
+    if (Plugin)
+    {
         AxPlatformAPI->DLL->Unload(Plugin->Handle);
+        free(Plugin->Path);
     }
+
 }
 
 struct AxPluginAPI *AxPluginAPI = &(struct AxPluginAPI) {

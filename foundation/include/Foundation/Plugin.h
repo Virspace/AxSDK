@@ -46,11 +46,9 @@ struct AxPluginAPI
     /**
      * Returns a full path to the target plugin.
      * @param Plugin The target plugin.
-     * @param Buffer Buffer to write the path into.
-     * @param BufferSize The size of the buffer.
-     * @return True if the BufferSize was large enough, otherwise false.
+     * @return A pointer to the path, otherwise NULL.
      */
-    bool (*GetPath)(struct AxPlugin *Plugin, char *Buffer, size_t BufferSize);
+    char *(*GetPath)(struct AxPlugin *Plugin);
 };
 
 #if defined(AXON_LINKS_FOUNDATION)
