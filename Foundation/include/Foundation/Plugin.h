@@ -16,39 +16,29 @@ struct AxPluginAPI
      * Loads a shared library and adds it to the plugin map.
      * @param Path The full path to the shared library.
      * @param HotReload If true, will hot reload when changes are detected (TODO).
-     * @return Returns an AxPlugin object if successful, otherwise NULL.
+     * @return Returns a non-zero handle to the plugin if successful, otherwise 0.
      */
-    struct AxPlugin *(*Load)(const char *Path, bool HotReload);
+    uint64_t (*Load)(const char *Path, bool HotReload);
 
     /**
      * Unloads a shared library.
-     * @param Plugin
+     * @param Handle 
      */
-    void (*Unload)(struct AxPlugin *Plugin);
-
-    /**
-     * Returns pointer to an AxArray (pointer) of Plugins.
-     */
-    struct AxPlugin *(*GetPlugins)(void);
-
-    /**
-     * Returns number of plugins.
-     * @return The number of plugins.
-     */
-    size_t (*GetNumPlugins)(void);
-
-    /**
-     * Returns a pointer to an AxPlugin given an index
-     * @return Returns an AxPlugin if given a valid index, otherwise NULL.
-     */
-    struct AxPlugin *(*GetPlugin)(size_t Index);
+    void (*Unload)(uint64_t Handle);
 
     /**
      * Returns a full path to the target plugin.
      * @param Plugin The target plugin.
      * @return A pointer to the path, otherwise NULL.
      */
-    char *(*GetPath)(struct AxPlugin *Plugin);
+    char *(*GetPath)(uint64_t Handle);
+
+    /**
+     * Checks to see if a plugin is valid or not.
+     * @param Plugin The target plugin.
+     * @return A handle to the plugin, otherwise 0.
+     */
+    bool (*IsValid)(uint64_t Handle);
 };
 
 #if defined(AXON_LINKS_FOUNDATION)
