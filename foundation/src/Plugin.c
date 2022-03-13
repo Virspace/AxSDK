@@ -4,21 +4,16 @@
 #include "AxHashTable.h"
 #include "Hash.h"
 #include <string.h> // _strdup
+#include <stdio.h>
 
 #define AXARRAY_IMPLEMENTATION
 #include "AxArray.h"
 
-// NOTE(mdeforge): I'm still deciding if I want to get a hash by reading or
-// use Win32's FindFirstChangeNotification or ReadDirectoryChanges. One
-// advantange of at least FindFirst is that it can watch a whole directory,
-// presumably the one where all the plugins would be...
-#define DO_HASH 0
-
 struct AxPlugin
 {
     char *Path;
-    uint64_t Hash;
     AxDLL Handle;
+    uint64_t Hash;
     bool IsHotReloadable;
 };
 
@@ -46,7 +41,6 @@ static struct AxPlugin *Load(const char *Path, bool HotReload)
 
             // Read DLL into buffer for hashing
             uint64_t Hash = 0;
-            #if (DO_HASH)
             AxFile DLLFile = FileAPI->OpenForRead(Path);
             if (FileAPI->IsValid)
             {
@@ -60,7 +54,6 @@ static struct AxPlugin *Load(const char *Path, bool HotReload)
                 Hash = HashBufferFNV1a(DLLFileBuffer, DLLFileSize, HashVal);
                 free(DLLFileBuffer);
             }
-            #endif
 
             // Create info
             struct AxPlugin Plugin = {
@@ -70,9 +63,14 @@ static struct AxPlugin *Load(const char *Path, bool HotReload)
                 .IsHotReloadable = HotReload
             };
 
+            // NOTE(mdeforge): A uint64_t has a particular bit pattern across 8 bytes
+            // Copy the uint64_t hash into a char array
+            char HashBuffer[sizeof(uint64_t)];
+            memcpy(&HashBuffer, &Hash, sizeof(uint64_t));
+
             // Add info to array and table
             ArrayPush(PluginArray, Plugin);
-            HashInsert(PluginTable, Path, ArrayBack(PluginArray));
+            HashInsert(PluginTable, HashBuffer, ArrayBack(PluginArray));
 
             // Update HashVal for next use
             HashVal = Hash;
