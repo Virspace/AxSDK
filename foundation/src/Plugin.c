@@ -12,7 +12,7 @@
 struct AxPlugin
 {
     char *Path;
-    AxDLL Handle;
+    AxDLL DLLHandle;
     uint64_t Hash;
     bool IsHotReloadable;
 };
@@ -21,7 +21,23 @@ static struct AxPlugin *PluginArray;
 static AxHashTable *PluginTable; // <Path, PluginInfo>
 static uint64_t HashVal = FNV1_64_INIT;
 
-static struct AxPlugin *Load(const char *Path, bool HotReload)
+static bool IsValid(uint64_t Handle)
+{
+    return ((Handle) ? true : false);
+}
+
+static struct AxPlugin *FindPlugin(uint64_t Handle)
+{
+    if (!IsValid(Handle)) {
+        return (NULL);
+    }
+
+    char HashBuffer[sizeof(uint64_t)];
+    memcpy(HashBuffer, &Handle, sizeof(uint64_t));
+    return ((struct AxPlugin *)HashTableSearch(PluginTable, HashBuffer));
+}
+
+static uint64_t Load(const char *Path, bool HotReload)
 {
     if (!PluginTable) {
         PluginTable = CreateTable(10);
@@ -58,7 +74,7 @@ static struct AxPlugin *Load(const char *Path, bool HotReload)
             // Create info
             struct AxPlugin Plugin = {
                 .Path = _strdup(Path),
-                .Handle = DLL,
+                .DLLHandle = DLL,
                 .Hash = Hash,
                 .IsHotReloadable = HotReload
             };
@@ -75,54 +91,36 @@ static struct AxPlugin *Load(const char *Path, bool HotReload)
             // Update HashVal for next use
             HashVal = Hash;
 
-            return(ArrayBack(PluginArray));
+            return(Hash);
         }
     }
 
-    return (NULL);
+    return (0);
 }
 
-static struct AxPlugin *GetPlugins(void)
+static void Unload(uint64_t Handle)
 {
-    return (PluginArray);
-}
-
-static size_t GetNumPlugins(void)
-{
-    return (ArraySize(PluginArray));
-}
-
-static struct AxPlugin *GetPlugin(size_t Index)
-{
-    struct AxPlugin *Plugin = &PluginArray[Index];
-
-    return ((Plugin) ? Plugin : NULL);
-}
-
-static char *GetPath(struct AxPlugin *Plugin)
-{
-    if (!Plugin) {
-        return (NULL);
-    }
-
-    return(Plugin->Path);
-}
-
-static void Unload(struct AxPlugin *Plugin)
-{
+    struct AxPlugin *Plugin = FindPlugin(Handle);
     if (Plugin)
     {
-        AxPlatformAPI->DLL->Unload(Plugin->Handle);
+        AxPlatformAPI->DLL->Unload(Plugin->DLLHandle);
         free(Plugin->Path);
     }
+}
 
+static char *GetPath(uint64_t Handle)
+{
+    struct AxPlugin *Plugin = FindPlugin(Handle);
+    if (Plugin) {
+        return (Plugin->Path);
+    }
+
+    return(NULL);
 }
 
 struct AxPluginAPI *AxPluginAPI = &(struct AxPluginAPI) {
     .Load = Load,
     .Unload = Unload,
-    .GetPlugins = GetPlugins,
-    .GetNumPlugins = GetNumPlugins,
-    .GetPlugin = GetPlugin,
-    .GetPath = GetPath
+    .GetPath = GetPath,
+    .IsValid = IsValid
 };
