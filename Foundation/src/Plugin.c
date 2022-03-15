@@ -32,8 +32,10 @@ static struct AxPlugin *FindPlugin(uint64_t Handle)
         return (NULL);
     }
 
-    char HashBuffer[sizeof(uint64_t)];
-    memcpy(HashBuffer, &Handle, sizeof(uint64_t));
+    char HashBuffer[sizeof(uint64_t) + 1];
+    memcpy(&HashBuffer, &Handle, sizeof(uint64_t));
+    HashBuffer[sizeof(uint64_t)] = '\0';
+
     return ((struct AxPlugin *)HashTableSearch(PluginTable, HashBuffer));
 }
 
@@ -81,8 +83,9 @@ static uint64_t Load(const char *Path, bool HotReload)
 
             // NOTE(mdeforge): A uint64_t has a particular bit pattern across 8 bytes
             // Copy the uint64_t hash into a char array
-            char HashBuffer[sizeof(uint64_t)];
+            char HashBuffer[sizeof(uint64_t) + 1];
             memcpy(&HashBuffer, &Hash, sizeof(uint64_t));
+            HashBuffer[sizeof(uint64_t)] = '\0';
 
             // Add info to array and table
             ArrayPush(PluginArray, Plugin);
