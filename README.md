@@ -1,14 +1,14 @@
 # Axon SDK
-The Axon SDK (AxSDK) is a set of tools, libraries, documentation, and samples for creating games and simulations of all kinds. My hope is that, when complete, this SDK becomes a fantastic starting point for others to build off of to create new and interesting things with. At least, that's what I plan on using it for.
+The Axon SDK (AxSDK) is a set of tools, libraries, documentation, and samples for creating games and simulations of all kinds. My hope is that, when complete, this SDK becomes a fantastic starting point for others to build off of to create new and interesting things with. At least, that's what I plan on using it for!
 
 The Axon SDK is my latest attempt at writing sane, well designed software. It is an opinionated departure from object-oriented programming based on my professional experiences writing fast, maintainable, easy to use code.
 
 Currently, only Windows 8.1+ is supported. However, the API's are platform agnostic and simply need platform specific implementations.
 
-_Note: This SDK is in a very early state and is being developed alongside another project. AxWindow is probably the most stable plugin to date but might be missing some features. There is much to do in AxOpenGL, and even the Foundation library will likely see some big changes._
+_Note: This SDK is in a very early state and is being developed alongside an editor and a game! AxWindow is probably the most stable plugin to date but might be missing some features. There is much to do in AxOpenGL, and even the Foundation library will likely see some big changes._
 
 Libraries
-* Foundation - A collection of data structures and algorithms, linear math, and the API registry
+* Foundation - A collection of data structures and algorithms, linear math, and the all important API registry
 * Drawable - A set of data structures and functions that help assemble a low-level list of polygons into draw commands
 
 Plugins
@@ -22,6 +22,7 @@ Features
 * No third-party dependencies
 * CMake Support
 * MIT License
+* Unit Tests (Limited coverage, for now)
 
 Design Principles
 * Avoid coupling like the plague
@@ -33,18 +34,13 @@ Code Organization
 * Header files should be written in C11
 * Implementation files should be written in C11
 
-Roadmap
-* TODO(mdeforge): Link with Trello?
-* Asset Pipeline (Supported an editor)
-* Audio support
-* Steam Deck support
-* Raspberry Pi 4 support
+[Axon SDK Roadmap](https://trello.com/b/a9z3gJWq)
 
 ## Why C?
 * C has a stable ABI which allows me to compile DLLs without worrying about compiler versions or flags
 * C has a smaller design space than C++ which I find freeing
 * C is easy to bind to because you don't have to fight with objects
-* I like the challenge, learning new things, and knowing what it's my code rather than using the STL
+* I like the challenge, learning new things, and knowing the code I'm using rather than just depending on the STL
 
 ## Inspirations
 * [Handmade Hero](https://handmadehero.org/)
