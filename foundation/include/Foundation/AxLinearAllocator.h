@@ -1,5 +1,9 @@
 #pragma once
 
+#ifdef __cplusplus
+extern  "C" {
+#endif
+
 #include "Foundation/Types.h"
 
 /**
@@ -15,7 +19,6 @@
 */
 
 struct AxLinearAllocator;
-struct AxAllocatorStats;
 
 #define AXON_LINEAR_ALLOCATOR_API_NAME "AxonLinearAllocatorAPI"
 
@@ -48,15 +51,12 @@ struct AxLinearAllocatorAPI
      * @return
      */
     void (*Free)(struct AxLinearAllocator *Allocator, const char *File, uint32_t Line);
-
-    /**
-     * Returns information on reserved and committed bytes and pages
-     * @param Allocator
-     * @return
-     */
-    struct AxAllocatorStats *(*Stats)(struct AxLinearAllocator *Allocator);
 };
 
 #if defined(AXON_LINKS_FOUNDATION)
-extern struct AxLinearAllocatorAPI *AxLinearAllocatorAPI;
+extern struct AxLinearAllocatorAPI *LinearAllocatorAPI;
+#endif
+
+#ifdef __cplusplus
+}
 #endif

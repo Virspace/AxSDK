@@ -32,6 +32,7 @@ add_executable(FoundationTests)
 target_sources(FoundationTests
     PRIVATE
         src/main.cpp
+        src/AxAllocatorTests.cpp
         src/AxArrayTests.cpp
         src/CameraTests.cpp
         src/HashmapTests.cpp

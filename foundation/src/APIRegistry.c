@@ -1,9 +1,10 @@
 #include "APIRegistry.h"
 #include "Plugin.h"
 #include "Platform.h"
-#include "AxLinearAllocator.h"
 #include "ImageLoader.h"
 #include "AxHashTable.h"
+#include "AxAllocatorInfo.h"
+#include "AxLinearAllocator.h"
 #include <string.h>
 
 struct AxAPIRegistry *AxonGlobalAPIRegistry;
@@ -67,9 +68,10 @@ void AxonRegisterAllFoundationAPIs(struct AxAPIRegistry *APIRegistry)
 {
     if (APIRegistry)
     {
-        APIRegistry->Set(AXON_PLUGIN_API_NAME, AxPluginAPI, sizeof(struct AxPluginAPI));
-        APIRegistry->Set(AXON_PLATFORM_API_NAME, AxPlatformAPI, sizeof(struct AxPlatformAPI));
-        APIRegistry->Set(AXON_LINEAR_ALLOCATOR_API_NAME, AxLinearAllocatorAPI, sizeof(struct AxLinearAllocatorAPI));
+        APIRegistry->Set(AXON_PLUGIN_API_NAME, PluginAPI, sizeof(struct AxPluginAPI));
+        APIRegistry->Set(AXON_PLATFORM_API_NAME, PlatformAPI, sizeof(struct AxPlatformAPI));
+        APIRegistry->Set(AXON_ALLOCATOR_INFO_REGISTRY_API_NAME, AllocatorInfoRegistryAPI, sizeof(struct AxAllocatorInfoRegistryAPI));
+        APIRegistry->Set(AXON_LINEAR_ALLOCATOR_API_NAME, LinearAllocatorAPI, sizeof(struct AxLinearAllocatorAPI));
     }
 }
 

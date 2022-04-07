@@ -218,7 +218,7 @@ static float ElapsedWallTime(AxWallClock Start, AxWallClock End)
    Setup
    ======================================================================== */
 
-struct AxPlatformAPI *AxPlatformAPI = &(struct AxPlatformAPI) {
+struct AxPlatformAPI *PlatformAPI = &(struct AxPlatformAPI) {
     .File = &(struct AxPlatformFileAPI) {
         .IsValid = FileIsValid,
         .OpenForRead = FileOpenForRead,
