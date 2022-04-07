@@ -15,13 +15,7 @@
 */
 
 struct AxLinearAllocator;
-
-struct AxLinearAllocatorStats
-{
-    size_t BytesUsed;
-    size_t MaxSize;
-    size_t PageCount;
-};
+struct AxAllocatorStats;
 
 #define AXON_LINEAR_ALLOCATOR_API_NAME "AxonLinearAllocatorAPI"
 
@@ -43,6 +37,7 @@ struct AxLinearAllocatorAPI
      * @param Size
      * @param File
      * @param Line
+     * @return
      */
     void *(*Alloc)(struct AxLinearAllocator *Allocator, size_t Size, const char *File, uint32_t Line);
 
@@ -50,8 +45,16 @@ struct AxLinearAllocatorAPI
      * @param Allocator
      * @param File
      * @param Line
+     * @return
      */
     void (*Free)(struct AxLinearAllocator *Allocator, const char *File, uint32_t Line);
+
+    /**
+     * Returns information on reserved and committed bytes and pages
+     * @param Allocator
+     * @return
+     */
+    struct AxAllocatorStats *(*Stats)(struct AxLinearAllocator *Allocator);
 };
 
 #if defined(AXON_LINKS_FOUNDATION)

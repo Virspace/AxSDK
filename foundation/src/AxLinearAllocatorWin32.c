@@ -1,4 +1,6 @@
 #include "AxLinearAllocator.h"
+#include "AxAllocStats.h"
+#include "AxAllocUtils.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,47 +8,26 @@
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
-#define PAGE_LIMIT 1
-#define PAGE_SIZE 4096
-
 // TODO(mdeforge): If we add platform memory allocation functions to the platform api
 //                 we can have one linear allocator source file that's not Win32 specific.
 
 struct AxLinearAllocator
 {
-    // page size?
-    struct AxLinearAllocatorStats Stats; // Allocator stats
-    size_t Offset;                     // Offset pointer, updated on each allocation.
-    void *Arena;                         // Start of Heap pointer
+    struct AxAllocatorStats Stats;  // Allocator stats
+    size_t ByteOffset;              // Offset pointer, updated on each allocation.
+    void *Arena;                    // Start of Heap pointer
 };
 
-// TODO(mdeforge): Move to another file?
-// Helper Functions ///////////////////////////////////////////
-inline size_t Align(size_t N)
-{
-    return (N + sizeof(intptr_t) - 1) & ~(sizeof(intptr_t) - 1);
-}
-
-inline size_t RoundSizeToNearestPageMultiple(size_t Value, size_t Multiple)
-{
-    size_t Remainder = Value % Multiple;
-    if (Remainder == 0) {
-        return Value;
-    }
-
-    return (Value + Multiple - Remainder);
-}
-
-inline uint32_t GetSystemPageSize()
+// TODO(mdeforge): Move to platform?
+inline uint16_t GetSystemPageSize()
 {
     SYSTEM_INFO SystemInfo;
     GetSystemInfo(&SystemInfo);
 
-    return ((uint32_t)SystemInfo.dwPageSize);
+    // Seems safe to assume a uint16_t is large enough
+    return ((uint16_t)SystemInfo.dwPageSize);
 }
-///////////////////////////////////////////////////////////////
 
-// Requests (maps) memory from OS
 static struct AxLinearAllocator *Create(size_t MaxSize, void *BaseAddress)
 {
     // TODO(mdeforge): Do we need to check for stupid? Probably...
@@ -57,7 +38,7 @@ static struct AxLinearAllocator *Create(size_t MaxSize, void *BaseAddress)
 
     // TODO(mdeforge): Maybe this can be determine and set by CMake?
     // Get the system page size
-    uint32_t PageSize = GetSystemPageSize();
+    uint16_t PageSize = GetSystemPageSize();
 
     // Round InitialSize up to the nearest multiple of the system page size.
     MaxSize = RoundSizeToNearestPageMultiple(MaxSize, PageSize);
@@ -74,11 +55,13 @@ static struct AxLinearAllocator *Create(size_t MaxSize, void *BaseAddress)
     if (Allocator)
     {
         Allocator->Arena = (uint8_t *)BaseAddress + sizeof(struct AxLinearAllocator);
-        Allocator->Offset = 0;
-        Allocator->Stats = (struct AxLinearAllocatorStats) {
-            .BytesUsed = 0,
-            .MaxSize = MaxSize,
-            .PageCount = MaxSize / PageSize
+        Allocator->ByteOffset = 0;
+        Allocator->Stats = (struct AxAllocatorStats) {
+            .BytesReserved = 0,
+            .BytesCommitted = 0,
+            .PageSize = PageSize,
+            .PagesReserved = MaxSize / (size_t)PageSize,
+            .PagesCommitted = 0
         };
     }
 
@@ -87,6 +70,7 @@ static struct AxLinearAllocator *Create(size_t MaxSize, void *BaseAddress)
 
 static void Destroy(struct AxLinearAllocator *Allocator)
 {
+    Assert(Allocator && "AxLinearAllocator passed NULL allocator!");
     if (!Allocator) {
         return;
     }
@@ -96,29 +80,31 @@ static void Destroy(struct AxLinearAllocator *Allocator)
 
 static void *Alloc(struct AxLinearAllocator *Allocator, size_t Size, const char *File, uint32_t Line)
 {
+    Assert(Allocator && "AxLinearAllocator passed NULL allocator!");
     if (!Allocator) {
         return (NULL);
     }
 
     // Adjust alignment and check against max size
-    size_t AdjustedSize = Align(Size);
-    if (AdjustedSize > Allocator->Stats.MaxSize) {
+    size_t BytesRequested = Align(Size);
+    if (BytesRequested > Allocator->Stats.BytesReserved) {
         return (NULL);
     }
 
     // Allocate
-    VirtualAlloc((uint8_t *)Allocator->Arena + Allocator->Offset, AdjustedSize, MEM_COMMIT, PAGE_READWRITE);
+    VirtualAlloc((uint8_t *)Allocator->Arena + Allocator->ByteOffset, BytesRequested, MEM_COMMIT, PAGE_READWRITE);
 
     // Update Arena Info
-    Allocator->Offset += AdjustedSize;
-    Allocator->Stats.BytesUsed += AdjustedSize;
+    Allocator->ByteOffset += BytesRequested;
+    Allocator->Stats.BytesCommitted = Allocator->ByteOffset;
 
     // User payload
-    return ((uint8_t *)Allocator->Arena + Allocator->Offset);
+    return ((uint8_t *)Allocator->Arena + Allocator->ByteOffset);
 }
 
 static void Free(struct AxLinearAllocator *Allocator, const char *File, uint32_t Line)
 {
+    Assert(Allocator && "AxLinearAllocator passed NULL allocator!");
     if (!Allocator) {
         return;
     }
@@ -126,13 +112,24 @@ static void Free(struct AxLinearAllocator *Allocator, const char *File, uint32_t
     // If lpAddress is the base address returned by VirtualAlloc and dwSize is 0 (zero), the function decommits
     // the entire region that is allocated by VirtualAlloc. After that, the entire region is in the reserved state.
     VirtualFree(Allocator->Arena, 0, MEM_DECOMMIT);
-    Allocator->Offset = 0;
-    Allocator->Stats = (struct AxLinearAllocatorStats){ 0 };
+    Allocator->ByteOffset = 0;
+    Allocator->Stats = (struct AxAllocatorStats){ 0 };
+}
+
+static struct AxAlloctorStats Stats(struct AxLinearAllocator *Allocator)
+{
+    Assert(Allocator && "AxLinearAllocator passed NULL allocator!");
+    if (!Allocator) {
+        return;
+    }
+
+    return (Allocator->Stats);
 }
 
 struct AxLinearAllocatorAPI *AxLinearAllocatorAPI = &(struct AxLinearAllocatorAPI) {
     .Create = Create,
     .Destroy = Destroy,
     .Alloc = Alloc,
-    .Free = Free
+    .Free = Free,
+    .Stats = Stats
 };
