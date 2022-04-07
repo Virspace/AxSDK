@@ -342,7 +342,7 @@ static void SetupRenderState(AxDrawData *DrawData, int FramebufferWidth, int Fra
     float B = (float)DrawData->DisplayPos.Y;
     float T = (float)DrawData->DisplayPos.Y + (float)DrawData->DisplaySize.Y;
 
-    AxMat4x4f OrthoProjection = AxCameraAPI->CalcOrthographicProjection(L, R, B, T, 0.1f, 100.0f);
+    AxMat4x4f OrthoProjection = CameraAPI->CalcOrthographicProjection(L, R, B, T, 0.1f, 100.0f);
     OrthoProjection = Transpose(OrthoProjection);
 
     glUseProgram(Data->ShaderHandle);

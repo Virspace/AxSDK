@@ -91,5 +91,5 @@ struct AxPlatformAPI
 };
 
 #if defined(AXON_LINKS_FOUNDATION)
-extern struct AxPlatformAPI *AxPlatformAPI;
+extern struct AxPlatformAPI *PlatformAPI;
 #endif
