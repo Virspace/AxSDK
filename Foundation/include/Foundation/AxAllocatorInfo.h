@@ -6,7 +6,7 @@ extern "C" {
 
 #include "Foundation/Types.h"
 
-#define AXON_ALLOCATOR_INFO_REGISTRY_API_NAME "AxonLinearAllocatorAPI"
+#define AXON_ALLOCATOR_INFO_REGISTRY_API_NAME "AxonAllocatorInfoRegistryAPI"
 
 struct AxAllocatorInfo
 {
@@ -21,8 +21,8 @@ struct AxAllocatorInfo
 struct AxAllocatorInfoRegistryAPI
 {
     void (*Register)(struct AxAllocatorInfo *AllocatorStats);
-    size_t (*Count)(void);
-    struct AxAllocatorInfo (*Stats)(size_t Index);
+    size_t (*Size)(void);
+    struct AxAllocatorInfo (*GetInfoByIndex)(size_t Index);
 };
 
 #if defined(AXON_LINKS_FOUNDATION)

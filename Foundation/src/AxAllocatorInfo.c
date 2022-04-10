@@ -1,27 +1,25 @@
 #include "AxAllocatorInfo.h"
-
-//#define AXARRAY_IMPLEMENTATION
 #include "AxArray.h"
 
-static struct AxAllocatorInfo **AllocatorsArray;
+static struct AxAllocatorInfo **AllocatorInfoArray;
 
-static void Register(struct AxAllocatorInfo *BaseAllocator)
+static void Register(struct AxAllocatorInfo *Info)
 {
-    ArrayPush(AllocatorsArray, BaseAllocator);
+    ArrayPush(AllocatorInfoArray, Info);
 }
 
-static size_t Count(void)
+static size_t Size(void)
 {
-    return (ArraySize(AllocatorsArray));
+    return (ArraySize(AllocatorInfoArray));
 }
 
-static struct AxAllocatorInfo Stats(size_t Index)
+static struct AxAllocatorInfo GetInfoByIndex(size_t Index)
 {
-    return (*AllocatorsArray[Index]);
+    return (*AllocatorInfoArray[Index]);
 }
 
 struct AxAllocatorInfoRegistryAPI *AllocatorInfoRegistryAPI = &(struct AxAllocatorInfoRegistryAPI) {
     .Register = Register,
-    .Count = Count,
-    .Stats = Stats,
+    .Size = Size,
+    .GetInfoByIndex = GetInfoByIndex,
 };
