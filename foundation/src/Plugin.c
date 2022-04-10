@@ -45,8 +45,8 @@ static uint64_t Load(const char *Path, bool HotReload)
         PluginTable = CreateTable(10);
     }
 
-    struct AxPlatformDLLAPI *DLLAPI = AxPlatformAPI->DLL;
-    struct AxPlatformFileAPI *FileAPI = AxPlatformAPI->File;
+    struct AxPlatformDLLAPI *DLLAPI = PlatformAPI->DLL;
+    struct AxPlatformFileAPI *FileAPI = PlatformAPI->File;
 
     AxDLL DLL = DLLAPI->Load(Path);
     if (DLLAPI->IsValid(DLL))
@@ -106,7 +106,7 @@ static void Unload(uint64_t Handle)
     struct AxPlugin *Plugin = FindPlugin(Handle);
     if (Plugin)
     {
-        AxPlatformAPI->DLL->Unload(Plugin->DLLHandle);
+        PlatformAPI->DLL->Unload(Plugin->DLLHandle);
         free(Plugin->Path);
     }
 }
@@ -121,7 +121,7 @@ static char *GetPath(uint64_t Handle)
     return(NULL);
 }
 
-struct AxPluginAPI *AxPluginAPI = &(struct AxPluginAPI) {
+struct AxPluginAPI *PluginAPI = &(struct AxPluginAPI) {
     .Load = Load,
     .Unload = Unload,
     .GetPath = GetPath,

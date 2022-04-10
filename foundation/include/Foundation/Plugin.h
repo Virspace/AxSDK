@@ -42,5 +42,5 @@ struct AxPluginAPI
 };
 
 #if defined(AXON_LINKS_FOUNDATION)
-extern struct AxPluginAPI *AxPluginAPI;
+extern struct AxPluginAPI *PluginAPI;
 #endif

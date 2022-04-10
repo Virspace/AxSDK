@@ -84,7 +84,7 @@ static AxMat4x4Inv OrthographicProjection(float AspectRatio, float NearClip, flo
 }
 
 // Use a compound literal to construct an unnamed object of API type in-place
-struct AxCameraAPI *AxCameraAPI = &(struct AxCameraAPI)
+struct AxCameraAPI *CameraAPI = &(struct AxCameraAPI)
 {
     .CalcOrthographicProjection = CalcOrthographicProjection
 };
