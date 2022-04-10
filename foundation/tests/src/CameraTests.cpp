@@ -8,7 +8,7 @@ extern "C"
 
 TEST(CameraTest, OrthographicProjection)
 {
-    AxMat4x4f Result = AxCameraAPI->CalcOrthographicProjection(0.0f, 800.0f, 0.0f, 600.0f, 0.1f, 100.0f);
+    AxMat4x4f Result = CameraAPI->CalcOrthographicProjection(0.0f, 800.0f, 0.0f, 600.0f, 0.1f, 100.0f);
 
     ASSERT_FLOAT_EQ(Result.E[0][0], 0.0024999999441206455);
     ASSERT_FLOAT_EQ(Result.E[0][1], 0.0);
