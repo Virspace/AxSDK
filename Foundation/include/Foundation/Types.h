@@ -192,13 +192,3 @@ typedef struct AxTuple
     size_t NumItems;
     AxTupleItem *Items;
 } AxTuple;
-
-struct AxAllocatorStats
-{
-    size_t BytesCommitted;  // Number of bytes used
-    size_t BytesReserved;   // Total bytes allocated
-
-    uint16_t PageSize;      // Page size
-    size_t PagesCommitted;  // Number of pages used
-    size_t PagesReserved;   // Total number of pages allocated
-};

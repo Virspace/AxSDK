@@ -18,7 +18,7 @@ target_sources(Foundation
     PRIVATE
         include/Foundation/APIRegistry.h
         include/Foundation/AxAllocUtils.h
-        #include/Foundation/AxAllocator.h
+        include/Foundation/AxAllocatorInfo.h
         include/Foundation/Application.h
         include/Foundation/AxArray.h
         include/Foundation/AxCamera.h
@@ -35,6 +35,7 @@ target_sources(Foundation
         include/Foundation/Types.h
         include/Foundation/LinkedList.h
         src/APIRegistry.c
+        src/AxAllocatorInfo.c
         src/AxCamera.c
         src/AxHeapWin32.c
         src/AxLinearAllocatorWin32.c

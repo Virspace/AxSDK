@@ -1,5 +1,5 @@
 #include "AxLinearAllocator.h"
-#include "AxAllocStats.h"
+#include "AxAllocatorInfo.h"
 #include "AxAllocUtils.h"
 
 #include <stdio.h>
@@ -13,7 +13,7 @@
 
 struct AxLinearAllocator
 {
-    struct AxAllocatorStats Stats;  // Allocator stats
+    struct AxAllocatorInfo Info;
     size_t ByteOffset;              // Offset pointer, updated on each allocation.
     void *Arena;                    // Start of Heap pointer
 };
@@ -26,6 +26,46 @@ inline uint16_t GetSystemPageSize()
 
     // Seems safe to assume a uint16_t is large enough
     return ((uint16_t)SystemInfo.dwPageSize);
+}
+
+static void *Alloc(struct AxLinearAllocator *Allocator, size_t Size, const char *File, uint32_t Line)
+{
+    Assert(Allocator && "AxLinearAllocator passed NULL allocator!");
+    if (!Allocator) {
+        return (NULL);
+    }
+
+    // Adjust alignment and check against max size
+    size_t BytesRequested = Align(Size);
+    if (BytesRequested > Allocator->Info.BytesReserved) {
+        return (NULL);
+    }
+
+    // Allocate
+    VirtualAlloc((uint8_t *)Allocator->Arena + Allocator->ByteOffset, BytesRequested, MEM_COMMIT, PAGE_READWRITE);
+
+    // Update Arena Info
+    Allocator->ByteOffset += BytesRequested;
+    Allocator->Info.BytesCommitted = Allocator->ByteOffset;
+    Allocator->Info.PagesCommitted = RoundSizeToNearestPageMultiple(
+        Allocator->Info.BytesCommitted, Allocator->Info.PageSize) / 4096;
+
+    // User payload
+    return ((uint8_t *)Allocator->Arena + Allocator->ByteOffset);
+}
+
+static void Free(struct AxLinearAllocator *Allocator, const char *File, uint32_t Line)
+{
+    Assert(Allocator && "AxLinearAllocator passed NULL allocator!");
+    if (!Allocator) {
+        return;
+    }
+
+    // If lpAddress is the base address returned by VirtualAlloc and dwSize is 0 (zero), the function decommits
+    // the entire region that is allocated by VirtualAlloc. After that, the entire region is in the reserved state.
+    VirtualFree(Allocator->Arena, 0, MEM_DECOMMIT);
+    Allocator->ByteOffset = 0;
+    Allocator->Info = (struct AxAllocatorInfo){ 0 };
 }
 
 static struct AxLinearAllocator *Create(size_t MaxSize, void *BaseAddress)
@@ -56,13 +96,16 @@ static struct AxLinearAllocator *Create(size_t MaxSize, void *BaseAddress)
     {
         Allocator->Arena = (uint8_t *)BaseAddress + sizeof(struct AxLinearAllocator);
         Allocator->ByteOffset = 0;
-        Allocator->Stats = (struct AxAllocatorStats) {
-            .BytesReserved = 0,
+        Allocator->Info = (struct AxAllocatorInfo) {
+            .BytesReserved = MaxSize,
             .BytesCommitted = 0,
             .PageSize = PageSize,
             .PagesReserved = MaxSize / (size_t)PageSize,
             .PagesCommitted = 0
         };
+
+        // Register with Allocator API
+        AllocatorInfoRegistryAPI->Register(&Allocator->Info);
     }
 
     return (Allocator);
@@ -78,58 +121,10 @@ static void Destroy(struct AxLinearAllocator *Allocator)
     VirtualFree(Allocator, 0, MEM_RELEASE); // Will decommit and release
 }
 
-static void *Alloc(struct AxLinearAllocator *Allocator, size_t Size, const char *File, uint32_t Line)
-{
-    Assert(Allocator && "AxLinearAllocator passed NULL allocator!");
-    if (!Allocator) {
-        return (NULL);
-    }
-
-    // Adjust alignment and check against max size
-    size_t BytesRequested = Align(Size);
-    if (BytesRequested > Allocator->Stats.BytesReserved) {
-        return (NULL);
-    }
-
-    // Allocate
-    VirtualAlloc((uint8_t *)Allocator->Arena + Allocator->ByteOffset, BytesRequested, MEM_COMMIT, PAGE_READWRITE);
-
-    // Update Arena Info
-    Allocator->ByteOffset += BytesRequested;
-    Allocator->Stats.BytesCommitted = Allocator->ByteOffset;
-
-    // User payload
-    return ((uint8_t *)Allocator->Arena + Allocator->ByteOffset);
-}
-
-static void Free(struct AxLinearAllocator *Allocator, const char *File, uint32_t Line)
-{
-    Assert(Allocator && "AxLinearAllocator passed NULL allocator!");
-    if (!Allocator) {
-        return;
-    }
-
-    // If lpAddress is the base address returned by VirtualAlloc and dwSize is 0 (zero), the function decommits
-    // the entire region that is allocated by VirtualAlloc. After that, the entire region is in the reserved state.
-    VirtualFree(Allocator->Arena, 0, MEM_DECOMMIT);
-    Allocator->ByteOffset = 0;
-    Allocator->Stats = (struct AxAllocatorStats){ 0 };
-}
-
-static struct AxAlloctorStats Stats(struct AxLinearAllocator *Allocator)
-{
-    Assert(Allocator && "AxLinearAllocator passed NULL allocator!");
-    if (!Allocator) {
-        return;
-    }
-
-    return (Allocator->Stats);
-}
-
-struct AxLinearAllocatorAPI *AxLinearAllocatorAPI = &(struct AxLinearAllocatorAPI) {
+struct AxLinearAllocatorAPI *LinearAllocatorAPI = &(struct AxLinearAllocatorAPI) {
     .Create = Create,
     .Destroy = Destroy,
     .Alloc = Alloc,
     .Free = Free,
-    .Stats = Stats
+    //.Stats = Stats
 };
