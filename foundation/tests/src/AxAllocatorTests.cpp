@@ -20,16 +20,16 @@ class LinearAllocatorTest : public testing::Test
         }
 };
 
-TEST_F(LinearAllocatorTest, AllocatorAPICount)
+TEST_F(LinearAllocatorTest, AllocatorAPISize)
 {
-    size_t Count = AllocatorInfoRegistryAPI->Count();
-    EXPECT_EQ(Count, 1);
+    size_t Size = AllocatorInfoRegistryAPI->Size();
+    EXPECT_EQ(Size, 1);
 }
 
 TEST_F(LinearAllocatorTest, AllocatorAPIStats)
 {
     void *Mem1 = LinearAllocatorAPI->Alloc(LinearAllocator, 64, __FILE__, __LINE__);
-    AxAllocatorInfo Info = AllocatorInfoRegistryAPI->Stats(1);
+    AxAllocatorInfo Info = AllocatorInfoRegistryAPI->GetInfoByIndex(1);
     EXPECT_EQ(Info.BytesReserved, 4096);
     EXPECT_EQ(Info.BytesCommitted, 64);
     EXPECT_EQ(Info.PageSize, 4096);
