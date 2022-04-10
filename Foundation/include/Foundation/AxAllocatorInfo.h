@@ -6,6 +6,8 @@ extern "C" {
 
 #include "Foundation/Types.h"
 
+#define AXON_ALLOCATOR_INFO_REGISTRY_API_NAME "AxonLinearAllocatorAPI"
+
 struct AxAllocatorInfo
 {
     char Name[48];          // Allocator Name
