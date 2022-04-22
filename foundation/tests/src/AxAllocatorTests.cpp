@@ -30,9 +30,10 @@ TEST_F(LinearAllocatorTest, AllocatorAPIStats)
 {
     void *Mem1 = LinearAllocatorAPI->Alloc(LinearAllocator, 64, __FILE__, __LINE__);
     AxAllocatorInfo Info = AllocatorInfoRegistryAPI->GetInfoByIndex(1);
-    EXPECT_EQ(Info.BytesReserved, 4096);
+    EXPECT_EQ(Info.BytesReserved, 65536);
     EXPECT_EQ(Info.BytesCommitted, 64);
     EXPECT_EQ(Info.PageSize, 4096);
-    EXPECT_EQ(Info.PagesReserved, 1);
+    EXPECT_EQ(Info.AllocationGranularity, 65536);
+    EXPECT_EQ(Info.PagesReserved, 16);
     EXPECT_EQ(Info.PagesCommitted, 1);
 }

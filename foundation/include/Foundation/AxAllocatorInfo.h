@@ -10,12 +10,14 @@ extern "C" {
 
 struct AxAllocatorInfo
 {
-    char Name[48];          // Allocator Name
-    uint16_t PageSize;      // Page size
-    size_t BytesCommitted;  // Number of bytes used
-    size_t BytesReserved;   // Total bytes allocated
-    size_t PagesCommitted;  // Number of pages used
-    size_t PagesReserved;   // Total number of pages allocated
+    char Name[32];                   // Allocator Name
+    uint32_t PageSize;               // Page size
+    uint32_t AllocationGranularity;  // Granularity
+    size_t BytesReserved;            // Number of bytes reserved
+    size_t BytesCommitted;           // Number of bytes used
+    size_t BytesAllocated;           // Number of bytes allocated
+    size_t PagesReserved;            // Total number of pages allocated
+    size_t PagesCommitted;           // Number of pages used
 };
 
 struct AxAllocatorInfoRegistryAPI
