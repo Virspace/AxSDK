@@ -1,16 +1,12 @@
 #pragma once
 
-inline size_t Align(size_t N)
+inline size_t RoundSizeToNearestMultiple(size_t Size, size_t Multiple)
 {
-    return (N + sizeof(intptr_t) - 1) & ~(sizeof(intptr_t) - 1);
+    return ((Size + Multiple - 1) & ~(Multiple - 1));
 }
 
-inline size_t RoundSizeToNearestPageMultiple(size_t Value, size_t Multiple)
+inline size_t CalcPadding(const size_t BaseAddress, const size_t Alignment)
 {
-    size_t Remainder = Value % Multiple;
-    if (Remainder == 0) {
-        return Value;
-    }
+    //const size_t Mult = (BaseAddress / Alignment) + 1;
 
-    return (Value + Multiple - Remainder);
 }

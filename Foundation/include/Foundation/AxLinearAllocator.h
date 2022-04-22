@@ -7,7 +7,7 @@ extern  "C" {
 #include "Foundation/Types.h"
 
 /**
-* A linear allocator is simpliest type of allocator. They work by keeping a pointer
+* A linear allocator is simpliest type of allocator. It works by keeping a pointer
 * to the current memory address and moving it forward every allocation. All memory
 * is freed at the same time.
 *
@@ -25,8 +25,17 @@ struct AxLinearAllocator;
 struct AxLinearAllocatorAPI
 {
     /**
-     * @param MaxSize
-     * @param BaseAddress
+     * @param MaxSize The maximum size in bytes to be reserved. Because the system must
+     * reserve regions in multiples of the page size, the maximum size is always rounded
+     * to the nearest system page size.
+     * @param BaseAddress If NULL, reserves a region of virtual memory anywhere in the
+     * processes address space. Otherwise, specifies the address at which the virtual
+     * memory should be reserved. Regions are always reserved on the allocation granularity
+     * boundary. If the specified address is not on the boundary, the system will round
+     * down to the nearest multiple of the granularity.
+     * @return NULL if a free region does exist at that address, or the free
+     * region is not large enough to accommodate MaxSize. Otherwise, a handle to the
+     * lienar allocator.
      */
     struct AxLinearAllocator *(*Create)(size_t MaxSize, void *BaseAddress);
 
