@@ -1,12 +1,11 @@
 #pragma once
 
-inline size_t RoundSizeToNearestMultiple(size_t Size, size_t Multiple)
+inline size_t RoundDownToPowerOfTwo(size_t Value, int Multiple)
 {
-    return ((Size + Multiple - 1) & ~(Multiple - 1));
+    return (Value & ~(Multiple - 1));
 }
 
-inline size_t CalcPadding(const size_t BaseAddress, const size_t Alignment)
+inline size_t RoundUpToPowerOfTwo(size_t Value, int Multiple)
 {
-    //const size_t Mult = (BaseAddress / Alignment) + 1;
-
+    return ((Value + Multiple - 1) & ~(Multiple - 1));
 }

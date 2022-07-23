@@ -35,32 +35,56 @@ static void *Alloc(struct AxLinearAllocator *Allocator, size_t Size, const char 
         return (NULL);
     }
 
-    // Memory committed will be a multiple of the page size, so round to it
-    size_t BytesRequestedRoundedToPageSize = RoundSizeToNearestMultiple(Size, Allocator->Info.PageSize);
+    // TODO(mdeforge): Could check to see if the user WANTS it aligned?
 
-    // Check if we have the bytes available to meet the allocation request
+    // TODO(mdeforge): We need to check reserve size before we do this! We might go over!
+
+    // Align allocation to multiple of pointer size
+    void *CurrentOffset = (uint8_t *)Allocator->Arena + Allocator->Info.BytesAllocated;
+    if ((size_t)CurrentOffset % sizeof(void *) != 0)
+    {
+        size_t NewAddress = RoundUpToPowerOfTwo((size_t)CurrentOffset, sizeof(void *));
+        size_t AlignmentSize = NewAddress - (size_t)CurrentOffset;
+        Allocator->Info.BytesAllocated += AlignmentSize;
+    }
+
+    // Despite requested amount, actual memory committed will be a multiple of the page size so round to it
+    // Don't worry, we'll carve up that allocated page and return what's needed
+    size_t BytesRequestedRoundedToPageSize = RoundUpToPowerOfTwo(Size, Allocator->Info.PageSize);
+
+    // TODO(mdeforge): Consider page boundaries! We may need to do this above like we do the padding
+    // We don't want to allocate across a page boundary, if we will go over we need to commit a new page
+    // then the allocation should move over to the new page.
+
+    // TODO(mdeforge): We should test this allocator against HeapAlloc under the same unit test conditions
+
+    // Check if we have the reserved bytes available to meet the rounded allocation request
+        // TODO(mdeforge): Does this need to take into account remaining committed?????
     size_t BytesAvailable = Allocator->Info.BytesReserved - Allocator->Info.BytesAllocated;
     if (BytesRequestedRoundedToPageSize > BytesAvailable) {
         return (NULL);
     }
 
-    // TODO(mdeforge): Double-check types
-    // Check to see if we need to commit more memory or if we already have some committed that we can return.
-    size_t BytesAllocatedRoundedToPageSize = RoundSizeToNearestMultiple(Allocator->Info.BytesAllocated, Allocator->Info.PageSize);
+    // We have the reserved bytes, now calculate bytes left in page
+    size_t BytesAllocatedRoundedToPageSize = RoundUpToPowerOfTwo(Allocator->Info.BytesAllocated, Allocator->Info.PageSize);
     int64_t BytesLeftInPage = (int64_t)(BytesAllocatedRoundedToPageSize - Allocator->Info.BytesAllocated - Size);
+
+    // Check to see if we have enough memory committed for the allocation or if we need to commit more
     if (BytesLeftInPage < 0)
     {
-        // Figure out how many pages we need to commit
-        size_t PagesNeeded = RoundSizeToNearestMultiple(llabs(BytesLeftInPage), Allocator->Info.PageSize);
-        size_t BytesNeeded = PagesNeeded * Allocator->Info.PageSize;
+        // Calculate bytes needed rounded to nearest multiple of the page size
+        size_t BytesNeeded = RoundUpToPowerOfTwo(llabs(BytesLeftInPage), Allocator->Info.PageSize);
 
         // TODO(mdeforge): Do we need to round up the base address then?
+        // Round up to nearest multiple of allocation request (this should be done earlier because it shifts the size!)
+
 
         // TODO(mdeforge): Check for virtual alloc failure
         VirtualAlloc((uint8_t *)Allocator->Arena + Allocator->Info.BytesAllocated, BytesNeeded, MEM_COMMIT, PAGE_READWRITE);
 
         // Does Info reserved memory go down as committed memory goes up?
-        Allocator->Info.BytesReserved -= BytesRequestedRoundedToPageSize;
+        Allocator->Info.BytesCommitted += BytesNeeded;
+        Allocator->Info.BytesReserved -= BytesNeeded;
     }
     // else
     // {
@@ -68,16 +92,15 @@ static void *Alloc(struct AxLinearAllocator *Allocator, size_t Size, const char 
     //     // can be compiled out during release builds? Or do we always want Info in there?
     // }
 
-    // Update Arena Info
-    Allocator->Info.BytesAllocated += BytesRequestedRoundedToPageSize;
+    void *Result = (uint8_t *)Allocator->Arena + Allocator->Info.BytesAllocated;
 
-    // Update stats
+    // Update Arena Info
+    //Allocator->Info.BytesAllocated += BytesRequestedRoundedToPageSize;
     Allocator->Info.BytesAllocated += Size;
-    Allocator->Info.BytesCommitted = Allocator->Info.BytesAllocated;
-    Allocator->Info.PagesCommitted = RoundSizeToNearestMultiple(Allocator->Info.BytesCommitted, Allocator->Info.PageSize) / 4096;
+    Allocator->Info.PagesCommitted = RoundUpToPowerOfTwo(Allocator->Info.BytesCommitted, Allocator->Info.PageSize) / 4096;
 
     // User payload
-    return ((uint8_t *)Allocator->Arena + Allocator->Info.BytesAllocated);
+    return (Result);
 }
 
 static void Free(struct AxLinearAllocator *Allocator, const char *File, uint32_t Line)
@@ -93,7 +116,7 @@ static void Free(struct AxLinearAllocator *Allocator, const char *File, uint32_t
     Allocator->Info = (struct AxAllocatorInfo){ 0 }; // TODO(mdeforge): Can we re-zero-initialize a struct?
 }
 
-static struct AxLinearAllocator *Create(size_t MaxSize, void *BaseAddress)
+static struct AxLinearAllocator *Create(const char *Name, size_t MaxSize, void *BaseAddress)
 {
     if (MaxSize == 0) {
         return NULL;
@@ -104,9 +127,15 @@ static struct AxLinearAllocator *Create(size_t MaxSize, void *BaseAddress)
     GetSysInfo(&PageSize, &AllocatorGranularity);
 
     // Memory reserved will be a multiple of the system allocation granularity
-    MaxSize = RoundSizeToNearestMultiple(MaxSize, AllocatorGranularity);
+    if (BaseAddress == NULL) {
+        MaxSize = RoundUpToPowerOfTwo(MaxSize, AllocatorGranularity);
+    }
 
     // TODO(mdeforge): Check for virtual alloc failure, like maybe the base address is not available
+
+    // TODO(mdeforge): It might be safe to say that Base Address show not be a parameter
+    // due to ASLR. It should probably always be NULL.
+
     // Reserve a block of MaxSize in the process's virtual address space for this heap.
     // The maximum size determines the total number of reserved pages.
     BaseAddress = VirtualAlloc(BaseAddress, MaxSize, MEM_RESERVE, PAGE_READWRITE);
@@ -120,6 +149,7 @@ static struct AxLinearAllocator *Create(size_t MaxSize, void *BaseAddress)
     {
         Allocator->Arena = (uint8_t *)BaseAddress + sizeof(struct AxLinearAllocator);
         Allocator->Info = (struct AxAllocatorInfo) {
+            .BaseAddress = Allocator->Arena,
             .PageSize = PageSize,
             .AllocationGranularity = AllocatorGranularity,
             .BytesReserved = MaxSize,
@@ -128,6 +158,15 @@ static struct AxLinearAllocator *Create(size_t MaxSize, void *BaseAddress)
             .PagesReserved = MaxSize / (size_t)PageSize,
             .PagesCommitted = 0
         };
+
+        // TODO(mdeforge): Need to factor in AxLinearAllocator size? Either in the allocation size or info?
+        //                  I think we just say you're not going to have access to the full allocation size
+        // TODO(mdeforge): Do we want to adjust MaxSize for the reserve or let VirtualAlloc do that?
+        //                  Can we test we're doing the same thing as reserve? Would want to confirm if we are...
+
+        // Copy name
+        size_t s = ArrayCount(Allocator->Info.Name);
+        //strncpy(Allocator->Info.Name, Name, s );
 
         // Register with Allocator API
         AllocatorInfoRegistryAPI->Register(&Allocator->Info);

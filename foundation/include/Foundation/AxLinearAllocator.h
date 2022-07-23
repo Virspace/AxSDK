@@ -31,13 +31,16 @@ struct AxLinearAllocatorAPI
      * @param BaseAddress If NULL, reserves a region of virtual memory anywhere in the
      * processes address space. Otherwise, specifies the address at which the virtual
      * memory should be reserved. Regions are always reserved on the allocation granularity
-     * boundary. If the specified address is not on the boundary, the system will round
-     * down to the nearest multiple of the granularity.
+     * boundary. If the specified address is not on the boundary, the system will round down
+     * to the nearest multiple of the granularity. Due to ASLR the program itself as well as
+     * any shared library it uses are loaded at a random address. Therefore it is possible to
+     * have an address collision. Because of this, it is RECOMMENDED you use NULL unless
+     * you know what you're doing.
      * @return NULL if a free region does exist at that address, or the free
      * region is not large enough to accommodate MaxSize. Otherwise, a handle to the
      * lienar allocator.
      */
-    struct AxLinearAllocator *(*Create)(size_t MaxSize, void *BaseAddress);
+    struct AxLinearAllocator *(*Create)(const char *Name, size_t MaxSize, void *BaseAddress);
 
     /**
      * @param Allocator
