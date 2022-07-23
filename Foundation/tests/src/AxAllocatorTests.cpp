@@ -11,7 +11,7 @@ class LinearAllocatorTest : public testing::Test
 
         void SetUp()
         {
-            LinearAllocator = LinearAllocatorAPI->Create(64, 0);
+            LinearAllocator = LinearAllocatorAPI->Create("LinearTest", 64, (void *)0x10000);
         }
 
         void TearDown()
@@ -20,13 +20,19 @@ class LinearAllocatorTest : public testing::Test
         }
 };
 
-TEST_F(LinearAllocatorTest, AllocatorAPISize)
+TEST_F(LinearAllocatorTest, Name)
+{
+    AxAllocatorInfo Info = AllocatorInfoRegistryAPI->GetInfoByIndex(1);
+    EXPECT_STREQ(Info.Name, "LinearTest");
+}
+
+TEST_F(LinearAllocatorTest, Size)
 {
     size_t Size = AllocatorInfoRegistryAPI->Size();
     EXPECT_EQ(Size, 1);
 }
 
-TEST_F(LinearAllocatorTest, AllocatorAPIStats)
+TEST_F(LinearAllocatorTest, Stats)
 {
     void *Mem1 = LinearAllocatorAPI->Alloc(LinearAllocator, 64, __FILE__, __LINE__);
     AxAllocatorInfo Info = AllocatorInfoRegistryAPI->GetInfoByIndex(1);
