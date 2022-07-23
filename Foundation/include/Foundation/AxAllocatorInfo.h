@@ -10,7 +10,8 @@ extern "C" {
 
 struct AxAllocatorInfo
 {
-    char Name[32];                   // Allocator Name
+    char Name[64];                   // Allocator Name
+    void *BaseAddress;               // Base Address
     uint32_t PageSize;               // Page size
     uint32_t AllocationGranularity;  // Granularity
     size_t BytesReserved;            // Number of bytes reserved
