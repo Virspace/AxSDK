@@ -149,6 +149,7 @@ static struct AxLinearAllocator *Create(const char *Name, size_t MaxSize, void *
     {
         Allocator->Arena = (uint8_t *)BaseAddress + sizeof(struct AxLinearAllocator);
         Allocator->Info = (struct AxAllocatorInfo) {
+            .Name = strdup(Name),
             .BaseAddress = Allocator->Arena,
             .PageSize = PageSize,
             .AllocationGranularity = AllocatorGranularity,
