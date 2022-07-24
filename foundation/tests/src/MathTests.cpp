@@ -3,7 +3,7 @@
 
 extern "C"
 {
-    #include "Foundation/Math.h"
+    #include "Foundation/AxMath.h"
 }
 
 TEST(Math, RandomFloatFunction)

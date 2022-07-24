@@ -9,7 +9,7 @@
 
 #include "AxWindow/AxWindow.h"
 #include "Foundation/APIRegistry.h"
-#include "Foundation/Math.h"
+#include "Foundation/AxMath.h"
 #include "Foundation/Platform.h"
 #include "Foundation/AxCamera.h"
 

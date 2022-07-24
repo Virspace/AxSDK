@@ -30,7 +30,7 @@ target_sources(Foundation
         include/Foundation/AxHashTable.h
         #include/Foundation/ImageLoader.h
         include/Foundation/Intrinsics.h
-        include/Foundation/Math.h
+        include/Foundation/AxMath.h
         include/Foundation/Platform.h
         include/Foundation/Plugin.h
         include/Foundation/Types.h
@@ -45,7 +45,7 @@ target_sources(Foundation
         src/Hash.c
         src/AxHashTable.c
         src/AxStackAllocatorWin32.c
-        src/Math.c
+        src/AxMath.c
         src/Plugin.c
         src/Win32Platform.c
         src/LinkedList.c

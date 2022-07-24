@@ -1,4 +1,4 @@
-#include "Math.h"
+#include "AxMath.h"
 #include <stdlib.h>
 
 // TODO(mdeforge): Use better rand function
