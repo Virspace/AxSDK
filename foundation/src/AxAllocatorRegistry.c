@@ -7,7 +7,7 @@ static struct AxHashTable *AllocatorInfoTable;
 static void Register(struct AxAllocatorInfo *Info)
 {
     if (!AllocatorInfoTable) {
-        CreateTable(4);
+        AllocatorInfoTable = CreateTable(4);
     }
 
     HashInsert(AllocatorInfoTable, Info->Name, Info);
@@ -15,17 +15,17 @@ static void Register(struct AxAllocatorInfo *Info)
 
 static size_t Length(void)
 {
-    return (GetHashTableLength(AllocatorInfoTable));
+    return ((AllocatorInfoTable) ? GetHashTableLength(AllocatorInfoTable) : 0);
 }
 
 static struct AxAllocatorInfo *GetAllocatorInfoByName(const char *Name)
 {
-    return (HashTableSearch(AllocatorInfoTable, Name));
+    return ((AllocatorInfoTable) ? HashTableSearch(AllocatorInfoTable, Name) : NULL);
 }
 
 static struct AxAllocatorInfo *GetAllocatorInfoByIndex(size_t Index)
 {
-    return (GetHashTableValue(AllocatorInfoTable, Index));
+    return ((AllocatorInfoTable) ? GetHashTableValue(AllocatorInfoTable, Index) : NULL);
 }
 
 static const char *Name(struct AxAllocatorInfo *Info)
