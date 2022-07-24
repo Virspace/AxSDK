@@ -1,4 +1,5 @@
 #include "AxLinearAllocator.h"
+#include "AxAllocatorRegistry.h"
 #include "AxAllocatorInfo.h"
 #include "AxAllocUtils.h"
 
@@ -170,7 +171,7 @@ static struct AxLinearAllocator *Create(const char *Name, size_t MaxSize, void *
         //strncpy(Allocator->Info.Name, Name, s );
 
         // Register with Allocator API
-        AllocatorInfoRegistryAPI->Register(&Allocator->Info);
+        AllocatorRegistryAPI->Register(&Allocator->Info);
     }
 
     return (Allocator);

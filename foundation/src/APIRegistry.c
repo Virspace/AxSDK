@@ -3,7 +3,7 @@
 #include "Platform.h"
 #include "ImageLoader.h"
 #include "AxHashTable.h"
-#include "AxAllocatorInfo.h"
+#include "AxAllocatorRegistry.h"
 #include "AxLinearAllocator.h"
 #include <string.h>
 
@@ -70,7 +70,7 @@ void AxonRegisterAllFoundationAPIs(struct AxAPIRegistry *APIRegistry)
     {
         APIRegistry->Set(AXON_PLUGIN_API_NAME, PluginAPI, sizeof(struct AxPluginAPI));
         APIRegistry->Set(AXON_PLATFORM_API_NAME, PlatformAPI, sizeof(struct AxPlatformAPI));
-        APIRegistry->Set(AXON_ALLOCATOR_INFO_REGISTRY_API_NAME, AllocatorInfoRegistryAPI, sizeof(struct AxAllocatorInfoRegistryAPI));
+        APIRegistry->Set(AXON_ALLOCATOR_REGISTRY_API_NAME, AllocatorRegistryAPI, sizeof(struct AxAllocatorRegistryAPI));
         APIRegistry->Set(AXON_LINEAR_ALLOCATOR_API_NAME, LinearAllocatorAPI, sizeof(struct AxLinearAllocatorAPI));
     }
 }
