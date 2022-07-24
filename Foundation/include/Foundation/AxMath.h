@@ -3,31 +3,31 @@
 #include "Foundation/Types.h"
 #include "Foundation/Intrinsics.h"
 
-inline float GetRectWidth(AxRect Rect)
+static inline float GetRectWidth(AxRect Rect)
 {
     return (Rect.Right - Rect.Left);
 }
 
-inline float GetRectHeight(AxRect Rect)
+static inline float GetRectHeight(AxRect Rect)
 {
     return (Rect.Bottom - Rect.Top);
 }
 
-inline void SetRectWidth(AxRect *Rect, float Width)
+static inline void SetRectWidth(AxRect *Rect, float Width)
 {
     if (Rect) {
         Rect->Right = Rect->Left + Width;
     }
 }
 
-inline void SetRectHeight(AxRect *Rect, float Height)
+static inline void SetRectHeight(AxRect *Rect, float Height)
 {
     if (Rect) {
         Rect->Bottom = Rect->Top + Height;
     }
 }
 
-inline void SetRectPosition(AxRect *Rect, float X, float Y)
+static inline void SetRectPosition(AxRect *Rect, float X, float Y)
 {
     if (Rect)
     {
@@ -36,7 +36,7 @@ inline void SetRectPosition(AxRect *Rect, float X, float Y)
     }
 }
 
-inline void SetRectSize(AxRect *Rect, float Width, float Height)
+static inline void SetRectSize(AxRect *Rect, float Width, float Height)
 {
     if (Rect)
     {
@@ -88,7 +88,7 @@ static AxRect AspectRatioFit(uint32_t RenderWidth, uint32_t RenderHeight,
     return (Result);
 }
 
-inline AxVec2 Vec2Add(AxVec2 A, AxVec2 B)
+static inline AxVec2 Vec2Add(AxVec2 A, AxVec2 B)
 {
     AxVec2 Result = {
         A.X + B.X,
@@ -98,7 +98,7 @@ inline AxVec2 Vec2Add(AxVec2 A, AxVec2 B)
     return (Result);
 }
 
-inline AxVec2 Vec2Sub(AxVec2 A, AxVec2 B)
+static inline AxVec2 Vec2Sub(AxVec2 A, AxVec2 B)
 {
     AxVec2 Result = {
         A.X - B.X,
@@ -108,43 +108,43 @@ inline AxVec2 Vec2Sub(AxVec2 A, AxVec2 B)
     return (Result);
 }
 
-inline AxVec2 Vec2Neg(AxVec2 V)
+static inline AxVec2 Vec2Neg(AxVec2 V)
 {
     AxVec2 Result = { -V.X, -V.Y };
 
     return (Result);
 }
 
-inline AxVec2 Vec2MulS(AxVec2 V, float S)
+static inline AxVec2 Vec2MulS(AxVec2 V, float S)
 {
     AxVec2 Result = { V.X * S, V.Y * S };
 
     return (Result);
 }
 
-inline AxVec2 Vec2DivS(AxVec2 V, float S)
+static inline AxVec2 Vec2DivS(AxVec2 V, float S)
 {
     AxVec2 Result = { V.X / S, V.Y / S };
 
     return (Result);
 }
 
-inline float Vec2Len(AxVec2 V)
+static inline float Vec2Len(AxVec2 V)
 {
     return (sqrtf(V.X * V.X + V.Y * V.Y));
 }
 
-inline float Vec2Mag(AxVec2 V)
+static inline float Vec2Mag(AxVec2 V)
 {
     return (Vec2Len(V));
 }
 
-inline AxVec2 Vec2Norm(AxVec2 V)
+static inline AxVec2 Vec2Norm(AxVec2 V)
 {
     return (Vec2MulS(V, (1.0f / Vec2Len(V))));
 }
 
-inline AxVec2 Vec2WeightedAvg3(AxVec2 A, AxVec2 B, AxVec2 C, float a, float b, float c)
+static inline AxVec2 Vec2WeightedAvg3(AxVec2 A, AxVec2 B, AxVec2 C, float a, float b, float c)
 {
     float Weight = a + b + c;
     AxVec2 Result = {
@@ -155,7 +155,7 @@ inline AxVec2 Vec2WeightedAvg3(AxVec2 A, AxVec2 B, AxVec2 C, float a, float b, f
     return (Result);
 }
 
-inline AxVec3 Vec3Mul(AxVec3 Vector, float Value)
+static inline AxVec3 Vec3Mul(AxVec3 Vector, float Value)
 {
     AxVec3 Result;
 
@@ -187,7 +187,7 @@ static AxVec3 Vec3Add(AxVec3 A, AxVec3 B)
     return (Result);
 }
 
-inline AxVec3 Vec3WeightedAvg3(AxVec3 A, AxVec3 B, AxVec3 C, float a, float b, float c)
+static inline AxVec3 Vec3WeightedAvg3(AxVec3 A, AxVec3 B, AxVec3 C, float a, float b, float c)
 {
     float Weight = a + b + c;
     AxVec3 Result = {
@@ -211,7 +211,7 @@ static AxVec4 Transform(AxMat4x4 A, AxVec4 P)
     return (R);
 }
 
-inline AxVec4 Mat4x4MulVec4(AxMat4x4 A, AxVec4 P)
+static inline AxVec4 Mat4x4MulVec4(AxMat4x4 A, AxVec4 P)
 {
     AxVec4 R = Transform(A, P);
     return(R);
@@ -269,7 +269,7 @@ static AxMat4x4f Transpose(const AxMat4x4f Matrix)
     return (Result);
 }
 
-inline AxMat4x4 XRotation(float Angle)
+static inline AxMat4x4 XRotation(float Angle)
 {
     float c = Cos(Angle);
     float s = Sin(Angle);
@@ -285,7 +285,7 @@ inline AxMat4x4 XRotation(float Angle)
     return (R);
 }
 
-inline AxMat4x4 YRotation(float Angle)
+static inline AxMat4x4 YRotation(float Angle)
 {
     float c = Cos(Angle);
     float s = Sin(Angle);
@@ -301,7 +301,7 @@ inline AxMat4x4 YRotation(float Angle)
     return (R);
 }
 
-inline AxMat4x4 ZRotation(float Angle)
+static inline AxMat4x4 ZRotation(float Angle)
 {
     float c = Cos(Angle);
     float s = Sin(Angle);
@@ -317,7 +317,7 @@ inline AxMat4x4 ZRotation(float Angle)
     return (R);
 }
 
-inline float Length(AxVec3 Vector)
+static inline float Length(AxVec3 Vector)
 {
     float Result = sqrtf(Vector.X * Vector.X +
                        Vector.Y * Vector.Y +
@@ -325,21 +325,21 @@ inline float Length(AxVec3 Vector)
     return (Result);
 }
 
-inline AxVec3 Normalize(AxVec3 A)
+static inline AxVec3 Normalize(AxVec3 A)
 {
     AxVec3 Result = Vec3Mul(A, (1.0f / Length(A)));
 
     return (Result);
 }
 
-inline float DotProduct(AxVec3 A, AxVec3 B)
+static inline float DotProduct(AxVec3 A, AxVec3 B)
 {
     float Result = A.X * B.X + A.Y * B.Y + A.Z * B.Z;
 
     return (Result);
 }
 
-inline AxVec3 CrossProduct(AxVec3 A, AxVec3 B)
+static inline AxVec3 CrossProduct(AxVec3 A, AxVec3 B)
 {
     AxVec3 Result;
 
@@ -352,7 +352,7 @@ inline AxVec3 CrossProduct(AxVec3 A, AxVec3 B)
 
 AxMat4x4 LookAt(AxVec3 Eye, AxVec3 Center, AxVec3 Up);
 
-inline AxMat4x4Inv PerspectiveProjection(float AspectRatio, float FocalLength, float NearClip, float FarClip)
+static inline AxMat4x4Inv PerspectiveProjection(float AspectRatio, float FocalLength, float NearClip, float FarClip)
 {
     float a = 1.0f;
     float b = AspectRatio;
@@ -381,7 +381,7 @@ inline AxMat4x4Inv PerspectiveProjection(float AspectRatio, float FocalLength, f
     return (Result);
 }
 
-inline AxMat4x4Inv OrthographicProjection(float AspectRatio, float NearClip, float FarClip)
+static inline AxMat4x4Inv OrthographicProjection(float AspectRatio, float NearClip, float FarClip)
 {
     float a = 1.0f;
     float b = AspectRatio;
@@ -409,7 +409,7 @@ inline AxMat4x4Inv OrthographicProjection(float AspectRatio, float NearClip, flo
     return (Result);
 }
 
-inline AxVec2 CalcParabolicTouchPoint(AxVec2 A, AxVec2 B, AxVec2 C, float T)
+static inline AxVec2 CalcParabolicTouchPoint(AxVec2 A, AxVec2 B, AxVec2 C, float T)
 {
     AxVec2 Q = { (1 - T) * A.X + T * B.X, (1 - T) * A.Y + T * B.Y };
     AxVec2 R = { (1 - T) * B.X + T * C.X, (1 - T) * B.Y + T * C.Y };
@@ -418,12 +418,12 @@ inline AxVec2 CalcParabolicTouchPoint(AxVec2 A, AxVec2 B, AxVec2 C, float T)
     return (P);
 }
 
-inline float CalcRatio2D(AxVec2 A, AxVec2 B, AxVec2 Q)
+static inline float CalcRatio2D(AxVec2 A, AxVec2 B, AxVec2 Q)
 {
     return ((A.Y - Q.Y) / (A.Y - B.Y));
 }
 
-inline float Distance2D(AxVec2 A, AxVec2 B)
+static inline float Distance2D(AxVec2 A, AxVec2 B)
 {
     return (sqrtf(powf(B.X - A.X, 2.0) + powf(B.Y - A.Y, 2.0)));
 }
