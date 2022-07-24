@@ -5,6 +5,7 @@
 #include "AxHashTable.h"
 #include "AxAllocatorRegistry.h"
 #include "AxLinearAllocator.h"
+#include <stdlib.h>
 #include <string.h>
 
 struct AxAPIRegistry *AxonGlobalAPIRegistry;

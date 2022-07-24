@@ -1,5 +1,6 @@
 #include "AxHashTable.h"
 #include "Hash.h"
+#include <stdlib.h>
 #include <string.h>
 
 #define DEFAULT_CAPACITY 16
