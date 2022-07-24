@@ -62,6 +62,11 @@ class HashMapTest : public testing::Test
         {
             Table = CreateTable(16);
         }
+
+        void TearDown()
+        {
+            DestroyTable(Table);
+        }
 };
 
 TEST_F(HashMapTest, InsertAndSearch)
@@ -178,30 +183,6 @@ TEST_F(HashMapTest, NonStringData)
 //    free(Bar2In);
 //}
 
-TEST_F(HashMapTest, DestroyTable)
-{
-    struct Bar
-    {
-        int32_t Min;
-        int32_t Max;
-    };
-
-    Bar* BarIn = (Bar*)malloc(sizeof(Bar));
-    if (BarIn)
-    {
-        BarIn->Min = 10;
-        BarIn->Max = 20;
-    }
-
-    HashInsert(Table, "Bar", BarIn);
-    Bar* BarOut = (Bar*)HashTableSearch(Table, "Bar");
-    EXPECT_EQ(BarOut->Min, 10);
-    EXPECT_EQ(BarOut->Max, 20);
-
-    DestroyTable(Table);
-    free(BarIn);
-}
-
 // TEST_F(HashMapTest, StoringIntegers)
 // {
 //     int32_t *Number = (int32_t *)malloc(sizeof(int32_t));
@@ -231,6 +212,7 @@ TEST_F(HashMapTest, StoringPointers)
     MinMax *Result = (MinMax *)HashTableSearch(Table, "Bar");
     EXPECT_EQ(MM->Min, Result->Min);
     EXPECT_EQ(MM->Max, Result->Max);
+    free(MM);
 }
 
 TEST_F(HashMapTest, Iterate)
