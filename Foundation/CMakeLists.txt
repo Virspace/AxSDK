@@ -18,12 +18,13 @@ target_sources(Foundation
     PRIVATE
         include/Foundation/APIRegistry.h
         include/Foundation/AxAllocUtils.h
-        include/Foundation/AxAllocatorInfo.h
+        include/Foundation/AxAllocatorRegistry.h
         include/Foundation/Application.h
         include/Foundation/AxArray.h
         include/Foundation/AxCamera.h
         include/Foundation/AxHeap.h
         include/Foundation/AxLinearAllocator.h
+        include/Foundation/AxStackAllocator.h
         include/Foundation/EditorPlugin.h
         include/Foundation/Hash.h
         include/Foundation/AxHashTable.h
@@ -35,13 +36,15 @@ target_sources(Foundation
         include/Foundation/Types.h
         include/Foundation/LinkedList.h
         src/APIRegistry.c
-        src/AxAllocatorInfo.c
+        src/AxAllocatorInfo.h
+        src/AxAllocatorRegistry.c
         src/AxCamera.c
         src/AxHeapWin32.c
         src/AxLinearAllocatorWin32.c
         #src/ImageLoader.c
         src/Hash.c
         src/AxHashTable.c
+        src/AxStackAllocatorWin32.c
         src/Math.c
         src/Plugin.c
         src/Win32Platform.c

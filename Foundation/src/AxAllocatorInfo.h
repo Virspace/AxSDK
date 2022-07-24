@@ -6,8 +6,6 @@ extern "C" {
 
 #include "Foundation/Types.h"
 
-#define AXON_ALLOCATOR_INFO_REGISTRY_API_NAME "AxonAllocatorInfoRegistryAPI"
-
 struct AxAllocatorInfo
 {
     char Name[64];                   // Allocator Name
@@ -20,17 +18,6 @@ struct AxAllocatorInfo
     size_t PagesReserved;            // Total number of pages allocated
     size_t PagesCommitted;           // Number of pages used
 };
-
-struct AxAllocatorInfoRegistryAPI
-{
-    void (*Register)(struct AxAllocatorInfo *AllocatorStats);
-    size_t (*Size)(void);
-    struct AxAllocatorInfo (*GetInfoByIndex)(size_t Index);
-};
-
-#if defined(AXON_LINKS_FOUNDATION)
-extern struct AxAllocatorInfoRegistryAPI *AllocatorInfoRegistryAPI;
-#endif
 
 #ifdef __cplusplus
 }
