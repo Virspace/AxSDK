@@ -4,7 +4,7 @@
 
 #include "Foundation/Types.h"
 #include <math.h>
-#include <intrin.h>
+#include <immintrin.h>
 
 inline int32_t RoundFloatToInt32(float f)
 {

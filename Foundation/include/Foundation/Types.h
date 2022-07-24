@@ -19,12 +19,6 @@
 #endif
 #endif
 
-#if COMPILER_MSVC
-#include <intrin.h>
-#else
-#error SSE optimizations are not available for this compiler yet!
-#endif
-
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdbool.h>
