@@ -6,19 +6,19 @@
 #define DEFAULT_CAPACITY 16
 
 // NOTE(mdeforge): Inspired by https://github.com/benhoyt/ht
-// TODO(mdeforge): Evaluate would should be int32_t vs int64_t vs size_t
+// TODO(mdeforge): Evaluate what should be int32_t vs int64_t vs size_t
 
 typedef struct HashEntry
 {
-    char *Key;              // Key is NULL if entry is empty
+    char *Key;           // Key is NULL if entry is empty
     void *Value;
 } HashEntry;
 
 typedef struct AxHashTable
 {
-    size_t Capacity;       // Size of the Entries array
-    size_t Length;         // Number of HashEntry's in the hash table
-    HashEntry *Entries;     // Hash entries
+    size_t Capacity;     // Size of the Entries array
+    size_t Length;       // Number of HashEntry's in the hash table
+    HashEntry *Entries;  // Hash entries
 } AxHashTable;
 
 static inline size_t FindIndex(uint64_t Hash, size_t BucketCount)
@@ -26,7 +26,7 @@ static inline size_t FindIndex(uint64_t Hash, size_t BucketCount)
     return ((size_t)(Hash & (uint64_t)BucketCount - 1));
 }
 
-AxHashTable *CreateTable(size_t Capacity)
+static AxHashTable *CreateTable(size_t Capacity)
 {
     AxHashTable *Table = malloc(sizeof(AxHashTable));
     if (Table == NULL) {
@@ -46,7 +46,7 @@ AxHashTable *CreateTable(size_t Capacity)
     return(Table);
 }
 
-void DestroyTable(AxHashTable *Table)
+static void DestroyTable(AxHashTable *Table)
 {
     // Free allocated keys
     for (size_t i = 0; i < Table->Capacity; i++)
@@ -61,11 +61,7 @@ void DestroyTable(AxHashTable *Table)
     free(Table);
 }
 
-/**
- * Searches for the key in the hash table.
- * @return NULL if it doesn't exist.
- */
-void *HashTableSearch(AxHashTable *Table, const char *Key)
+static void *Search(AxHashTable *Table, const char *Key)
 {
     if (Table == NULL) {
         return NULL;
@@ -94,7 +90,7 @@ void *HashTableSearch(AxHashTable *Table, const char *Key)
     return(NULL);
 }
 
-const char *HashInsertEntry(HashEntry *Entries, size_t Capacity, const char *Key, void *Value, size_t *EntryLength)
+static const char *HashInsertEntry(HashEntry *Entries, size_t Capacity, const char *Key, void *Value, size_t *EntryLength)
 {
     // Get hash and index
     uint64_t Hash = HashStringFNV1a(Key, FNV1_64_INIT);
@@ -136,7 +132,7 @@ const char *HashInsertEntry(HashEntry *Entries, size_t Capacity, const char *Key
     return (Key);
 }
 
-bool HashTableExpand(AxHashTable *Table)
+static bool HashTableExpand(AxHashTable *Table)
 {
     size_t NewCapacity = Table->Capacity * 2;
 
@@ -162,7 +158,7 @@ bool HashTableExpand(AxHashTable *Table)
     return (true);
 }
 
-const char *HashInsert(AxHashTable *Table, const char *Key, void *Value)
+static const char *Insert(AxHashTable *Table, const char *Key, void *Value)
 {
     //Assert(Value != NULL);
     if (!Table) { //  || !Value
@@ -181,13 +177,13 @@ const char *HashInsert(AxHashTable *Table, const char *Key, void *Value)
     return(HashInsertEntry(Table->Entries, Table->Capacity, Key, Value, &Table->Length));
 }
 
-size_t GetHashTableLength(AxHashTable *Table)
+static size_t Length(AxHashTable *Table)
 {
     Assert(Table && "AxHashTable is NULL!");
     return ((Table) ? Table->Length : 0);
 }
 
-const char *GetHashTableKey(AxHashTable *Table, size_t Index)
+static const char *GetHashTableKey(AxHashTable *Table, size_t Index)
 {
     // Loop until we find the entry at the index
     size_t NumEntry = 0;
@@ -206,7 +202,7 @@ const char *GetHashTableKey(AxHashTable *Table, size_t Index)
     return (NULL);
 }
 
-void *GetHashTableValue(AxHashTable *Table, size_t Index)
+static void *GetHashTableValue(AxHashTable *Table, size_t Index)
 {
     // Loop until we find the entry at the index
     size_t NumEntry = 0;
@@ -229,3 +225,13 @@ void *GetHashTableValue(AxHashTable *Table, size_t Index)
 //{
 //    
 //}
+
+struct AxHashTableAPI *HashTableAPI = &(struct AxHashTableAPI) {
+    .CreateTable = CreateTable,
+    .DestroyTable = DestroyTable,
+    .Length = Length,
+    .Insert = Insert,
+    .Search = Search,
+    .GetHashTableKey = GetHashTableKey,
+    .GetHashTableValue = GetHashTableValue
+};

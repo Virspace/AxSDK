@@ -7,25 +7,25 @@ static struct AxHashTable *AllocatorInfoTable;
 static void Register(struct AxAllocatorInfo *Info)
 {
     if (!AllocatorInfoTable) {
-        AllocatorInfoTable = CreateTable(4);
+        AllocatorInfoTable = HashTableAPI->CreateTable(4);
     }
 
-    HashInsert(AllocatorInfoTable, Info->Name, Info);
+    HashTableAPI->Insert(AllocatorInfoTable, Info->Name, Info);
 }
 
 static size_t Length(void)
 {
-    return ((AllocatorInfoTable) ? GetHashTableLength(AllocatorInfoTable) : 0);
+    return ((AllocatorInfoTable) ? HashTableAPI->Length(AllocatorInfoTable) : 0);
 }
 
 static struct AxAllocatorInfo *GetAllocatorInfoByName(const char *Name)
 {
-    return ((AllocatorInfoTable) ? HashTableSearch(AllocatorInfoTable, Name) : NULL);
+    return ((AllocatorInfoTable) ? HashTableAPI->Search(AllocatorInfoTable, Name) : NULL);
 }
 
 static struct AxAllocatorInfo *GetAllocatorInfoByIndex(size_t Index)
 {
-    return ((AllocatorInfoTable) ? GetHashTableValue(AllocatorInfoTable, Index) : NULL);
+    return ((AllocatorInfoTable) ? HashTableAPI->GetHashTableValue(AllocatorInfoTable, Index) : NULL);
 }
 
 static const char *Name(struct AxAllocatorInfo *Info)

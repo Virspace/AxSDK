@@ -20,18 +20,18 @@ static int32_t APIMemoryOffset;
 
 static void Set(const char *Name, void *API, size_t Size)
 {
-    void* Result = HashTableSearch(APIMap, Name);
+    void* Result = HashTableAPI->Search(APIMap, Name);
     if (Result) {
         memcpy(Result, API, Size);
     } else {
-        HashInsert(APIMap, Name, API);
+        HashTableAPI->Insert(APIMap, Name, API);
     }
 }
 
 static void *Get(const char *Name)
 {
     // Try to find it
-    void *API = (void *)HashTableSearch(APIMap, Name);
+    void *API = (void *)HashTableAPI->Search(APIMap, Name);
     if (API)
     {
         // If found, return API
@@ -42,8 +42,8 @@ static void *Get(const char *Name)
         // If not found, create a placeholder that will be filled out
         // once the API gets loaded.
         void* Temp = (char *)APIMemory + APIMemoryOffset;
-        HashInsert(APIMap, Name, Temp);
-        void *Result = HashTableSearch(APIMap, Name);
+        HashTableAPI->Insert(APIMap, Name, Temp);
+        void *Result = HashTableAPI->Search(APIMap, Name);
         APIMemoryOffset += Kilobytes(8);
 
         return(Result);
@@ -54,14 +54,14 @@ static void *Get(const char *Name)
 
 void AxonInitGlobalAPIRegistry()
 {
-    APIMap = CreateTable(InitialSize);
+    APIMap = HashTableAPI->CreateTable(InitialSize);
     APIMemory = calloc(InitialSize, Kilobytes(8) * 16);
     APIMemoryOffset = 0;
 }
 
 void AxonTermGlobalAPIRegistry()
 {
-    DestroyTable(APIMap);
+    HashTableAPI->DestroyTable(APIMap);
     free(APIMemory);
 }
 
@@ -73,6 +73,7 @@ void AxonRegisterAllFoundationAPIs(struct AxAPIRegistry *APIRegistry)
         APIRegistry->Set(AXON_PLATFORM_API_NAME, PlatformAPI, sizeof(struct AxPlatformAPI));
         APIRegistry->Set(AXON_ALLOCATOR_REGISTRY_API_NAME, AllocatorRegistryAPI, sizeof(struct AxAllocatorRegistryAPI));
         APIRegistry->Set(AXON_LINEAR_ALLOCATOR_API_NAME, LinearAllocatorAPI, sizeof(struct AxLinearAllocatorAPI));
+        APIRegistry->Set(AXON_HASH_TABLE_API_NAME, HashTableAPI, sizeof(struct AxHashTableAPI));
     }
 }
 

@@ -60,63 +60,63 @@ class HashMapTest : public testing::Test
 
         void SetUp()
         {
-            Table = CreateTable(16);
+            Table = HashTableAPI->CreateTable(16);
         }
 
         void TearDown()
         {
-            DestroyTable(Table);
+            HashTableAPI->DestroyTable(Table);
         }
 };
 
 TEST_F(HashMapTest, InsertAndSearch)
 {
-    HashInsert(Table, "1", "First address");
-    HashInsert(Table, "2", "Second address");
+    HashTableAPI->Insert(Table, "1", "First address");
+    HashTableAPI->Insert(Table, "2", "Second address");
 
-    const char *Result1 = (char *)HashTableSearch(Table, "1");
-    const char* Result2 = (char *)HashTableSearch(Table, "2");
+    const char *Result1 = (char *)HashTableAPI->Search(Table, "1");
+    const char* Result2 = (char *)HashTableAPI->Search(Table, "2");
     EXPECT_STREQ(Result1, "First address");
     EXPECT_STREQ(Result2, "Second address");
 }
 
 TEST_F(HashMapTest, KeyDoesNotExist)
 {
-    EXPECT_EQ((int64_t)HashTableSearch(Table, "1"), NULL);
+    EXPECT_EQ((int64_t)HashTableAPI->Search(Table, "1"), NULL);
 }
 
 TEST_F(HashMapTest, Collision)
 {
-    HashInsert(Table, "1", "First address");
-    HashInsert(Table, "2", "Second address");
-    HashInsert(Table, "Hel", "Third address");
-    HashInsert(Table, "Cau", "Fourth address");
-    HashInsert(Table, "Dbs", "Fifth address");
+    HashTableAPI->Insert(Table, "1", "First address");
+    HashTableAPI->Insert(Table, "2", "Second address");
+    HashTableAPI->Insert(Table, "Hel", "Third address");
+    HashTableAPI->Insert(Table, "Cau", "Fourth address");
+    HashTableAPI->Insert(Table, "Dbs", "Fifth address");
 
-    char *Result1 = (char *)HashTableSearch(Table, "Hel");
+    char *Result1 = (char *)HashTableAPI->Search(Table, "Hel");
     EXPECT_STREQ(Result1, "Third address");
 
-    char *Result2 = (char *)HashTableSearch(Table, "Cau");
+    char *Result2 = (char *)HashTableAPI->Search(Table, "Cau");
     EXPECT_STREQ(Result2, "Fourth address");
 
-    char *Result3 = (char *)HashTableSearch(Table, "Dbs");
+    char *Result3 = (char *)HashTableAPI->Search(Table, "Dbs");
     EXPECT_STREQ(Result3, "Fifth address");
 }
 
 //TEST_F(HashMapTest, HashDelete)
 //{
-//    HashInsert(Table, "1", "First address");
-//    HashInsert(Table, "2", "Second address");
-//    HashInsert(Table, "Hel", "Third address");
-//    HashInsert(Table, "Cau", "Fourth address");
-//    HashInsert(Table, "Dbs", "Fifth address");
+//    HashTableAPI->Insert(Table, "1", "First address");
+//    HashTableAPI->Insert(Table, "2", "Second address");
+//    HashTableAPI->Insert(Table, "Hel", "Third address");
+//    HashTableAPI->Insert(Table, "Cau", "Fourth address");
+//    HashTableAPI->Insert(Table, "Dbs", "Fifth address");
 //
 //    HashDelete(Table, "2");
-//    EXPECT_STREQ((char *)HashTableSearch(Table, "2"), NULL);
+//    EXPECT_STREQ((char *)HashTableAPI->Search(Table, "2"), NULL);
 //
 //    HashDelete(Table, "Cau");
-//    EXPECT_STREQ((char *)HashTableSearch(Table, "Hel"), "Third address");
-//    EXPECT_STREQ((char *)HashTableSearch(Table, "Dbs"), "Fifth address");
+//    EXPECT_STREQ((char *)HashTableAPI->Search(Table, "Hel"), "Third address");
+//    EXPECT_STREQ((char *)HashTableAPI->Search(Table, "Dbs"), "Fifth address");
 //}
 
 TEST_F(HashMapTest, NonStringData)
@@ -134,8 +134,8 @@ TEST_F(HashMapTest, NonStringData)
         BarIn->Max = 20;
     }
 
-    HashInsert(Table, "Bar", BarIn);
-    Bar *BarOut = (Bar *)HashTableSearch(Table, "Bar");
+    HashTableAPI->Insert(Table, "Bar", BarIn);
+    Bar *BarOut = (Bar *)HashTableAPI->Search(Table, "Bar");
     EXPECT_EQ(BarOut->Min, 10);
     EXPECT_EQ(BarOut->Max, 20);
 
@@ -159,19 +159,19 @@ TEST_F(HashMapTest, NonStringData)
 //    if (Bar1In)
 //    {
 //        Bar1In->Value = 10;
-//        HashInsert(Table, "Ba", Bar1In);
-//        HashInsert(Table, "Bar", Bar1In);
+//        HashTableAPI->Insert(Table, "Ba", Bar1In);
+//        HashTableAPI->Insert(Table, "Bar", Bar1In);
 //    }
 //
 //    Bar2 *Bar2In = (Bar2*)malloc(sizeof(Bar2));
 //    Bar2In->Min = 20;
 //    Bar2In->Max = 30;
-//    HashInsert(Table, "Bar", Bar2In);
-//    HashInsert(Table, "Bars", Bar2In);
+//    HashTableAPI->Insert(Table, "Bar", Bar2In);
+//    HashTableAPI->Insert(Table, "Bars", Bar2In);
 //
-//    Bar2 *BaOut = (Bar2 *)HashTableSearch(Table, "Ba");
-//    Bar2 *Bar2Out = (Bar2 *)HashTableSearch(Table, "Bar");
-//    Bar2 *BarsOut = (Bar2 *)HashTableSearch(Table, "Bars");
+//    Bar2 *BaOut = (Bar2 *)HashTableAPI->Search(Table, "Ba");
+//    Bar2 *Bar2Out = (Bar2 *)HashTableAPI->Search(Table, "Bar");
+//    Bar2 *BarsOut = (Bar2 *)HashTableAPI->Search(Table, "Bars");
 //    
 //    EXPECT_EQ(BaOut->Min, 10);
 //    EXPECT_EQ(Bar2Out->Min, 20);
@@ -187,8 +187,8 @@ TEST_F(HashMapTest, NonStringData)
 // {
 //     int32_t *Number = (int32_t *)malloc(sizeof(int32_t));
 //     *Number = 123;
-//     HashInsert(Table, "Number", (void *)Number, sizeof(void *));
-//     int32_t *Result = (int32_t *)HashTableSearch(Table, "Number");
+//     HashTableAPI->Insert(Table, "Number", (void *)Number, sizeof(void *));
+//     int32_t *Result = (int32_t *)HashTableAPI->Search(Table, "Number");
 //     EXPECT_EQ(*Number, *Result);
 // }
 
@@ -207,9 +207,9 @@ TEST_F(HashMapTest, StoringPointers)
         MM->Max = 20;
     }
 
-    HashInsert(Table, "Bar", (void *)MM);
+    HashTableAPI->Insert(Table, "Bar", (void *)MM);
 
-    MinMax *Result = (MinMax *)HashTableSearch(Table, "Bar");
+    MinMax *Result = (MinMax *)HashTableAPI->Search(Table, "Bar");
     EXPECT_EQ(MM->Min, Result->Min);
     EXPECT_EQ(MM->Max, Result->Max);
     free(MM);
@@ -217,14 +217,14 @@ TEST_F(HashMapTest, StoringPointers)
 
 TEST_F(HashMapTest, Iterate)
 {
-    HashInsert(Table, "1", "First address");
-    HashInsert(Table, "2", "Second address");
+    HashTableAPI->Insert(Table, "1", "First address");
+    HashTableAPI->Insert(Table, "2", "Second address");
 
-    size_t Length = GetHashTableLength(Table);
+    size_t Length = HashTableAPI->Length(Table);
     EXPECT_EQ(Length, 2);
 
-    const char *Result1 = (char *)GetHashTableValue(Table, 0);
-    const char *Result2 = (char *)GetHashTableValue(Table, 1);
+    const char *Result1 = (char *)HashTableAPI->GetHashTableValue(Table, 0);
+    const char *Result2 = (char *)HashTableAPI->GetHashTableValue(Table, 1);
 
     EXPECT_STREQ(Result1, "Second address");
     EXPECT_STREQ(Result2, "First address");

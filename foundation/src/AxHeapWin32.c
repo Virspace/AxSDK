@@ -94,11 +94,11 @@ static struct AxHeap *Create(const char *Name, size_t InitialSize, size_t MaxSiz
 
     // Lazy-initialize heap table
     if (!HeapTable) {
-        HeapTable = CreateTable(3);
+        HeapTable = HashTableAPI->CreateTable(3);
     }
 
     // Add heap to heap table
-    HashInsert(HeapTable, Name, Heap);
+    HashTableAPI->Insert(HeapTable, Name, Heap);
 
     return (Heap);
 }
@@ -156,7 +156,7 @@ static size_t GetNumHeaps(void)
         return (0);
     }
 
-    return (GetHashTableLength(HeapTable));
+    return (HashTableAPI->Length(HeapTable));
 }
 
 static struct AxHeap *GetHeap(size_t Index)
@@ -166,7 +166,7 @@ static struct AxHeap *GetHeap(size_t Index)
         return (NULL);
     }
 
-    return (GetHashTableValue(HeapTable, Index));
+    return (HashTableAPI->GetHashTableValue(HeapTable, Index));
 }
 
 static const struct AxHeapHeader *GetHeapHeader(struct AxHeap *Heap)
