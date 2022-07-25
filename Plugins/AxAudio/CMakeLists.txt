@@ -23,9 +23,10 @@ target_sources(AxAudio
 
 # Add compiler features and definitions
 target_compile_features(AxAudio PRIVATE c_std_11)
-#target_compile_definitions(AxAudio
-#	PRIVATE
-#)
+target_compile_definitions(AxAudio
+    PRIVATE
+        AXON_LINKS_FOUNDATION
+)
 
 # Specify include directories to use when compiling a given target
 target_include_directories(AxAudio
