@@ -36,13 +36,13 @@ static struct AxPlugin *FindPlugin(uint64_t Handle)
     memcpy(&HashBuffer, &Handle, sizeof(uint64_t));
     HashBuffer[sizeof(uint64_t)] = '\0';
 
-    return ((struct AxPlugin *)HashTableSearch(PluginTable, HashBuffer));
+    return ((struct AxPlugin *)HashTableAPI->Search(PluginTable, HashBuffer));
 }
 
 static uint64_t Load(const char *Path, bool HotReload)
 {
     if (!PluginTable) {
-        PluginTable = CreateTable(10);
+        PluginTable = HashTableAPI->CreateTable(10);
     }
 
     struct AxPlatformDLLAPI *DLLAPI = PlatformAPI->DLL;
@@ -75,7 +75,7 @@ static uint64_t Load(const char *Path, bool HotReload)
 
             // Create info
             struct AxPlugin Plugin = {
-                .Path = _strdup(Path),
+                .Path = strdup(Path),
                 .DLLHandle = DLL,
                 .Hash = Hash,
                 .IsHotReloadable = HotReload
@@ -89,7 +89,7 @@ static uint64_t Load(const char *Path, bool HotReload)
 
             // Add info to array and table
             ArrayPush(PluginArray, Plugin);
-            HashInsert(PluginTable, HashBuffer, ArrayBack(PluginArray));
+            HashTableAPI->Insert(PluginTable, HashBuffer, ArrayBack(PluginArray));
 
             // Update HashVal for next use
             HashVal = Hash;

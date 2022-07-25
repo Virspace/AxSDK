@@ -18,9 +18,9 @@ extern  "C" {
 * Complexity: O(1)
 */
 
-struct AxLinearAllocator;
-
 #define AXON_LINEAR_ALLOCATOR_API_NAME "AxonLinearAllocatorAPI"
+
+typedef struct AxLinearAllocator AxLinearAllocator;
 
 struct AxLinearAllocatorAPI
 {
