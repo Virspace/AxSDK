@@ -118,7 +118,7 @@ static const char *HashInsertEntry(HashEntry *Entries, size_t Capacity, const ch
     // Didn't find key, allocate and copy if needed, then insert it
     if (EntryLength != NULL)
     {
-        Key = _strdup(Key); // Note(mdeforge): This malloc's, don't forget to free!
+        Key = strdup(Key); // Note(mdeforge): This malloc's, don't forget to free!
         if (Key == NULL) {
             return (NULL);
         }
