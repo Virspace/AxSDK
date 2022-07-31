@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Foundation/Types.h"
+#include "Foundation/AxTypes.h"
 
 // Typical sampling rates for game audio are 48k, sometimes 44.1k
 // Mixer thread

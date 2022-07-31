@@ -16,25 +16,25 @@ add_library(Virspace::Foundation ALIAS Foundation)
 # Add sources to target
 target_sources(Foundation
     PRIVATE
-        include/Foundation/APIRegistry.h
+        include/Foundation/AxAPIRegistry.h
         include/Foundation/AxAllocUtils.h
         include/Foundation/AxAllocatorRegistry.h
-        include/Foundation/Application.h
+        include/Foundation/AxApplication.h
         include/Foundation/AxArray.h
         include/Foundation/AxCamera.h
         include/Foundation/AxHeap.h
         include/Foundation/AxLinearAllocator.h
         #include/Foundation/AxStackAllocator.h
-        include/Foundation/EditorPlugin.h
-        include/Foundation/Hash.h
+        include/Foundation/AxEditorPlugin.h
+        include/Foundation/AxHash.h
         include/Foundation/AxHashTable.h
-        #include/Foundation/ImageLoader.h
-        include/Foundation/Intrinsics.h
+        #include/Foundation/AxImageLoader.h
+        include/Foundation/AxIntrinsics.h
         include/Foundation/AxMath.h
-        include/Foundation/Platform.h
-        include/Foundation/Plugin.h
-        include/Foundation/Types.h
-        include/Foundation/LinkedList.h
+        include/Foundation/AxPlatform.h
+        include/Foundation/AxPlugin.h
+        include/Foundation/AxTypes.h
+        include/Foundation/AxLinkedList.h
         src/APIRegistry.c
         src/AxAllocatorInfo.h
         src/AxAllocatorRegistry.c

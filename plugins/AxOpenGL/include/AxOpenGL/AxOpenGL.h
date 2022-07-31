@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Foundation/Types.h"
+#include "Foundation/AxTypes.h"
 
 //typedef struct OpenGLData OpenGLData;
 typedef struct AxWindow AxWindow;

@@ -1,5 +1,5 @@
 #include "AxHashTable.h"
-#include "Hash.h"
+#include "AxHash.h"
 #include <stdlib.h>
 #include <string.h>
 

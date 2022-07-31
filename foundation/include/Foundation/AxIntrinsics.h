@@ -2,7 +2,7 @@
 
 // TODO(mdeforge): Convert to platform efficient versions and remove math.h
 
-#include "Foundation/Types.h"
+#include "Foundation/AxTypes.h"
 #include <math.h>
 #include <immintrin.h>
 

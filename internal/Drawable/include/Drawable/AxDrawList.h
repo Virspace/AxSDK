@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Foundation/Types.h"
+#include "Foundation/AxTypes.h"
 
 struct AxDrawCommand;
 typedef uint32_t AxDrawIndex;

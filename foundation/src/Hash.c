@@ -1,4 +1,4 @@
-#include "Hash.h"
+#include "AxHash.h"
 
 uint64_t HashStringFNV1a(const char *String, uint64_t HashVal)
 {

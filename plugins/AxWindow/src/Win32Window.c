@@ -1,7 +1,7 @@
-#include "Foundation/APIRegistry.h"
+#include "Foundation/AxAPIRegistry.h"
 #include "Foundation/AxMath.h"
 #include "Foundation/AxHashTable.h"
-#include "Foundation/Platform.h"
+#include "Foundation/AxPlatform.h"
 #include "AxWindow.h"
 #include <stdio.h>
 #include <stdlib.h>

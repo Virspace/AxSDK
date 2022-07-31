@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Types.h"
+#include "AxTypes.h"
 
 #ifdef __cplusplus
 extern "C" {
