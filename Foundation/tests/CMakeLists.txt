@@ -36,6 +36,7 @@ target_sources(FoundationTests
         src/AxArrayTests.cpp
         src/CameraTests.cpp
         src/HashmapTests.cpp
+        src/LinkedListTests.cpp
         src/MathTests.cpp
 )
 
