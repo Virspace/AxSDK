@@ -1,5 +1,5 @@
 #include "gtest/gtest.h"
-#include "Foundation/Types.h"
+#include "Foundation/AxTypes.h"
 #include "Foundation/AxMath.h"
 
 TEST(Math, RandomFloatFunction)

@@ -1,5 +1,5 @@
 #include "gtest/gtest.h"
-#include "Foundation/Types.h"
+#include "Foundation/AxTypes.h"
 #include "Foundation/AxHashTable.h"
 
 class HashMapTest : public testing::Test

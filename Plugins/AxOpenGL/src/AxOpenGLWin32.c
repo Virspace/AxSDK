@@ -8,9 +8,9 @@
 #include "Drawable/AxDrawList.h"
 
 #include "AxWindow/AxWindow.h"
-#include "Foundation/APIRegistry.h"
+#include "Foundation/AxAPIRegistry.h"
 #include "Foundation/AxMath.h"
-#include "Foundation/Platform.h"
+#include "Foundation/AxPlatform.h"
 #include "Foundation/AxCamera.h"
 
 #define AXARRAY_IMPLEMENTATION

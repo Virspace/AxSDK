@@ -4,7 +4,7 @@
 extern "C" {
 #endif
 
-#include "Foundation/Types.h"
+#include "Foundation/AxTypes.h"
 
 struct AxAllocatorInfo
 {

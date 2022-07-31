@@ -1,7 +1,7 @@
 #ifndef AXARRAY_INCLUDE
 #define AXARRAY_INCLUDE
 
-#include "Foundation/Types.h"
+#include "Foundation/AxTypes.h"
 
 // TODO(mdeforge): Consider removing SetCapacity and SetSize and renaming things to grow/shrink
 

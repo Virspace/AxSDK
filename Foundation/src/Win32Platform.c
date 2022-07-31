@@ -6,7 +6,7 @@
 #include <ShObjIdl.h>
 #include <shellapi.h>
 #include "AxHashTable.h"
-#include "platform.h"
+#include "Axplatform.h"
 
 /* ========================================================================
    Axon Path

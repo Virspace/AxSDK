@@ -1,6 +1,6 @@
 #include "gtest/gtest.h"
-#include "Foundation/Types.h"
-#include "Foundation/LinkedList.h"
+#include "Foundation/AxTypes.h"
+#include "Foundation/AxLinkedList.h"
 
 struct Foo
 {

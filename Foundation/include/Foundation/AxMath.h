@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Foundation/Types.h"
-#include "Foundation/Intrinsics.h"
+#include "Foundation/AxTypes.h"
+#include "Foundation/AxIntrinsics.h"
 
 #ifdef __cplusplus
 extern "C" {
