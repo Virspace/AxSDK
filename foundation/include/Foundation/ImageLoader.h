@@ -2,6 +2,10 @@
 
 #include "Foundation/Types.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct AxImage
 {
     int32_t Width;
@@ -20,4 +24,8 @@ struct AxImageAPI
 
 #if defined(AXON_LINKS_FOUNDATION)
 extern struct AxImageAPI *AxImageAPI;
+#endif
+
+#ifdef __cplusplus
+}
 #endif

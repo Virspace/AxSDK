@@ -1,5 +1,9 @@
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct ImGuiContext;
 struct EditorPluginAPI
 {
@@ -7,3 +11,7 @@ struct EditorPluginAPI
     void (*Tick)(void);
     void (*Term)(void);
 };
+
+#ifdef __cplusplus
+}
+#endif

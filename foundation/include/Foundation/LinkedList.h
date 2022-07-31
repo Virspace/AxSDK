@@ -2,6 +2,10 @@
 
 #include "Foundation/Types.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // Interface for a circular intrusive doubly linked list.
 
 #define ListEntry(address, type, field) ((type *)((uint8_t *)(address) - (uint64_t)(&((type *)0)->field)))
@@ -85,3 +89,7 @@ bool IsListEmpty(AxLink *ListHead);
  * @param ListToAppend Pointer to the first entry in the list to append to the ListHead.
  */
 void AppendListTail(AxLink *ListToAppend, AxLink *ListHead);
+
+#ifdef __cplusplus
+}
+#endif

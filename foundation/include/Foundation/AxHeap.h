@@ -2,6 +2,10 @@
 
 #include "Foundation/Types.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // An implementation of heap alloc described at https://docs.microsoft.com/en-us/windows/win32/memory/heap-functions
 
 // TODO(mdeforge): It might be a good idea to remove the ability of the AxHeapAPI to track Heaps into something else
@@ -84,4 +88,8 @@ struct AxHeapAPI
 
 #if defined(AXON_LINKS_FOUNDATION)
 extern struct AxHeapAPI *HeapAPI;
+#endif
+
+#ifdef __cplusplus
+}
 #endif

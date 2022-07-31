@@ -3,6 +3,10 @@
 #include "Foundation/Types.h"
 #include "Foundation/Intrinsics.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 static inline float GetRectWidth(AxRect Rect)
 {
     return (Rect.Right - Rect.Left);
@@ -431,3 +435,7 @@ static inline float Distance2D(AxVec2 A, AxVec2 B)
 void SeedRandom(uint32_t Seed);
 
 float RandomFloat(const float Min, const float Max);
+
+#ifdef __cplusplus
+}
+#endif

@@ -2,6 +2,10 @@
 
 #include "Foundation/Types.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // http://www.isthe.com/chongo/tech/comp/fnv/
 
 #define FNV1_64_INIT ((uint64_t)0xcbf29ce484222325ULL)
@@ -29,3 +33,7 @@ extern uint64_t HashStringFNV1a(const char *String, uint64_t HashVal);
  * @return 64 bit hash as a static hash type.
  */
 extern uint64_t HashBufferFNV1a(void *Buffer, size_t Length, uint64_t HashVal);
+
+#ifdef __cplusplus
+}
+#endif

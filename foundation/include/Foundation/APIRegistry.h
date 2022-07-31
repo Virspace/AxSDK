@@ -2,6 +2,10 @@
 
 #include "Foundation/Types.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define AXON_API_REGISTRY_NAME "AxonAPIRegistry"
 
 struct AxAPIRegistry
@@ -19,4 +23,8 @@ void AxonInitGlobalAPIRegistry();
 void AxonTermGlobalAPIRegistry();
 void AxonRegisterAllFoundationAPIs(struct AxAPIRegistry *APIRegistry);
 
+#endif
+
+#ifdef __cplusplus
+}
 #endif

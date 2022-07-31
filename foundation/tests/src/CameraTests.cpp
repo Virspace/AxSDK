@@ -1,10 +1,6 @@
 #include "gtest/gtest.h"
 #include "Foundation/Types.h"
-
-extern "C"
-{
-    #include "Foundation/AxCamera.h"
-}
+#include "Foundation/AxCamera.h"
 
 TEST(CameraTest, OrthographicProjection)
 {
