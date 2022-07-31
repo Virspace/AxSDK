@@ -1,10 +1,6 @@
 #include "gtest/gtest.h"
 #include "Foundation/Types.h"
-
-extern "C"
-{
-    #include "Foundation/AxMath.h"
-}
+#include "Foundation/AxMath.h"
 
 TEST(Math, RandomFloatFunction)
 {

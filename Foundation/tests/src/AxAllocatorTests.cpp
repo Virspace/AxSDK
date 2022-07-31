@@ -1,6 +1,5 @@
 #include "gtest/gtest.h"
 #include "Foundation/Types.h"
-
 #include "Foundation/AxAllocatorRegistry.h"
 #include "Foundation/AxLinearAllocator.h"
 

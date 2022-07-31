@@ -6,6 +6,10 @@
 #include <math.h>
 #include <immintrin.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 inline int32_t RoundFloatToInt32(float f)
 {
     return (_mm_cvtss_si32(_mm_set_ss(f)));
@@ -25,3 +29,7 @@ inline float ATan2(float Y, float X)
 {
     return (atan2f(Y, X));
 }
+
+#ifdef __cplusplus
+}
+#endif

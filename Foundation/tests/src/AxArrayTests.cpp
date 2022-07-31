@@ -1,11 +1,8 @@
 #include "gtest/gtest.h"
 #include "Foundation/Types.h"
 
-//extern "C"
-//{
 #define AXARRAY_IMPLEMENTATION
 #include "Foundation/AxArray.h"
-//}
 
 struct Foo { int32_t a; char *b; };
 #define FooConstruct(n, t) (Foo { n, t })

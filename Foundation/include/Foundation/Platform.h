@@ -2,6 +2,10 @@
 
 #include "Foundation/Types.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // Represents a file handle
 typedef struct AxFile
 {
@@ -92,4 +96,8 @@ struct AxPlatformAPI
 
 #if defined(AXON_LINKS_FOUNDATION)
 extern struct AxPlatformAPI *PlatformAPI;
+#endif
+
+#ifdef __cplusplus
+}
 #endif

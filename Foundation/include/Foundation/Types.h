@@ -1,5 +1,9 @@
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #if !defined(COMPILER_MSVC)
 #define COMPILER_MSVC 0
 #endif
@@ -186,3 +190,7 @@ typedef struct AxTuple
     size_t NumItems;
     AxTupleItem *Items;
 } AxTuple;
+
+#ifdef __cplusplus
+}
+#endif

@@ -1,10 +1,10 @@
 #pragma once
 
+#include "Foundation/Types.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include "Foundation/Types.h"
 
 #define AXON_HASH_TABLE_API_NAME "AxonHashTableAPI"
 

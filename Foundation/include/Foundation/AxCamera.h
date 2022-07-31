@@ -2,6 +2,10 @@
 
 #include "Types.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 enum AxCameraMode {
     AX_CAMERA_MODE_PERSPECTIVE,
     AX_CAMERA_MODE_ORTHOGRAPHIC
@@ -18,4 +22,8 @@ struct AxCameraAPI
 
 #if defined(AXON_LINKS_FOUNDATION)
 extern struct AxCameraAPI *CameraAPI;
+#endif
+
+#ifdef __cplusplus
+}
 #endif

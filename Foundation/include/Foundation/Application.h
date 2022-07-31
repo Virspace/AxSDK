@@ -2,6 +2,10 @@
 
 #include "Foundation/Types.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define AXON_APPLICATION_API_NAME "AxonApplicationAPI"
 
 typedef struct AxApplication AxApplication;
@@ -12,3 +16,7 @@ struct AxApplicationAPI
     bool (*Tick)(AxApplication *App);
     void (*Destroy)(AxApplication *App);
 };
+
+#ifdef __cplusplus
+}
+#endif

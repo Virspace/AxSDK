@@ -2,6 +2,10 @@
 
 #include "Foundation/Types.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct AxPlugin;
 struct AxAPIRegistry;
 
@@ -43,4 +47,8 @@ struct AxPluginAPI
 
 #if defined(AXON_LINKS_FOUNDATION)
 extern struct AxPluginAPI *PluginAPI;
+#endif
+
+#ifdef __cplusplus
+}
 #endif
