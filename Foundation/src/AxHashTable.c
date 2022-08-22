@@ -3,10 +3,19 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define DEFAULT_CAPACITY 16
+/**
+ * Inspired by:
+ *  https://github.com/benhoyt/ht
+ *  https://craftinginterpreters.com/hash-tables.html
+ */
 
-// NOTE(mdeforge): Inspired by https://github.com/benhoyt/ht
 // TODO(mdeforge): Evaluate what should be int32_t vs int64_t vs size_t
+// TODO(mdeforge): Use foundation allocators instead of malloc/calloc
+
+#define MAX_LOAD 0.75
+
+static const uint64_t AXON_HASH_UNUSED = 0xffffffffffffffffULL;    // -1
+static const uint64_t AXON_HASH_TOMBSTONE = 0xfffffffffffffffeULL; // -2
 
 typedef struct HashEntry
 {
@@ -17,33 +26,98 @@ typedef struct HashEntry
 typedef struct AxHashTable
 {
     size_t Capacity;     // Size of the Entries array
-    size_t Length;       // Number of HashEntry's in the hash table
+    size_t Size;       // Number of HashEntry's in the hash table
     HashEntry *Entries;  // Hash entries
 } AxHashTable;
 
-static inline size_t FindIndex(uint64_t Hash, size_t BucketCount)
+static inline size_t GrowCapacity(size_t Capacity)
 {
-    return ((size_t)(Hash & (uint64_t)BucketCount - 1));
+    return ((Capacity < 8) ? 8 : Capacity * 2);
 }
 
-static AxHashTable *CreateTable(size_t Capacity)
+// Maps the key's hash to an index within the array's bounds
+// TODO(mdeforge): This is a weak hash. Consider a mod by prime?
+static inline size_t FindIndex(uint64_t Hash, size_t Capacity)
+{
+    return ((size_t)(Hash & (uint64_t)Capacity - 1));
+}
+
+static HashEntry *FindEntry(HashEntry *Entries, size_t Capacity, const char *Key)
+{
+    // Hash key
+    uint64_t Hash = HashStringFNV1a(Key, FNV1A_64_INIT);
+
+    // Find index of hash in table
+    size_t Index = FindIndex(Hash, Capacity);
+    HashEntry* Tombstone = NULL;
+
+    // Starting at hash index, loop until we find an empty entry
+    for (;;)
+    {
+        HashEntry *Entry = &Entries[Index];
+        if (Entry->Key == NULL)
+        {
+            // We found a tombstone or an empty entry, figure out which one
+            if (Entry->Value == (void *)AXON_HASH_TOMBSTONE)
+            {
+                // We found a tombstone, save it and keep going. We need to
+                // keep going in order to make sure this is the last tombstone.
+                // If we find an empty entry next loop we'll return the saved
+                // tombstone so we can reuse the entry.
+                if (Tombstone == NULL) {
+                    Tombstone = Entry;
+                }
+            }
+            else
+            {
+                // We found an empty entry, but if we just found a tombstone
+                // return that instead so we can reuse the entry.
+                return ((Tombstone == NULL) ? Entry : Tombstone);
+            }
+        }
+        else if (strcmp(Entry->Key, Key) == 0)
+        {
+            // We found the key
+            return (Entry);
+        }
+
+        // Key wasn't here, move to next (linear probe)
+        // TODO(mdeforge): Consider quadradic probe
+        Index = (Index + 1) % Capacity;
+    }
+}
+
+static HashEntry *GetEntryAtIndex(AxHashTable *Table, size_t Index)
+{
+    HashEntry *Entry = NULL;
+    size_t ValidEntries = 0;
+
+    // Starting at the first index, loop until we find a real entry
+    for (size_t i = 0; ValidEntries <= Index; i++)
+    {
+        Entry = &Table->Entries[i];
+        if (Entry->Key == NULL) {
+            continue;
+        } else {
+            ValidEntries++;
+        }
+    }
+
+    return (Entry);
+}
+
+static AxHashTable *CreateTable(void)
 {
     AxHashTable *Table = malloc(sizeof(AxHashTable));
     if (Table == NULL) {
         return (NULL);
     }
 
-    Table->Length = 0;
-    Table->Capacity = (Capacity > 0) ? Capacity : DEFAULT_CAPACITY;
-    Table->Entries = calloc(Table->Capacity, sizeof(HashEntry));
+    Table->Size = 0;
+    Table->Capacity = 0;
+    Table->Entries = NULL;
 
-    if (Table->Entries == NULL)
-    {
-        free(Table);
-        return (NULL);
-    }
-
-    return(Table);
+    return (Table);
 }
 
 static void DestroyTable(AxHashTable *Table)
@@ -56,182 +130,148 @@ static void DestroyTable(AxHashTable *Table)
         }
     }
 
-    // Free the table itself
+    // Free the array
     free(Table->Entries);
-    free(Table);
+
+    // Reinitialize table
+    CreateTable(Table);
 }
 
-static void *Search(AxHashTable *Table, const char *Key)
+static bool HashTableExpand(AxHashTable *Table, size_t Capacity)
 {
-    if (Table == NULL) {
-        return NULL;
-    }
+    // Allocate new array
+    HashEntry* Entries = calloc(Capacity, sizeof(HashEntry));
 
-    // Get hash and index
-    uint64_t Hash = HashStringFNV1a(Key, FNV1_64_INIT);
-    size_t Index = FindIndex(Hash, Table->Capacity);
-
-    // Loop until we find an empty entry
-    while (Table->Entries[Index].Key != NULL)
-    {
-        if (strcmp(Table->Entries[Index].Key, Key) == 0) {
-            return (Table->Entries[Index].Value); // Found key
-        }
-
-        // Key wasn't in slot, move to next entry (linear probe)
-        Index++;
-
-        // Wrap around if at the end
-        if (Index >= Table->Capacity) {
-            Index = 0;
-        }
-    }
-
-    return(NULL);
-}
-
-static const char *HashInsertEntry(HashEntry *Entries, size_t Capacity, const char *Key, void *Value, size_t *EntryLength)
-{
-    // Get hash and index
-    uint64_t Hash = HashStringFNV1a(Key, FNV1_64_INIT);
-    size_t Index = FindIndex(Hash, Capacity);
-
-    // Loop until we find an empty entry
-    while (Entries[Index].Key != NULL)
-    {
-        if (strcmp(Entries[Index].Key, Key) == 0)
-        {
-            // Found existing key, update value
-            Entries[Index].Value = Value;
-            return (Entries[Index].Key);
-        }
-
-        // Key wasn't here, move to next (linear probe)
-        Index++;
-
-        // Wrap around if at the end
-        if (Index >= Capacity) {
-            Index = 0;
-        }
-    }
-
-    // Didn't find key, allocate and copy if needed, then insert it
-    if (EntryLength != NULL)
-    {
-        Key = strdup(Key); // Note(mdeforge): This malloc's, don't forget to free!
-        if (Key == NULL) {
-            return (NULL);
-        }
-
-        (*EntryLength)++;
-    }
-
-    Entries[Index].Key = (char *)Key;
-    Entries[Index].Value = Value;
-
-    return (Key);
-}
-
-static bool HashTableExpand(AxHashTable *Table)
-{
-    size_t NewCapacity = Table->Capacity * 2;
-
-    HashEntry* NewEntries = calloc(NewCapacity, sizeof(HashEntry));
-    if (NewEntries == NULL) {
-        return (false);
-    }
-
-    // Iterate through entites, moving all non-empty ones to new table
+    // Initialize keys to NULL and values to unused
     for (size_t i = 0; i < Table->Capacity; i++)
     {
-        HashEntry Entry = Table->Entries[i];
-        if (Entry.Key != NULL) {
-            HashInsertEntry(NewEntries, NewCapacity, Entry.Key, Entry.Value, NULL);
+        Entries[i].Key = NULL;
+        Entries[i].Value = (void *)AXON_HASH_UNUSED;
+    }
+
+    // Iterate through entities, moving all non-empty ones to new table
+    Table->Size = 0;
+    for (size_t i = 0; i < Table->Capacity; i++)
+    {
+        // Skip over empty entries
+        HashEntry *Entry = &Table->Entries[i];
+        if (Entry->Key == NULL) {
+            continue;
         }
+
+        // Insert old entry into new array
+        HashEntry *NewEntry = FindEntry(Entries, Capacity, Entry->Key);
+        NewEntry->Key = strdup(Entry->Key);
+        NewEntry->Value = Entry->Value;
+        Table->Size++;
     }
 
     // Free old array and update the table
     free(Table->Entries);
-    Table->Entries = NewEntries;
-    Table->Capacity = NewCapacity;
+    Table->Entries = Entries;
+    Table->Capacity = Capacity;
 
     return (true);
 }
 
-static const char *Insert(AxHashTable *Table, const char *Key, void *Value)
+static bool Set(AxHashTable *Table, const char *Key, void *Value)
 {
-    //Assert(Value != NULL);
-    if (!Table) { //  || !Value
+    Assert(Table);
+
+    // If we don't have enough capacity to insert a new entry, expand
+    if (Table->Size + 1 > Table->Capacity * MAX_LOAD)
+    {
+        if (!HashTableExpand(Table, GrowCapacity(Table->Capacity))) {
+            return (false);
+        }
+    }
+
+    // Find entry
+    HashEntry *Entry = FindEntry(Table->Entries, Table->Capacity, Key);
+
+    // If it's a new key and has a tomestone, increment table length
+    bool IsNewKey = Entry->Key == NULL;
+    if (IsNewKey && Entry->Value != (void *)AXON_HASH_TOMBSTONE) {
+        Table->Size++;
+    }
+
+    // Set entry
+    Entry->Key = strdup(Key);
+    Entry->Value = Value;
+
+    return (true);
+}
+
+static bool Remove(AxHashTable *Table, const char *Key)
+{
+    Assert(Table);
+
+    // Early out if table has no entries
+    if (Table->Size == 0) {
         return (false);
     }
 
-    // If length exceeds half of current capacity, expand it
-    if (Table->Length >= Table->Capacity / 2)
-    {
-        if (!HashTableExpand(Table)) {
-            return (NULL);
-        }
+    // Find the entry
+    HashEntry *Entry = FindEntry(Table->Entries, Table->Capacity, Key);
+    if (Entry->Key == NULL) {
+        return (false);
     }
 
-    // Set entry and update length
-    return(HashInsertEntry(Table->Entries, Table->Capacity, Key, Value, &Table->Length));
+    // Place a tombstone in the entry
+    Entry->Key = NULL;
+    Entry->Value = (void *)AXON_HASH_TOMBSTONE;
+
+    return (true);
 }
 
-static size_t Length(AxHashTable *Table)
+static void *Find(const AxHashTable *Table, const char *Key)
 {
-    Assert(Table && "AxHashTable is NULL!");
-    return ((Table) ? Table->Length : 0);
-}
+    Assert(Table);
 
-static const char *GetHashTableKey(AxHashTable *Table, size_t Index)
-{
-    // Loop until we find the entry at the index
-    size_t NumEntry = 0;
-    for (size_t i = 0; i < Table->Capacity; ++i)
-    {
-        if (Table->Entries[i].Key != NULL)
-        {
-            if (NumEntry == Index) {
-                return (Table->Entries[i].Key);
-            }
-
-            NumEntry++;
-        }
+    if (Table->Size == 0) {
+        return (NULL);
     }
 
-    return (NULL);
-}
-
-static void *GetHashTableValue(AxHashTable *Table, size_t Index)
-{
-    // Loop until we find the entry at the index
-    size_t NumEntry = 0;
-    for (size_t i = 0; i < Table->Capacity; ++i)
-    {
-        if (Table->Entries[i].Key != NULL)
-        {
-            if (NumEntry == Index) {
-                return (Table->Entries[i].Value);
-            }
-
-            NumEntry++;
-        }
+    HashEntry *Entry = FindEntry(Table->Entries, Table->Capacity, Key);
+    if (Entry->Key == NULL) {
+        return (NULL);
     }
 
-    return (NULL);
+    return (Entry->Value);
 }
 
-//void HashDelete(AxHashTable *Table, const char *Key)
-//{
-//    
-//}
+static size_t Size(const AxHashTable *Table)
+{
+    Assert(Table);
+    return (Table->Size);
+}
+
+static size_t Capacity(const AxHashTable *Table)
+{
+    Assert(Table);
+    return (Table->Capacity);
+}
+
+static const char *GetKeyAtIndex(AxHashTable *Table, size_t Index)
+{
+    Assert(Table);
+    return (GetEntryAtIndex(Table, Index)->Key);
+}
+
+static void *GetValueAtIndex(AxHashTable *Table, size_t Index)
+{
+    Assert(Table);
+    return (GetEntryAtIndex(Table, Index)->Value);
+}
 
 struct AxHashTableAPI *HashTableAPI = &(struct AxHashTableAPI) {
     .CreateTable = CreateTable,
     .DestroyTable = DestroyTable,
-    .Length = Length,
-    .Insert = Insert,
-    .Search = Search,
-    .GetHashTableKey = GetHashTableKey,
-    .GetHashTableValue = GetHashTableValue
+    .Set = Set,
+    .Remove = Remove,
+    .Find = Find,
+    .Size = Size,
+    .Capacity = Capacity,
+    .GetKeyAtIndex = GetKeyAtIndex,
+    .GetValueAtIndex = GetValueAtIndex
 };
