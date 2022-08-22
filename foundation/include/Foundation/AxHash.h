@@ -8,8 +8,8 @@ extern "C" {
 
 // http://www.isthe.com/chongo/tech/comp/fnv/
 
-#define FNV1_64_INIT ((uint64_t)0xcbf29ce484222325ULL)
-#define FNV_64_PRIME ((uint64_t)0x100000001b3ULL)
+#define FNV1A_64_INIT 0xcbf29ce484222325U
+#define FNV_64_PRIME 0x100000001b3U
 
 /**
  * Perform a 64 bit Fowler/Noll/Vo FNV-1a hash on a buffer

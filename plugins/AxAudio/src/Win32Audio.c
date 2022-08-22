@@ -20,8 +20,8 @@ AxHashTable *ChannelMap;
 
 static void Init(void)
 {
-    SoundMap = HashTableAPI->CreateTable(16);
-    ChannelMap = HashTableAPI->CreateTable(16);
+    HashTableAPI->CreateTable(SoundMap);
+    HashTableAPI->CreateTable(ChannelMap);
 }
 
 static void Update(void)
