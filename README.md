@@ -31,8 +31,8 @@ Design Principles
 
 Code Organization
 * Header files should only contain a types header
-* Header files should be written in C11
-* Implementation files should be written in C11
+* Header files should be written in C for compatibility
+* Implementation files can be written in C or C++
 
 [Axon SDK Roadmap](https://trello.com/b/a9z3gJWq)
 
