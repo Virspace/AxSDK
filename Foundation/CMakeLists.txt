@@ -38,6 +38,7 @@ target_sources(Foundation
         src/APIRegistry.c
         src/AxAllocatorInfo.h
         src/AxAllocatorRegistry.c
+        src/AxAllocUtils.c
         src/AxCamera.c
         src/AxHeapWin32.c
         src/AxLinearAllocatorWin32.c
