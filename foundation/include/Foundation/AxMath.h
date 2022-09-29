@@ -432,6 +432,46 @@ static inline float Distance2D(AxVec2 A, AxVec2 B)
     return (sqrtf(powf(B.X - A.X, 2.0) + powf(B.Y - A.Y, 2.0)));
 }
 
+/**
+ * Checks if a value is a power of two.
+ * @param Value The value to check.
+ * @return True if the value is a power of two, otherwise false.
+ */
+inline bool IsPowerOfTwo(size_t Value)
+{
+    return ((Value & (Value - 1)) == 0);
+}
+
+/**
+ * Rounds a value up to the nearest power of two multiple.
+ * @param Value The value to round up.
+ * @param PowerOfTwo The power of two to round up to.
+ * @return The nearest power of two multiple, zero if Multiple is not a power of two.
+ */
+inline size_t RoundUpToPowerOfTwo(size_t Value, size_t Multiple)
+{
+    if (!IsPowerOfTwo(Multiple)) {
+        return (0);
+    }
+
+    return ((Value + Multiple - 1) & ~(Multiple - 1));
+}
+
+/**
+ * Rounds a value down to the nearest power of two multiple.
+ * @param Value The value to round down.
+ * @param Multiple The power of two to round down to.
+ * @return The nearest power of two multiple, zero if Multiple is not a power of two.
+ */
+inline size_t RoundDownToPowerOfTwo(size_t Value, size_t Multiple)
+{
+    if (!IsPowerOfTwo(Multiple)) {
+        return (0);
+    }
+
+    return (Value & ~(Multiple - 1));
+}
+
 void SeedRandom(uint32_t Seed);
 
 float RandomFloat(const float Min, const float Max);

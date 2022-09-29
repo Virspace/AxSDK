@@ -4,72 +4,57 @@
 #include "Foundation/AxAllocatorRegistry.h"
 #include "Foundation/AxLinearAllocator.h"
 
-TEST(AlocUtils, IsPowerOfTwo)
+static uintptr_t AlignedAddress1 = 0x000001bb20350000;
+static uintptr_t AlignedAddress2 = 0x000001bb20350008;
+static uintptr_t UnalignedAddress = 0x000001bb20350001;
+static uintptr_t NextPage = 0x000001bb20351000;
+
+TEST(AllocUtils, RoundAddressUp)
 {
-    EXPECT_EQ(IsPowerOfTwo(3), false);
-    EXPECT_EQ(IsPowerOfTwo(4), true);
+    EXPECT_EQ(RoundAddressUpToPowerOfTwo(UnalignedAddress, 4096), NextPage);
 }
 
-TEST(AlocUtils, RoundUpToPowerOfTwo)
+TEST(AllocUtils, RoundAddressDown)
 {
-    // Value is zero case
-    EXPECT_EQ(RoundUpToPowerOfTwo(0, 16), 0);
-
-    // Multiple is zero case
-    EXPECT_EQ(RoundUpToPowerOfTwo(7, 0), 0);
-
-    // Value is less than multiple case
-    EXPECT_EQ(RoundUpToPowerOfTwo(7, 16), 16);
-
-    // Value is more than twice as small as multiple case
-    EXPECT_EQ(RoundUpToPowerOfTwo(7, 32), 32);
-
-    // Value is greater than the multiple case
-    EXPECT_EQ(RoundUpToPowerOfTwo(17, 8), 24);
-
-    // Multiple is less than not a power of two case
-    EXPECT_EQ(RoundUpToPowerOfTwo(7, 9), 0);
-
-    // Multiple is greater than not a power of two case
-    EXPECT_EQ(RoundUpToPowerOfTwo(13, 9), 0);
+    EXPECT_EQ(RoundAddressDownToPowerOfTwo(UnalignedAddress, 4096), AlignedAddress1);
 }
 
-TEST(AlocUtils, RoundDownToPowerOfTwo)
+TEST(AllocUtils, AddressDistance)
 {
-    // Value is zero case
-    EXPECT_EQ(RoundDownToPowerOfTwo(0, 16), 0);
-
-    // Multiple is zero case
-    EXPECT_EQ(RoundDownToPowerOfTwo(18, 0), 0);
-
-    // Value is greater than multiple case
-    EXPECT_EQ(RoundDownToPowerOfTwo(18, 16), 16);
-
-    // Value is more than twice as small as multiple case
-    EXPECT_EQ(RoundDownToPowerOfTwo(31, 16), 16);
-
-    // Value is smaller than the multiple case
-    EXPECT_EQ(RoundDownToPowerOfTwo(3, 16), 0);
-
-    // Multiple is less than not a power of two case
-    EXPECT_EQ(RoundDownToPowerOfTwo(5, 13), 0);
-
-    // Multiple is greater than not a power of two case
-    EXPECT_EQ(RoundDownToPowerOfTwo(18, 13), 0);
+    size_t Size = 7;
+    uintptr_t End = UnalignedAddress + Size;
+    EXPECT_EQ(AddressDistance(UnalignedAddress, End), 7);
 }
 
-TEST(AllocUtils, Alignment)
+TEST(AllocUtils, IsStraddlingBoundary)
+{
+    EXPECT_EQ(IsStraddlingBoundary(AlignedAddress1, 7, 4096), true);
+}
+
+TEST(AllocUtils, IsAligned)
 {
     uintptr_t Start = 0xFF1040; // true
     uintptr_t End = 0xFF1048; // true
 
-    EXPECT_EQ(IsAligned((void *)Start), true);
+    EXPECT_EQ(IsAligned(Start), true);
 
+    // Test every address in-between
     for (uintptr_t Current = Start + 1; Current < End; Current++) {
-        EXPECT_EQ(IsAligned((void *)Current), false);
+        EXPECT_EQ(IsAligned(Current), false);
     }
 
-    EXPECT_EQ(IsAligned((void *)End), true);
+    EXPECT_EQ(IsAligned(End), true);
+}
+
+TEST(AllocUtils, AlignOffset)
+{
+    EXPECT_EQ(AlignOffset(AlignedAddress1), 0);
+    EXPECT_EQ(AlignOffset(UnalignedAddress), 7);
+}
+
+TEST(AllocUtils, AlignAddress)
+{
+    EXPECT_EQ(AlignAddress(UnalignedAddress), AlignedAddress2);
 }
 
 class LinearAllocatorTest : public testing::Test
