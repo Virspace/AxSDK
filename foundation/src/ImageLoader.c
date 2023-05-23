@@ -1,4 +1,4 @@
-#include "ImageLoader.h"
+#include "AxImageLoader.h"
 
 #define STBI_NO_JPEG
 #define STBI_NO_BMP

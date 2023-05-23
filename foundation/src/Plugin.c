@@ -1,8 +1,8 @@
-#include "Plugin.h"
-#include "APIRegistry.h"
-#include "Platform.h"
+#include "AxPlugin.h"
+#include "AxAPIRegistry.h"
+#include "AxPlatform.h"
 #include "AxHashTable.h"
-#include "Hash.h"
+#include "AxHash.h"
 #include <string.h> // _strdup
 #include <stdio.h>
 
@@ -19,7 +19,7 @@ struct AxPlugin
 
 static struct AxPlugin *PluginArray;
 static AxHashTable *PluginTable; // <Path, PluginInfo>
-static uint64_t HashVal = FNV1_64_INIT;
+static uint64_t HashVal = FNV1A_64_INIT;
 
 static bool IsValid(uint64_t Handle)
 {
@@ -36,13 +36,13 @@ static struct AxPlugin *FindPlugin(uint64_t Handle)
     memcpy(&HashBuffer, &Handle, sizeof(uint64_t));
     HashBuffer[sizeof(uint64_t)] = '\0';
 
-    return ((struct AxPlugin *)HashTableAPI->Search(PluginTable, HashBuffer));
+    return ((struct AxPlugin *)HashTableAPI->Find(PluginTable, HashBuffer));
 }
 
 static uint64_t Load(const char *Path, bool HotReload)
 {
     if (!PluginTable) {
-        PluginTable = HashTableAPI->CreateTable(10);
+        PluginTable = HashTableAPI->CreateTable();
     }
 
     struct AxPlatformDLLAPI *DLLAPI = PlatformAPI->DLL;
@@ -89,7 +89,7 @@ static uint64_t Load(const char *Path, bool HotReload)
 
             // Add info to array and table
             ArrayPush(PluginArray, Plugin);
-            HashTableAPI->Insert(PluginTable, HashBuffer, ArrayBack(PluginArray));
+            HashTableAPI->Set(PluginTable, HashBuffer, ArrayBack(PluginArray));
 
             // Update HashVal for next use
             HashVal = Hash;

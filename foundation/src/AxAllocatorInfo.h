@@ -12,9 +12,9 @@ struct AxAllocatorInfo
     void *BaseAddress;               // Base Address
     uint32_t PageSize;               // Page size
     uint32_t AllocationGranularity;  // Granularity
-    size_t BytesReserved;            // Number of bytes reserved
-    size_t BytesCommitted;           // Number of bytes used
-    size_t BytesAllocated;           // Number of bytes allocated
+    size_t BytesReserved;            // Number of bytes reserved in the address space
+    size_t BytesCommitted;           // Number of bytes mapped to physical memory
+    size_t BytesAllocated;           // Number of bytes actually allocated
     size_t PagesReserved;            // Total number of pages allocated
     size_t PagesCommitted;           // Number of pages used
 };

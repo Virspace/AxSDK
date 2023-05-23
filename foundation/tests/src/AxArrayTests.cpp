@@ -1,5 +1,5 @@
 #include "gtest/gtest.h"
-#include "Foundation/Types.h"
+#include "Foundation/AxTypes.h"
 
 #define AXARRAY_IMPLEMENTATION
 #include "Foundation/AxArray.h"

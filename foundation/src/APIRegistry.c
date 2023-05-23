@@ -1,6 +1,6 @@
-#include "APIRegistry.h"
-#include "Plugin.h"
-#include "Platform.h"
+#include "AxAPIRegistry.h"
+#include "AxPlugin.h"
+#include "AxPlatform.h"
 #include "ImageLoader.h"
 #include "AxHashTable.h"
 #include "AxAllocatorRegistry.h"
@@ -10,7 +10,7 @@
 
 struct AxAPIRegistry *AxonGlobalAPIRegistry;
 
-static const uint32_t InitialSize = 16;
+static const uint32_t INITIAL_SIZE = 16;
 static struct AxHashTable *APIMap;
 
 static void *APIMemory;
@@ -20,18 +20,18 @@ static int32_t APIMemoryOffset;
 
 static void Set(const char *Name, void *API, size_t Size)
 {
-    void* Result = HashTableAPI->Search(APIMap, Name);
+    void* Result = HashTableAPI->Find(APIMap, Name);
     if (Result) {
         memcpy(Result, API, Size);
     } else {
-        HashTableAPI->Insert(APIMap, Name, API);
+        HashTableAPI->Set(APIMap, Name, API);
     }
 }
 
 static void *Get(const char *Name)
 {
     // Try to find it
-    void *API = (void *)HashTableAPI->Search(APIMap, Name);
+    void *API = (void *)HashTableAPI->Find(APIMap, Name);
     if (API)
     {
         // If found, return API
@@ -42,8 +42,8 @@ static void *Get(const char *Name)
         // If not found, create a placeholder that will be filled out
         // once the API gets loaded.
         void* Temp = (char *)APIMemory + APIMemoryOffset;
-        HashTableAPI->Insert(APIMap, Name, Temp);
-        void *Result = HashTableAPI->Search(APIMap, Name);
+        HashTableAPI->Set(APIMap, Name, Temp);
+        void *Result = HashTableAPI->Find(APIMap, Name);
         APIMemoryOffset += Kilobytes(8);
 
         return(Result);
@@ -54,8 +54,8 @@ static void *Get(const char *Name)
 
 void AxonInitGlobalAPIRegistry()
 {
-    APIMap = HashTableAPI->CreateTable(InitialSize);
-    APIMemory = calloc(InitialSize, Kilobytes(8) * 16);
+    APIMap = HashTableAPI->CreateTable();
+    APIMemory = calloc(INITIAL_SIZE, Kilobytes(8) * 16);
     APIMemoryOffset = 0;
 }
 

@@ -2,7 +2,6 @@
 #include "AxAllocatorRegistry.h"
 #include "AxAllocatorInfo.h"
 #include "AxAllocUtils.h"
-#include "AxMath.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,16 +24,11 @@ inline void GetSysInfo(uint32_t *PageSize, uint32_t *AllocationGranularity)
     SYSTEM_INFO SystemInfo;
     GetSystemInfo(&SystemInfo);
 
-    // Seems safe to assume a uint32_t is large enough
+    // Seems safe to assume a uint16_t is large enough
     *PageSize = (uint32_t)SystemInfo.dwPageSize;
     *AllocationGranularity = (uint32_t)SystemInfo.dwAllocationGranularity;
 }
 
-/**
- * There's two things that go on here:
- * 1) Commit what we need to commit to satisfy the allocation (or don't)
- * 2) Divide up what was committed to satisfy the allocation
- */
 static void *Alloc(struct AxLinearAllocator *Allocator, size_t Size, const char *File, uint32_t Line)
 {
     Assert(Allocator && "AxLinearAllocator passed NULL allocator!");
@@ -43,23 +37,17 @@ static void *Alloc(struct AxLinearAllocator *Allocator, size_t Size, const char 
     }
 
     // TODO(mdeforge): We need to check reserve size before we do this! We might go over!
-    size_t AlignmentSize = 0;
 
     // Align allocation to multiple of pointer size
-    uintptr_t CurrentAddress = (uintptr_t)Allocator->Arena + Allocator->Info.BytesAllocated;
-    if (!IsAligned(CurrentAddress))
+    void *CurrentOffset = (uint8_t *)Allocator->Arena + Allocator->Info.BytesAllocated;
+    if (!IsAligned(CurrentOffset))
     {
-        uintptr_t NewAddress = AlignAddress(CurrentAddress);
-        AlignmentSize = AddressDistance(NewAddress, CurrentAddress);
-        CurrentAddress = NewAddress;
+        size_t NewAddress = RoundUpToPowerOfTwo((size_t)CurrentOffset, sizeof(void *));
+        size_t AlignmentSize = NewAddress - (size_t)CurrentOffset;
 
-        
         // We're just assuming this allocation is going to work out????
-        //Allocator->Info.BytesAllocated += AlignmentSize;
+        Allocator->Info.BytesAllocated += AlignmentSize;
     }
-
-    // Check if aligned address + allocation straddles a page boundary
-    //bool WillCrossPageBoundary = (((uint8_t *)CurrentAddress + Size)) % Allocator->Info.PageSize) == 0);
 
     // Despite requested amount, actual memory committed will be a multiple of the page size so round to it
     // Don't worry, we'll carve up that allocated page and return what's needed
@@ -73,7 +61,7 @@ static void *Alloc(struct AxLinearAllocator *Allocator, size_t Size, const char 
 
     // Check if we have the reserved bytes available to meet the rounded allocation request
         // TODO(mdeforge): Does this need to take into account remaining committed?????
-    size_t BytesAvailable = Allocator->Info.BytesReserved - (Allocator->Info.BytesAllocated + AlignmentSize);
+    size_t BytesAvailable = Allocator->Info.BytesReserved - Allocator->Info.BytesAllocated;
     if (BytesRequestedRoundedToPageSize > BytesAvailable) {
         return (NULL);
     }
@@ -93,8 +81,7 @@ static void *Alloc(struct AxLinearAllocator *Allocator, size_t Size, const char 
 
 
         // TODO(mdeforge): Check for virtual alloc failure
-        uint8_t *Address = (uint8_t *)Allocator->Arena + (Allocator->Info.BytesAllocated + AlignmentSize);
-        VirtualAlloc(Address, BytesNeeded, MEM_COMMIT, PAGE_READWRITE);
+        VirtualAlloc((uint8_t *)Allocator->Arena + Allocator->Info.BytesAllocated, BytesNeeded, MEM_COMMIT, PAGE_READWRITE);
 
         // Does Info reserved memory go down as committed memory goes up?
         Allocator->Info.BytesCommitted += BytesNeeded;
@@ -110,7 +97,7 @@ static void *Alloc(struct AxLinearAllocator *Allocator, size_t Size, const char 
 
     // Update Arena Info
     //Allocator->Info.BytesAllocated += BytesRequestedRoundedToPageSize;
-    Allocator->Info.BytesAllocated += Size + AlignmentSize;
+    Allocator->Info.BytesAllocated += Size;
     Allocator->Info.PagesCommitted = RoundUpToPowerOfTwo(Allocator->Info.BytesCommitted, Allocator->Info.PageSize) / 4096;
 
     // User payload
@@ -127,7 +114,7 @@ static void Free(struct AxLinearAllocator *Allocator, const char *File, uint32_t
     // If lpAddress is the base address returned by VirtualAlloc and dwSize is 0 (zero), the function decommits
     // the entire region that is allocated by VirtualAlloc. After that, the entire region is in the reserved state.
     VirtualFree(Allocator->Arena, 0, MEM_DECOMMIT);
-    ZeroMemory(&Allocator->Info, sizeof(struct AxAllocatorInfo));
+    Allocator->Info = (struct AxAllocatorInfo){ 0 }; // TODO(mdeforge): Can we re-zero-initialize a struct?
 }
 
 static struct AxLinearAllocator *Create(const char *Name, size_t MaxSize)
@@ -149,7 +136,7 @@ static struct AxLinearAllocator *Create(const char *Name, size_t MaxSize)
     // NOTE(mdeforge): Because the application and any shared libraries it uses are loaded at
     //                 a random address (a security feature called ASLR), we pass NULL as the
     //                 BaseAddress parameter in VirtualAlloc.
-    void *BaseAddress = VirtualAlloc(NULL, MaxSize, MEM_RESERVE, PAGE_READWRITE);
+    void *BaseAddress = VirtualAlloc(BaseAddress, MaxSize, MEM_RESERVE, PAGE_READWRITE);
 
     // Check for alloc failure
     if (!BaseAddress) {
