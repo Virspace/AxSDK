@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Foundation/Types.h"
+#include "Foundation/AxTypes.h"
 
 #ifdef __cplusplus
 extern  "C" {
@@ -27,7 +27,8 @@ struct AxLinearAllocatorAPI
     /**
      * @param MaxSize The maximum size in bytes to be reserved. Because the system must
      * reserve regions in multiples of the page size, the maximum size is always rounded
-     * to the nearest system page size.
+     * to the nearest system page size. Due to using space at the beginning of the requested
+     * heap to store information, actual size may be less than MaxSize.
      * @param BaseAddress If NULL, reserves a region of virtual memory anywhere in the
      * processes address space. Otherwise, specifies the address at which the virtual
      * memory should be reserved. Regions are always reserved on the allocation granularity
@@ -40,7 +41,7 @@ struct AxLinearAllocatorAPI
      * region is not large enough to accommodate MaxSize. Otherwise, a handle to the
      * lienar allocator.
      */
-    struct AxLinearAllocator *(*Create)(const char *Name, size_t MaxSize, void *BaseAddress);
+    struct AxLinearAllocator *(*Create)(const char *Name, size_t MaxSize);
 
     /**
      * @param Allocator
@@ -48,6 +49,7 @@ struct AxLinearAllocatorAPI
     void (*Destroy)(struct AxLinearAllocator *Allocator);
 
     /**
+     * Returns an aligned allocation.
      * @param Allocator
      * @param Size
      * @param File
