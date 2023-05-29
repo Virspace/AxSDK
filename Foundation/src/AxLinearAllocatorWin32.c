@@ -165,7 +165,6 @@ static struct AxLinearAllocator *Create(const char *Name, size_t MaxSize)
     {
         Allocator->Arena = (uint8_t *)BaseAddress + sizeof(struct AxLinearAllocator);
         Allocator->Info = (struct AxAllocatorInfo) {
-            .Name = strdup(Name),
             .BaseAddress = Allocator->Arena,
             .PageSize = PageSize,
             .AllocationGranularity = AllocatorGranularity,
@@ -178,7 +177,7 @@ static struct AxLinearAllocator *Create(const char *Name, size_t MaxSize)
 
         // Copy name
         size_t s = ArrayCount(Allocator->Info.Name);
-        //strncpy(Allocator->Info.Name, Name, s );
+        strncpy(Allocator->Info.Name, Name, s);
 
         // Register with Allocator API
         AllocatorRegistryAPI->Register(&Allocator->Info);
