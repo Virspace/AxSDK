@@ -26,6 +26,7 @@ struct AxAllocatorRegistryAPI
     size_t (*BytesAllocated)(struct AxAllocatorInfo *Info);
     size_t (*PagesReserved)(struct AxAllocatorInfo *Info);
     size_t (*PagesCommitted)(struct AxAllocatorInfo *Info);
+    size_t (*NumAllocs)(struct AxAllocatorInfo *Info);
 };
 
 #if defined(AXON_LINKS_FOUNDATION)

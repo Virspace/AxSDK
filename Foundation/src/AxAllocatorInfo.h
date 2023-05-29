@@ -17,6 +17,7 @@ struct AxAllocatorInfo
     size_t BytesAllocated;           // Number of bytes actually allocated
     size_t PagesReserved;            // Total number of pages allocated
     size_t PagesCommitted;           // Number of pages used
+    size_t NumAllocs;                // Number of allocations
 };
 
 #ifdef __cplusplus
