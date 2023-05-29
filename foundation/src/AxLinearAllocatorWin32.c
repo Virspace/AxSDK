@@ -112,6 +112,7 @@ static void *Alloc(struct AxLinearAllocator *Allocator, size_t Size, const char 
     //Allocator->Info.BytesAllocated += BytesRequestedRoundedToPageSize;
     Allocator->Info.BytesAllocated += Size + AlignmentSize;
     Allocator->Info.PagesCommitted = RoundUpToPowerOfTwo(Allocator->Info.BytesCommitted, Allocator->Info.PageSize) / 4096;
+    Allocator->Info.NumAllocs++;
 
     // User payload
     return (Result);
