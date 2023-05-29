@@ -84,7 +84,7 @@ static size_t PagesCommitted(struct AxAllocatorInfo *Info)
 
 static size_t NumAllocs(struct AxAllocatorInfo *Info)
 {
-    Asset(Info && "Info is NULL");
+    Assert(Info && "Info is NULL");
     return ((Info) ? Info->NumAllocs : 0);
 }
 
