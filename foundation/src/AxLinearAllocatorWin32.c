@@ -173,7 +173,8 @@ static struct AxLinearAllocator *Create(const char *Name, size_t MaxSize)
             .BytesCommitted = 0,
             .BytesAllocated = 0,
             .PagesReserved = MaxSize / (size_t)PageSize,
-            .PagesCommitted = 0
+            .PagesCommitted = 0,
+            .NumAllocs = 0
         };
 
         // Copy name
