@@ -100,5 +100,6 @@ struct AxAllocatorRegistryAPI *AllocatorRegistryAPI = &(struct AxAllocatorRegist
     .BytesCommitted = BytesCommitted,
     .BytesAllocated = BytesAllocated,
     .PagesReserved = PagesReserved,
-    .PagesCommitted = PagesCommitted
+    .PagesCommitted = PagesCommitted,
+    .NumAllocs = NumAllocs
 };
