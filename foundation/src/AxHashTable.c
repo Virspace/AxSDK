@@ -106,7 +106,7 @@ static HashEntry *GetEntryAtIndex(AxHashTable *Table, size_t Index)
     return (Entry);
 }
 
-static AxHashTable *CreateTable(void)
+static AxHashTable *CreateTable()
 {
     AxHashTable *Table = malloc(sizeof(AxHashTable));
     if (Table == NULL) {
@@ -174,7 +174,7 @@ static bool HashTableExpand(AxHashTable *Table, size_t Capacity)
     return (true);
 }
 
-static bool Set(AxHashTable *Table, const char *Key, void *Value)
+static bool Set(AxHashTable *Table, const char *Key, const void *Value)
 {
     Assert(Table);
 

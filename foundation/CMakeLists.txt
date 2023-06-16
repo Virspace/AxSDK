@@ -13,11 +13,13 @@ project(Foundation VERSION 1.0.0 LANGUAGES C CXX)
 add_library(Foundation STATIC)
 add_library(Virspace::Foundation ALIAS Foundation)
 
+if (WIN32)
 # Add sources to target
 target_sources(Foundation
     PRIVATE
         include/Foundation/AxAPIRegistry.h
         include/Foundation/AxAllocUtils.h
+        include/Foundation/AxAllocatorInfo.h
         include/Foundation/AxAllocatorRegistry.h
         include/Foundation/AxApplication.h
         include/Foundation/AxArray.h
@@ -36,7 +38,7 @@ target_sources(Foundation
         include/Foundation/AxTypes.h
         include/Foundation/AxLinkedList.h
         src/APIRegistry.c
-        src/AxAllocatorInfo.h
+        src/AxAllocatorData.h
         src/AxAllocatorRegistry.c
         src/AxAllocUtils.c
         src/AxCamera.c
@@ -51,6 +53,46 @@ target_sources(Foundation
         src/Win32Platform.c
         src/LinkedList.c
 )
+else()
+    target_sources(Foundation
+        PRIVATE
+            include/Foundation/AxAPIRegistry.h
+            include/Foundation/AxAllocUtils.h
+            include/Foundation/AxAllocatorInfo.h
+            include/Foundation/AxAllocatorRegistry.h
+            include/Foundation/AxApplication.h
+            include/Foundation/AxArray.h
+            include/Foundation/AxCamera.h
+            include/Foundation/AxHeap.h
+            include/Foundation/AxLinearAllocator.h
+            #include/Foundation/AxStackAllocator.h
+            include/Foundation/AxEditorPlugin.h
+            include/Foundation/AxHash.h
+            include/Foundation/AxHashTable.h
+            #include/Foundation/AxImageLoader.h
+            include/Foundation/AxIntrinsics.h
+            include/Foundation/AxMath.h
+            include/Foundation/AxPlatform.h
+            include/Foundation/AxPlugin.h
+            include/Foundation/AxTypes.h
+            include/Foundation/AxLinkedList.h
+            src/APIRegistry.c
+            src/AxAllocatorData.h
+            src/AxAllocatorRegistry.c
+            src/AxAllocUtils.c
+            src/AxCamera.c
+            src/AxHeapLinux.c
+            src/AxLinearAllocatorLinux.c
+            #src/ImageLoader.c
+            src/Hash.c
+            src/AxHashTable.c
+            #src/AxStackAllocatorWin32.c
+            src/AxMath.c
+            src/Plugin.c
+            src/LinuxPlatform.c
+            src/LinkedList.c
+    )
+endif()
 
 #
 # Usage Requirements

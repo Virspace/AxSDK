@@ -6,7 +6,7 @@ extern "C" {
 
 #include "Foundation/AxTypes.h"
 
-struct AxAllocatorInfo
+struct AxAllocatorData
 {
     char Name[64];                   // Allocator Name
     void *BaseAddress;               // Base Address

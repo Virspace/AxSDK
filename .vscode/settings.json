@@ -1,5 +1,12 @@
 {
     "files.associations": {
-        "axhashtable.h": "c"
+        "axhashtable.h": "c",
+        "axallocatorregistry.h": "c",
+        "axallocatordata.h": "c",
+        "mman.h": "c",
+        "types.h": "c",
+        "features.h": "c",
+        "axheap.h": "c",
+        "axtypes.h": "c"
     }
 }
