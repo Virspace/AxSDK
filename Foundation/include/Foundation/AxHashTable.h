@@ -66,7 +66,7 @@ struct AxHashTableAPI
      * @param Value the entry value.
      * @return The key if successful, otherwise NULL.
      */
-    bool (*Set)(AxHashTable *Table, const char *Key, void *Value);
+    bool (*Set)(AxHashTable *Table, const char *Key, const void *Value);
 
     /**
      * @param

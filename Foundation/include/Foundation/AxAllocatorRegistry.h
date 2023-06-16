@@ -1,36 +1,26 @@
 #pragma once
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
 #include "Foundation/AxTypes.h"
 
 #define AXON_ALLOCATOR_REGISTRY_API_NAME "AxonAllocatorRegistryAPI"
 
-struct AxAllocatorInfo;
-struct AxAllocatorRegistryAPI
-{
-    void (*Register)(struct AxAllocatorInfo *Info);
-    size_t (*Length)(void);
+    struct AxAllocatorData;
+    struct AxAllocatorRegistryAPI
+    {
+        void (*Register)(struct AxAllocatorData *Info);
+        size_t (*Length)(void);
+        struct AxAllocatorData *(*GetAllocatorDataByName)(const char *Name);
+        struct AxAllocatorData *(*GetAllocatorDataByIndex)(size_t Index);
 
-    struct AxAllocatorInfo *(*GetAllocatorInfoByName)(const char *Name);
-    struct AxAllocatorInfo *(*GetAllocatorInfoByIndex)(size_t Index);
-
-    const char *(*Name)(struct AxAllocatorInfo *Info);
-    void *(*BaseAddress)(struct AxAllocatorInfo *Info);
-    uint32_t (*PageSize)(struct AxAllocatorInfo *Info);
-    uint32_t (*AllocationGranularity)(struct AxAllocatorInfo *Info);
-    size_t (*BytesReserved)(struct AxAllocatorInfo *Info);
-    size_t (*BytesCommitted)(struct AxAllocatorInfo *Info);
-    size_t (*BytesAllocated)(struct AxAllocatorInfo *Info);
-    size_t (*PagesReserved)(struct AxAllocatorInfo *Info);
-    size_t (*PagesCommitted)(struct AxAllocatorInfo *Info);
-    size_t (*NumAllocs)(struct AxAllocatorInfo *Info);
-};
+    };
 
 #if defined(AXON_LINKS_FOUNDATION)
-extern struct AxAllocatorRegistryAPI *AllocatorRegistryAPI;
+    extern struct AxAllocatorRegistryAPI *AllocatorRegistryAPI;
 #endif
 
 #ifdef __cplusplus

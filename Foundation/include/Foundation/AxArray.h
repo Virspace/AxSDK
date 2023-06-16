@@ -7,7 +7,8 @@
 
 /*
     AxArray's are a type-safe dynamic array. They are useful when building a list of things
-    with an unknown quantity. AxArray's are based on Sean Barrett's stretchy buffer's,
+    with an unknown quantity. When an AxArray resizes, there is a good chance the new array
+    will be at a new memory address. AxArray's are based on Sean Barrett's stretchy buffer's,
     [stb_ds.h](https://github.com/nothings/stb/blob/master/stb_ds.h).
 
     AxArray's are accessed using a regular pointer to the array type.

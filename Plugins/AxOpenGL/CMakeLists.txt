@@ -11,17 +11,31 @@ add_library(AxOpenGL SHARED)
 add_library(Virspace::AxOpenGL ALIAS AxOpenGL)
 
 # Add sources to target
-target_sources(AxOpenGL
-    PRIVATE
-        include/AxOpenGL/AxOpenGL.h
-        include/GL/gl3w.h
-        include/GL/glcorearb.h
-        src/gl3w.c
-        #include/glad/glad.h
-        #include/KHR/khrplatform.h
-        #src/glad.c
-        src/AxOpenGLWin32.c
-)
+if(WIN32)
+    target_sources(AxOpenGL
+        PRIVATE
+            include/AxOpenGL/AxOpenGL.h
+            include/GL/gl3w.h
+            include/GL/glcorearb.h
+            src/gl3w.c
+            #include/glad/glad.h
+            #include/KHR/khrplatform.h
+            #src/glad.c
+            src/AxOpenGLWin32.c
+    )
+else()
+    target_sources(AxOpenGL
+        PRIVATE
+            include/AxOpenGL/AxOpenGL.h
+            include/GL/gl3w.h
+            include/GL/glcorearb.h
+            src/gl3w.c
+            #include/glad/glad.h
+            #include/KHR/khrplatform.h
+            #src/glad.c
+            src/AxOpenGLLinux.c
+    )
+endif()
 
 #
 # Usage Requirements
