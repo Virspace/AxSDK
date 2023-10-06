@@ -5,6 +5,8 @@
 #include "AxHashTable.h"
 #include "AxPlatform.h"
 
+// TODO(mdeforge): size_t vs. uint_X_t vs int_X_t
+
 /* ========================================================================
    Axon Path
    ======================================================================== */
@@ -40,7 +42,6 @@ static char *CurrentWorkingDirectory(void)
 {
 
 }
-
 
 /* ========================================================================
    Axon File
@@ -105,27 +106,34 @@ static int64_t FileRead(AxFile File, void *Buffer, uint64_t BytesToRead)
         return (0);
     }
 
-    fseek(File.Handle, 0, SEEK_END);
-    long Size = ftell(File.Handle);
-    rewind(File.Handle);
+    // NOTE(mdeforge): I'm not sure what this was about...
+    //fseek(File.Handle, 0, SEEK_END);
+    //long Size = ftell(File.Handle);
+    //rewind(File.Handle);
 
     // If file size is smaller than requested read, read the number 
     // of bytes that are available and return the number of read bytes.
+    uint64_t Size = FileSize(File);
     if (Size < BytesToRead)
     {
         BytesToRead = Size;
     }
 
-    if (fread(Buffer, 1, Size, File.Handle) != Size)
+    size_t NumBytesRead = fread(Buffer, 1, Size, (FILE *)File.Handle);
+    if (NumBytesRead != Size)
     {
-        fclose(File.Handle);
+        fclose((FILE *)File.Handle);
         return -1;
     }
 
-    fclose(File.Handle);
+    fclose((FILE *)File.Handle);
 
-    return(NumBytesRead);
+    return((int64_t)NumBytesRead);
 }
+
+/* ========================================================================
+   Axon Directory
+   ======================================================================== */
 
 static void FileClose(AxFile File)
 {
@@ -136,7 +144,7 @@ static void FileClose(AxFile File)
 /* ========================================================================
    Axon Directory
    ======================================================================== */
-
+/*
 static bool CreateDir(const char *Path)
 {
     return (CreateDirectory(Path, NULL));
@@ -160,7 +168,7 @@ static bool RemoveDir(const char *Path)
 /* ========================================================================
    Axon DLL
    ======================================================================== */
-
+/*
 static AxDLL DLLLoad(const char *Path)
 {
     AxDLL DLL = { 0 };
@@ -195,7 +203,7 @@ static void *DLLSymbol(AxDLL DLL, const char *SymbolName)
 /* ========================================================================
    Time
    ======================================================================== */
-
+/*
 static AxWallClock WallTime(void)
 {
     LARGE_INTEGER Result;
@@ -226,18 +234,18 @@ struct AxPlatformAPI *PlatformAPI = &(struct AxPlatformAPI) {
         .Read = FileRead,
         .Close = FileClose
     },
-    .Directory = &(struct AxPlatformDirectoryAPI) {
-        .CreateDir = CreateDir,
-        .RemoveDir = RemoveDir
-    },
-    .DLL =  &(struct AxPlatformDLLAPI) {
-        .Load = DLLLoad,
-        .Unload = DLLUnload,
-        .IsValid = DLLIsValid,
-        .Symbol = DLLSymbol
-    },
-    .Time = &(struct AxTimeAPI) {
-        .WallTime = WallTime,
-        .ElapsedWallTime = ElapsedWallTime
-    }
+    // .Directory = &(struct AxPlatformDirectoryAPI) {
+    //     .CreateDir = CreateDir,
+    //     .RemoveDir = RemoveDir
+    // },
+    // .DLL =  &(struct AxPlatformDLLAPI) {
+    //     .Load = DLLLoad,
+    //     .Unload = DLLUnload,
+    //     .IsValid = DLLIsValid,
+    //     .Symbol = DLLSymbol
+    // },
+    // .Time = &(struct AxTimeAPI) {
+    //     .WallTime = WallTime,
+    //     .ElapsedWallTime = ElapsedWallTime
+    // }
 };
