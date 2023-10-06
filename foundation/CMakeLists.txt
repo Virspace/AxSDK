@@ -63,7 +63,7 @@ else()
             include/Foundation/AxApplication.h
             include/Foundation/AxArray.h
             include/Foundation/AxCamera.h
-            include/Foundation/AxHeap.h
+            #include/Foundation/AxHeap.h
             include/Foundation/AxLinearAllocator.h
             #include/Foundation/AxStackAllocator.h
             include/Foundation/AxEditorPlugin.h
@@ -81,7 +81,7 @@ else()
             src/AxAllocatorRegistry.c
             src/AxAllocUtils.c
             src/AxCamera.c
-            src/AxHeapLinux.c
+            #src/AxHeapLinux.c
             src/AxLinearAllocatorLinux.c
             #src/ImageLoader.c
             src/Hash.c
