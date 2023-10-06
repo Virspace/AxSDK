@@ -53,7 +53,6 @@ static void *Alloc(struct AxLinearAllocator *Allocator, size_t Size, const char 
         AlignmentSize = AddressDistance(NewAddress, CurrentAddress);
         CurrentAddress = NewAddress;
 
-        
         // We're just assuming this allocation is going to work out????
         //Allocator->Info.BytesAllocated += AlignmentSize;
     }

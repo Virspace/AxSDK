@@ -6,6 +6,9 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <sys/mman.h>
+#include <string.h>
 
 // TODO(mdeforge): If we add platform memory allocation functions to the platform api
 //                 we can have one linear allocator source file that's not Win32 specific.
@@ -50,7 +53,6 @@ static void *Alloc(struct AxLinearAllocator *Allocator, size_t Size, const char 
         AlignmentSize = AddressDistance(NewAddress, CurrentAddress);
         CurrentAddress = NewAddress;
 
-        
         // We're just assuming this allocation is going to work out????
         //Allocator->Info.BytesAllocated += AlignmentSize;
     }
@@ -124,8 +126,8 @@ static void Free(struct AxLinearAllocator *Allocator, const char *File, uint32_t
 
     // If lpAddress is the base address returned by VirtualAlloc and dwSize is 0 (zero), the function decommits
     // the entire region that is allocated by VirtualAlloc. After that, the entire region is in the reserved state.
-    munmap(Allocator->Arena, 0, MEM_DECOMMIT);
-    ZeroMemory(&Allocator->Data, sizeof(struct AxAllocatorInfo));
+    munmap(Allocator->Arena, Allocator->Data.BytesAllocated);
+    memset(&Allocator->Data, 0, sizeof(struct AxAllocatorData));
 }
 
 static struct AxLinearAllocator *Create(const char *Name, size_t MaxSize)
@@ -135,8 +137,8 @@ static struct AxLinearAllocator *Create(const char *Name, size_t MaxSize)
     }
 
     // Get the system page size and allocator granularity
-    uint32_t PageSize, AllocatorGranularity;
-    GetSysInfo(&PageSize, &AllocatorGranularity);
+    uint32_t PageSize = getpagesize();
+    uint32_t AllocatorGranularity = getpagesize();
 
     // Memory reserved will be a multiple of the system allocation granularity
     // NOTE(mdeforge): We wouldn't round if VirtualAlloc's BaseAddress parameter was going to be set below
@@ -147,7 +149,7 @@ static struct AxLinearAllocator *Create(const char *Name, size_t MaxSize)
     // NOTE(mdeforge): Because the application and any shared libraries it uses are loaded at
     //                 a random address (a security feature called ASLR), we pass NULL as the
     //                 BaseAddress parameter in VirtualAlloc.
-    void *BaseAddress = VirtualAlloc(NULL, MaxSize, MEM_RESERVE, PAGE_READWRITE);
+    void *BaseAddress = mmap(NULL, MaxSize, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
     // Check for alloc failure
     if (!BaseAddress) {
@@ -155,14 +157,15 @@ static struct AxLinearAllocator *Create(const char *Name, size_t MaxSize)
     }
 
     // Use some space at the beginning of the heap to store information
-    VirtualAlloc(BaseAddress, sizeof(struct AxLinearAllocator), MEM_COMMIT, PAGE_READWRITE);
+    //VirtualAlloc(BaseAddress, sizeof(struct AxLinearAllocator), MEM_COMMIT, PAGE_READWRITE);
+    mmap(BaseAddress, sizeof(struct AxLinearAllocator), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     struct AxLinearAllocator *Allocator = BaseAddress;
 
     // Construct the heap
     if (Allocator)
     {
         Allocator->Arena = (uint8_t *)BaseAddress + sizeof(struct AxLinearAllocator);
-        Allocator->Data = (struct AxAllocatorInfo) {
+        Allocator->Data = (struct AxAllocatorData) {
             .BaseAddress = Allocator->Arena,
             .PageSize = PageSize,
             .AllocationGranularity = AllocatorGranularity,
@@ -192,7 +195,7 @@ static void Destroy(struct AxLinearAllocator *Allocator)
         return;
     }
 
-    VirtualFree(Allocator, 0, MEM_RELEASE); // Will decommit and release
+    munmap(Allocator->Arena, Allocator->Data.BytesAllocated);
 }
 
 struct AxLinearAllocatorAPI *LinearAllocatorAPI = &(struct AxLinearAllocatorAPI) {
