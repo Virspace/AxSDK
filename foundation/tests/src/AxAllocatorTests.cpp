@@ -2,6 +2,7 @@
 #include "Foundation/AxTypes.h"
 #include "Foundation/AxAllocUtils.h"
 #include "Foundation/AxAllocatorRegistry.h"
+#include "Foundation/AxAllocatorInfo.h"
 #include "Foundation/AxLinearAllocator.h"
 
 static uintptr_t AlignedAddress1 = 0x000001bb20350000;
@@ -79,15 +80,15 @@ TEST_F(LinearAllocatorTest, Length)
     EXPECT_EQ(Length, 1);
 }
 
-// TEST_F(LinearAllocatorTest, Info)
-// {
-//     void *Mem1 = LinearAllocatorAPI->Alloc(LinearAllocator, 64, __FILE__, __LINE__);
-//     AxAllocatorInfo *Info = AllocatorRegistryAPI->GetAllocatorInfoByIndex(1);
-//     EXPECT_STREQ(AllocatorRegistryAPI->Name(Info), "LinearTest");
-//     EXPECT_EQ(AllocatorRegistryAPI->BytesReserved(Info), 65536);
-//     EXPECT_EQ(AllocatorRegistryAPI->BytesCommitted(Info), 64);
-//     EXPECT_EQ(AllocatorRegistryAPI->PageSize(Info), 4096);
-//     EXPECT_EQ(AllocatorRegistryAPI->AllocationGranularity(Info), 65536);
-//     EXPECT_EQ(AllocatorRegistryAPI->PagesReserved(Info), 16);
-//     EXPECT_EQ(AllocatorRegistryAPI->PagesCommitted(Info), 1);
-// }
+TEST_F(LinearAllocatorTest, Info)
+{
+    void *Mem1 = LinearAllocatorAPI->Alloc(LinearAllocator, 64, __FILE__, __LINE__);
+    AxAllocatorData *Data = AllocatorRegistryAPI->GetAllocatorDataByName("LinearTest");
+    //EXPECT_STREQ(AllocatorDataAPI->Name(Data), "LinearTest");
+    EXPECT_EQ(AllocatorDataAPI->BytesReserved(Data), 65536);
+    EXPECT_EQ(AllocatorDataAPI->BytesCommitted(Data), 64);
+    EXPECT_EQ(AllocatorDataAPI->PageSize(Data), 4096);
+    EXPECT_EQ(AllocatorDataAPI->AllocationGranularity(Data), 65536);
+    EXPECT_EQ(AllocatorDataAPI->PagesReserved(Data), 16);
+    EXPECT_EQ(AllocatorDataAPI->PagesCommitted(Data), 1);
+}
