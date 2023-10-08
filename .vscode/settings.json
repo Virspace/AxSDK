@@ -8,6 +8,7 @@
         "features.h": "c",
         "axheap.h": "c",
         "axtypes.h": "c",
-        "axallocatorinfo.h": "c"
+        "axallocatorinfo.h": "c",
+        "unistd.h": "c"
     }
 }

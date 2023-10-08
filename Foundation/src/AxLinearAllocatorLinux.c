@@ -4,11 +4,13 @@
 #include "AxAllocUtils.h"
 #include "AxMath.h"
 
+#define __USE_MISC 1
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/mman.h>
 #include <string.h>
+
 
 // TODO(mdeforge): If we add platform memory allocation functions to the platform api
 //                 we can have one linear allocator source file that's not Win32 specific.
@@ -158,7 +160,7 @@ static struct AxLinearAllocator *Create(const char *Name, size_t MaxSize)
 
     // Use some space at the beginning of the heap to store information
     //VirtualAlloc(BaseAddress, sizeof(struct AxLinearAllocator), MEM_COMMIT, PAGE_READWRITE);
-    mmap(BaseAddress, sizeof(struct AxLinearAllocator), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    mprotect(BaseAddress, sizeof(struct AxLinearAllocator), PROT_READ | PROT_WRITE);
     struct AxLinearAllocator *Allocator = BaseAddress;
 
     // Construct the heap

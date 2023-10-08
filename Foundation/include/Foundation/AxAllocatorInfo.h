@@ -7,25 +7,25 @@ extern "C"
 
 #include "Foundation/AxTypes.h"
 
-#define AXON_ALLOCATOR_REGISTRY_API_NAME "AxonAllocatorInfoAPI"
+#define AXON_ALLOCATOR_DATA_API_NAME "AxonAllocatorDataAPI"
 
     struct AxAllocatorData;
-    struct AxAllocatorInfoAPI
+    struct AxAllocatorDataAPI
     {
-        const char *(*Name)(struct AxAllocatorData *Info);
-        void *(*BaseAddress)(struct AxAllocatorData *Info);
-        uint32_t (*PageSize)(struct AxAllocatorData *Info);
-        uint32_t (*AllocationGranularity)(struct AxAllocatorData *Info);
-        size_t (*BytesReserved)(struct AxAllocatorData *Info);
-        size_t (*BytesCommitted)(struct AxAllocatorData *Info);
-        size_t (*BytesAllocated)(struct AxAllocatorData *Info);
-        size_t (*PagesReserved)(struct AxAllocatorData *Info);
-        size_t (*PagesCommitted)(struct AxAllocatorData *Info);
-        size_t (*NumAllocs)(struct AxAllocatorData *Info);
+        const char *(*Name)(struct AxAllocatorData *Data);
+        void *(*BaseAddress)(struct AxAllocatorData *Data);
+        uint32_t (*PageSize)(struct AxAllocatorData *Data);
+        uint32_t (*AllocationGranularity)(struct AxAllocatorData *Data);
+        size_t (*BytesReserved)(struct AxAllocatorData *Data);
+        size_t (*BytesCommitted)(struct AxAllocatorData *Data);
+        size_t (*BytesAllocated)(struct AxAllocatorData *Data);
+        size_t (*PagesReserved)(struct AxAllocatorData *Data);
+        size_t (*PagesCommitted)(struct AxAllocatorData *Data);
+        size_t (*NumAllocs)(struct AxAllocatorData *Data);
     };
 
 #if defined(AXON_LINKS_FOUNDATION)
-    extern struct AxAllocatorInfoAPI *AllocatorInfoAPI;
+    extern struct AxAllocatorDataAPI *AllocatorDataAPI;
 #endif
 
 #ifdef __cplusplus

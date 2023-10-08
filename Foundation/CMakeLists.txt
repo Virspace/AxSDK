@@ -39,6 +39,7 @@ target_sources(Foundation
         include/Foundation/AxLinkedList.h
         src/APIRegistry.c
         src/AxAllocatorData.h
+        src/AxAllocatorInfo.c
         src/AxAllocatorRegistry.c
         src/AxAllocUtils.c
         src/AxCamera.c
@@ -78,6 +79,7 @@ else()
             include/Foundation/AxLinkedList.h
             src/APIRegistry.c
             src/AxAllocatorData.h
+            src/AxAllocatorInfo.c
             src/AxAllocatorRegistry.c
             src/AxAllocUtils.c
             src/AxCamera.c
