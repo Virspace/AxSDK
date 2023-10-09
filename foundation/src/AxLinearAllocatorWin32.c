@@ -1,6 +1,6 @@
 #include "AxLinearAllocator.h"
 #include "AxAllocatorRegistry.h"
-#include "AxAllocatorInfo.h"
+#include "AxAllocatorData.h"
 #include "AxAllocUtils.h"
 #include "AxMath.h"
 
@@ -15,7 +15,7 @@
 
 struct AxLinearAllocator
 {
-    struct AxAllocatorInfo Info;  // Allocator info
+    struct AxAllocatorData Data;  // Allocator info
     void *Arena;                  // Start of heap pointer
 };
 
@@ -46,7 +46,7 @@ static void *Alloc(struct AxLinearAllocator *Allocator, size_t Size, const char 
     size_t AlignmentSize = 0;
 
     // Align allocation to multiple of pointer size
-    uintptr_t CurrentAddress = (uintptr_t)Allocator->Arena + Allocator->Info.BytesAllocated;
+    uintptr_t CurrentAddress = (uintptr_t)Allocator->Arena + Allocator->Data.BytesAllocated;
     if (!IsAligned(CurrentAddress))
     {
         uintptr_t NewAddress = AlignAddress(CurrentAddress);
@@ -62,7 +62,7 @@ static void *Alloc(struct AxLinearAllocator *Allocator, size_t Size, const char 
 
     // Despite requested amount, actual memory committed will be a multiple of the page size so round to it
     // Don't worry, we'll carve up that allocated page and return what's needed
-    size_t BytesRequestedRoundedToPageSize = RoundUpToPowerOfTwo(Size, Allocator->Info.PageSize);
+    size_t BytesRequestedRoundedToPageSize = RoundUpToPowerOfTwo(Size, Allocator->Data.PageSize);
 
     // TODO(mdeforge): Consider page boundaries! We may need to do this above like we do the padding
     // We don't want to allocate across a page boundary, if we will go over we need to commit a new page
@@ -72,32 +72,32 @@ static void *Alloc(struct AxLinearAllocator *Allocator, size_t Size, const char 
 
     // Check if we have the reserved bytes available to meet the rounded allocation request
         // TODO(mdeforge): Does this need to take into account remaining committed?????
-    size_t BytesAvailable = Allocator->Info.BytesReserved - (Allocator->Info.BytesAllocated + AlignmentSize);
+    size_t BytesAvailable = Allocator->Data.BytesReserved - (Allocator->Data.BytesAllocated + AlignmentSize);
     if (BytesRequestedRoundedToPageSize > BytesAvailable) {
         return (NULL);
     }
 
     // We have the reserved bytes, now calculate bytes left in page
-    size_t BytesAllocatedRoundedToPageSize = RoundUpToPowerOfTwo(Allocator->Info.BytesAllocated, Allocator->Info.PageSize);
-    int64_t BytesLeftInPage = (int64_t)(BytesAllocatedRoundedToPageSize - Allocator->Info.BytesAllocated - Size);
+    size_t BytesAllocatedRoundedToPageSize = RoundUpToPowerOfTwo(Allocator->Data.BytesAllocated, Allocator->Data.PageSize);
+    int64_t BytesLeftInPage = (int64_t)(BytesAllocatedRoundedToPageSize - Allocator->Data.BytesAllocated - Size);
 
     // Check to see if we have enough memory committed for the allocation or if we need to commit more
     if (BytesLeftInPage < 0)
     {
         // Calculate bytes needed rounded to nearest multiple of the page size
-        size_t BytesNeeded = RoundUpToPowerOfTwo(llabs(BytesLeftInPage), Allocator->Info.PageSize);
+        size_t BytesNeeded = RoundUpToPowerOfTwo(llabs(BytesLeftInPage), Allocator->Data.PageSize);
 
         // TODO(mdeforge): Do we need to round up the base address then?
         // Round up to nearest multiple of allocation request (this should be done earlier because it shifts the size!)
 
 
         // TODO(mdeforge): Check for virtual alloc failure
-        uint8_t *Address = (uint8_t *)Allocator->Arena + (Allocator->Info.BytesAllocated + AlignmentSize);
+        uint8_t *Address = (uint8_t *)Allocator->Arena + (Allocator->Data.BytesAllocated + AlignmentSize);
         VirtualAlloc(Address, BytesNeeded, MEM_COMMIT, PAGE_READWRITE);
 
         // Does Info reserved memory go down as committed memory goes up?
-        Allocator->Info.BytesCommitted += BytesNeeded;
-        Allocator->Info.BytesReserved -= BytesNeeded;
+        Allocator->Data.BytesCommitted += BytesNeeded;
+        Allocator->Data.BytesReserved -= BytesNeeded;
     }
     // else
     // {
@@ -105,13 +105,13 @@ static void *Alloc(struct AxLinearAllocator *Allocator, size_t Size, const char 
     //     // can be compiled out during release builds? Or do we always want Info in there?
     // }
 
-    void *Result = (uint8_t *)Allocator->Arena + Allocator->Info.BytesAllocated;
+    void *Result = (uint8_t *)Allocator->Arena + Allocator->Data.BytesAllocated;
 
     // Update Arena Info
     //Allocator->Info.BytesAllocated += BytesRequestedRoundedToPageSize;
-    Allocator->Info.BytesAllocated += Size + AlignmentSize;
-    Allocator->Info.PagesCommitted = RoundUpToPowerOfTwo(Allocator->Info.BytesCommitted, Allocator->Info.PageSize) / 4096;
-    Allocator->Info.NumAllocs++;
+    Allocator->Data.BytesAllocated += Size + AlignmentSize;
+    Allocator->Data.PagesCommitted = RoundUpToPowerOfTwo(Allocator->Data.BytesCommitted, Allocator->Data.PageSize) / 4096;
+    Allocator->Data.NumAllocs++;
 
     // User payload
     return (Result);
@@ -127,7 +127,7 @@ static void Free(struct AxLinearAllocator *Allocator, const char *File, uint32_t
     // If lpAddress is the base address returned by VirtualAlloc and dwSize is 0 (zero), the function decommits
     // the entire region that is allocated by VirtualAlloc. After that, the entire region is in the reserved state.
     VirtualFree(Allocator->Arena, 0, MEM_DECOMMIT);
-    ZeroMemory(&Allocator->Info, sizeof(struct AxAllocatorInfo));
+    ZeroMemory(&Allocator->Data, sizeof(struct AxAllocatorData));
 }
 
 static struct AxLinearAllocator *Create(const char *Name, size_t MaxSize)
@@ -164,7 +164,7 @@ static struct AxLinearAllocator *Create(const char *Name, size_t MaxSize)
     if (Allocator)
     {
         Allocator->Arena = (uint8_t *)BaseAddress + sizeof(struct AxLinearAllocator);
-        Allocator->Info = (struct AxAllocatorInfo) {
+        Allocator->Data = (struct AxAllocatorData) {
             .BaseAddress = Allocator->Arena,
             .PageSize = PageSize,
             .AllocationGranularity = AllocatorGranularity,
@@ -177,11 +177,11 @@ static struct AxLinearAllocator *Create(const char *Name, size_t MaxSize)
         };
 
         // Copy name
-        size_t s = ArrayCount(Allocator->Info.Name);
-        strncpy(Allocator->Info.Name, Name, s);
+        size_t s = ArrayCount(Allocator->Data.Name);
+        strncpy(Allocator->Data.Name, Name, s);
 
         // Register with Allocator API
-        AllocatorRegistryAPI->Register(&Allocator->Info);
+        AllocatorRegistryAPI->Register(&Allocator->Data);
     }
 
     return (Allocator);
