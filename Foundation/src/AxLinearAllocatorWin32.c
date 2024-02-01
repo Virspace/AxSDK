@@ -97,7 +97,6 @@ static void *Alloc(struct AxLinearAllocator *Allocator, size_t Size, const char 
 
         // Does Info reserved memory go down as committed memory goes up?
         Allocator->Data.BytesCommitted += BytesNeeded;
-        Allocator->Data.BytesReserved -= BytesNeeded;
     }
     // else
     // {
@@ -141,7 +140,7 @@ static struct AxLinearAllocator *Create(const char *Name, size_t MaxSize)
     GetSysInfo(&PageSize, &AllocatorGranularity);
 
     // Memory reserved will be a multiple of the system allocation granularity
-    // NOTE(mdeforge): We wouldn't round if VirtualAlloc's BaseAddress parameter was going to be set below
+        // NOTE(mdeforge): We wouldn't round if VirtualAlloc's BaseAddress parameter was going to be set below
     MaxSize = RoundUpToPowerOfTwo(MaxSize, AllocatorGranularity);
 
     // Reserve a block of MaxSize in the process's virtual address space for this heap.
@@ -163,7 +162,7 @@ static struct AxLinearAllocator *Create(const char *Name, size_t MaxSize)
     // Construct the heap
     if (Allocator)
     {
-        Allocator->Arena = (uint8_t *)BaseAddress + sizeof(struct AxLinearAllocator);
+        Allocator->Arena = (uint8_t *)BaseAddress;
         Allocator->Data = (struct AxAllocatorData) {
             .BaseAddress = Allocator->Arena,
             .PageSize = PageSize,

@@ -808,9 +808,7 @@ static bool HasRequestedClose(AxWindow *Window)
 
     if (Window)
     {
-        if (Window->IsRequestingClose) {
-            return (true);
-        }
+        return Window->IsRequestingClose;
     }
 
     return (false);
