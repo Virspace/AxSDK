@@ -50,11 +50,11 @@ struct AxLinearAllocatorAPI
 
     /**
      * Returns an aligned allocation.
-     * @param Allocator
-     * @param Size
-     * @param File
-     * @param Line
-     * @return
+     * @param Allocator The target linear allocator.
+     * @param Size The size in bytes to be allocated.
+     * @param File The file making the allocation, e.g. __FILE__.
+     * @param Line The line making the allocation, e.g. __LINE__.
+     * @return A pointer to the allocated memory.
      */
     void *(*Alloc)(struct AxLinearAllocator *Allocator, size_t Size, const char *File, uint32_t Line);
 
