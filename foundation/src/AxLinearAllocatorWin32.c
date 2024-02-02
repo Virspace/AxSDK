@@ -2,6 +2,7 @@
 #include "AxAllocatorRegistry.h"
 #include "AxAllocatorData.h"
 #include "AxAllocUtils.h"
+#include "AxPlatform.h"
 #include "AxMath.h"
 
 #include <stdio.h>
@@ -18,17 +19,6 @@ struct AxLinearAllocator
     struct AxAllocatorData Data;  // Allocator info
     void *Arena;                  // Start of heap pointer
 };
-
-// TODO(mdeforge): Move to platform?
-inline void GetSysInfo(uint32_t *PageSize, uint32_t *AllocationGranularity)
-{
-    SYSTEM_INFO SystemInfo;
-    GetSystemInfo(&SystemInfo);
-
-    // Seems safe to assume a uint32_t is large enough
-    *PageSize = (uint32_t)SystemInfo.dwPageSize;
-    *AllocationGranularity = (uint32_t)SystemInfo.dwAllocationGranularity;
-}
 
 /**
  * There's two things that go on here:
