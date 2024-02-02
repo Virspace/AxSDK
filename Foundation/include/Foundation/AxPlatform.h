@@ -73,6 +73,7 @@ struct AxPlatformDLLAPI
     void *(*Symbol)(AxDLL Handle, const char *SymbolName);
 };
 
+// Interface for time
 struct AxTimeAPI
 {
     AxWallClock (*WallTime)(void);
@@ -85,6 +86,9 @@ struct AxTimeAPI
      */
     float (*ElapsedWallTime)(AxWallClock Start, AxWallClock End);
 };
+
+// TODO(mdeforge): Create a system interface for these types of functions
+void GetSysInfo(uint32_t *PageSize, uint32_t *AllocationGranularity);
 
 struct AxPlatformAPI
 {

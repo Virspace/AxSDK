@@ -22,6 +22,7 @@ struct AxLinearAllocator
 };
 
 // TODO(mdeforge): Move to platform?
+// NOTE(mdeforge): This was moved into AxPlatform.h! Need to do the same on the linux branch.
 // inline void GetSysInfo(uint32_t *PageSize, uint32_t *AllocationGranularity)
 // {
 //     SYSTEM_INFO SystemInfo;
