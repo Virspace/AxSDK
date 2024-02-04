@@ -1,6 +1,8 @@
 #include "AxAllocatorData.h"
+#include "AxAllocationData.h"
 #include "AxAllocatorInfo.h"
 #include "AxAllocatorRegistry.h"
+#include "AxArray.h"
 
 static const char *Name(struct AxAllocatorData *Data)
 {
@@ -62,6 +64,21 @@ static size_t NumAllocs(struct AxAllocatorData *Data)
     return ((Data) ? Data->NumAllocs : 0);
 }
 
+static bool GetAllocationDataByIndex(struct AxAllocatorData *Data, size_t Index, struct AxAllocationData *AllocData)
+{
+    Assert(Data && "Data is NULL");
+    if (Index > ArraySize(Data->AllocationData)) {
+        return false;
+    }
+
+    // NOTE(mdeforge): We don't want to return a pointer to the actual allocation data
+    //                 since we don't want anyone messing with it. So, we copy values instead.
+    *AllocData = (struct AxAllocationData) {
+        .Address = Data->AllocationData[Index].Address,
+        .Size = Data->AllocationData[Index].Size
+    };
+}
+
 struct AxAllocatorDataAPI *AllocatorDataAPI = &(struct AxAllocatorDataAPI) {
     .Name = Name,
     .BaseAddress = BaseAddress,
@@ -72,5 +89,6 @@ struct AxAllocatorDataAPI *AllocatorDataAPI = &(struct AxAllocatorDataAPI) {
     .BytesAllocated = BytesAllocated,
     .PagesReserved = PagesReserved,
     .PagesCommitted = PagesCommitted,
-    .NumAllocs = NumAllocs
+    .NumAllocs = NumAllocs,
+    .GetAllocationDataByIndex = GetAllocationDataByIndex
 };

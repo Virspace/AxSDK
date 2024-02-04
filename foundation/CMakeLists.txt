@@ -19,6 +19,7 @@ target_sources(Foundation
     PRIVATE
         include/Foundation/AxAPIRegistry.h
         include/Foundation/AxAllocUtils.h
+        include/Foundation/AxAllocationData.h
         include/Foundation/AxAllocatorInfo.h
         include/Foundation/AxAllocatorRegistry.h
         include/Foundation/AxApplication.h
