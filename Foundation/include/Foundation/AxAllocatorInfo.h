@@ -22,6 +22,7 @@ extern "C"
         size_t (*PagesReserved)(struct AxAllocatorData *Data);
         size_t (*PagesCommitted)(struct AxAllocatorData *Data);
         size_t (*NumAllocs)(struct AxAllocatorData *Data);
+        bool (*GetAllocationDataByIndex)(struct AxAllocatorData *Data, size_t Index, struct AxAllocationData *AllocData);
     };
 
 #if defined(AXON_LINKS_FOUNDATION)

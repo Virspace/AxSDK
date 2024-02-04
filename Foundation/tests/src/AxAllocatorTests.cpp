@@ -2,6 +2,7 @@
 #include "Foundation/AxTypes.h"
 #include "Foundation/AxAllocUtils.h"
 #include "Foundation/AxAllocatorRegistry.h"
+#include "Foundation/AxAllocationData.h"
 #include "Foundation/AxAllocatorInfo.h"
 #include "Foundation/AxLinearAllocator.h"
 
@@ -115,4 +116,19 @@ TEST_F(LinearAllocatorTest, Info)
     EXPECT_EQ(AllocatorDataAPI->BytesCommitted(Data), Megabytes(3) + Kilobytes(64));
     EXPECT_EQ(AllocatorDataAPI->PagesReserved(Data), 1024);
     EXPECT_EQ(AllocatorDataAPI->PagesCommitted(Data), 784);
+
+    // Check allocation data
+    for (size_t i = 0; i < AllocatorDataAPI->NumAllocs(Data); ++i) {
+        AxAllocationData AllocData;
+        if (AllocatorDataAPI->GetAllocationDataByIndex(Data, i, &AllocData)) {
+            switch (i) {
+                case 0:
+                    EXPECT_EQ(AllocData.Size, Megabytes(1)); break;
+                case 1:
+                    EXPECT_EQ(AllocData.Size, Megabytes(2)); break;
+                case 2:
+                    EXPECT_EQ(AllocData.Size, Kilobytes(64)); break;
+            }
+        }
+    }
 }

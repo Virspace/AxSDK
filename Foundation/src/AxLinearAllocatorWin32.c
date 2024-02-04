@@ -1,9 +1,11 @@
 #include "AxLinearAllocator.h"
 #include "AxAllocatorRegistry.h"
+#include "AxAllocationData.h"
 #include "AxAllocatorData.h"
 #include "AxAllocUtils.h"
 #include "AxPlatform.h"
 #include "AxMath.h"
+#include "AxArray.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -87,6 +89,14 @@ static void *Alloc(struct AxLinearAllocator *Allocator, size_t Size, const char 
 
         // Does Info reserved memory go down as committed memory goes up?
         Allocator->Data.BytesCommitted += BytesNeeded;
+
+        // Add to AxAllocatorData for AxMemViz purposes in AxEditor
+        struct AxAllocationData AllocationData = (struct AxAllocationData) {
+            .Address = Address,
+            .Size = BytesNeeded
+        };
+
+        ArrayPush(Allocator->Data.AllocationData, AllocationData);
     }
     // else
     // {
@@ -112,6 +122,9 @@ static void Free(struct AxLinearAllocator *Allocator, const char *File, uint32_t
     if (!Allocator) {
         return;
     }
+
+    // Be sure to free the allocation data array first
+    ArrayFree(Allocator->Data.AllocationData);
 
     // If lpAddress is the base address returned by VirtualAlloc and dwSize is 0 (zero), the function decommits
     // the entire region that is allocated by VirtualAlloc. After that, the entire region is in the reserved state.
