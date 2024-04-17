@@ -29,7 +29,7 @@ static void Set(const char *Name, void *API, size_t Size)
     }
 }
 
-static void *Get(const char *Name)
+static void *Create(const char *Name)
 {
     // Try to find it
     void *API = (void *)HashTableAPI->Find(APIMap, Name);
@@ -51,12 +51,18 @@ static void *Get(const char *Name)
     }
 }
 
+static void *Get(const char *Name)
+{
+    void *API = (void *)HashTableAPI->Find(APIMap, Name);
+    return API ? API : NULL;
+}
+
 #if defined(AXON_LINKS_FOUNDATION)
 
 void AxonInitGlobalAPIRegistry()
 {
     APIMap = HashTableAPI->CreateTable();
-    APIMemory = calloc(INITIAL_SIZE, Kilobytes(8) * 16);
+    APIMemory = calloc(INITIAL_SIZE, Kilobytes(8) * 16); // TODO(mdeforge): Hardcoded...
     APIMemoryOffset = 0;
 }
 

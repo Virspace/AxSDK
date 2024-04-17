@@ -9,6 +9,8 @@
         "axheap.h": "c",
         "axtypes.h": "c",
         "axallocatorinfo.h": "c",
-        "unistd.h": "c"
-    }
+        "unistd.h": "c",
+        "axapiregistry.h": "c"
+    },
+    "dotnet.defaultSolution": "disable"
 }

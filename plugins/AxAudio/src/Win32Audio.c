@@ -45,7 +45,7 @@ AXON_DLL_EXPORT void LoadPlugin(struct AxAPIRegistry *APIRegistry, bool Load)
 {
     if (APIRegistry)
     {
-        //PlatformAPI = APIRegistry->Get(AXON_PLATFORM_API_NAME);
+        //PlatformAPI = APIRegistry->Create(AXON_PLATFORM_API_NAME);
 
         APIRegistry->Set(AXON_AUDIO_API_NAME, WindowAPI, sizeof(struct AxAudioAPI));
     }
