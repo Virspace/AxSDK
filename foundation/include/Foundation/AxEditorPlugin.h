@@ -4,11 +4,13 @@
 extern "C" {
 #endif
 
+#include "Foundation/AxTypes.h"
+
 struct ImGuiContext;
 struct EditorPluginAPI
 {
     void (*Init)(struct ImGuiContext *Context);
-    void (*Tick)(void);
+    bool (*Tick)(void);
     void (*Term)(void);
 };
 
