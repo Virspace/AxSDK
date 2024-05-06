@@ -233,7 +233,7 @@ void GetSysInfo(uint32_t *PageSize, uint32_t *AllocationGranularity)
    ======================================================================== */
 
 struct AxPlatformAPI *PlatformAPI = &(struct AxPlatformAPI) {
-    .File = &(struct AxPlatformFileAPI) {
+    .FileAPI = &(struct AxPlatformFileAPI) {
         .IsValid = FileIsValid,
         .OpenForRead = FileOpenForRead,
         .SetPosition = FileSetPosition,
@@ -241,17 +241,17 @@ struct AxPlatformAPI *PlatformAPI = &(struct AxPlatformAPI) {
         .Read = FileRead,
         .Close = FileClose
     },
-    .Directory = &(struct AxPlatformDirectoryAPI) {
+    .DirectoryAPI = &(struct AxPlatformDirectoryAPI) {
         .CreateDir = CreateDir,
         .RemoveDir = RemoveDir
     },
-    .DLL =  &(struct AxPlatformDLLAPI) {
+    .DLLAPI =  &(struct AxPlatformDLLAPI) {
         .Load = DLLLoad,
         .Unload = DLLUnload,
         .IsValid = DLLIsValid,
         .Symbol = DLLSymbol
     },
-    .Time = &(struct AxTimeAPI) {
+    .TimeAPI = &(struct AxTimeAPI) {
         .WallTime = WallTime,
         .ElapsedWallTime = ElapsedWallTime
     }
