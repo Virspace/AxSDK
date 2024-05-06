@@ -92,10 +92,10 @@ void GetSysInfo(uint32_t *PageSize, uint32_t *AllocationGranularity);
 
 struct AxPlatformAPI
 {
-    struct AxPlatformFileAPI *File;
-    struct AxPlatformDirectoryAPI *Directory;
-    struct AxPlatformDLLAPI *DLL;
-    struct AxTimeAPI *Time;
+    struct AxPlatformFileAPI *FileAPI;
+    struct AxPlatformDirectoryAPI *DirectoryAPI;
+    struct AxPlatformDLLAPI *DLLAPI;
+    struct AxTimeAPI *TimeAPI;
 };
 
 #if defined(AXON_LINKS_FOUNDATION)
