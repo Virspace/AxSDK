@@ -324,6 +324,13 @@ static LRESULT CALLBACK Win32MainWindowCallback(HWND Hwnd, UINT Message, WPARAM 
             return (0);
         }
 
+        case WM_MOUSEWHEEL:
+        {
+            // We += here because it's possible to accrue a few messages before the value actually gets used
+            Window->Platform.Win32.MouseWheel += (float)GET_WHEEL_DELTA_WPARAM(WParam) / (float)WHEEL_DELTA;
+            return (0);
+        }
+
         case WM_INPUT:
         {
             // If the cursor mode is normal or hidden, and the keyboard is disabled, break. This section is for raw input.
@@ -940,6 +947,24 @@ static int32_t GetMouseButton(const AxWindow *Window, int32_t Button)
     return (Window->MouseButtons[Button]);
 }
 
+static float GetMouseWheel(AxWindow *Window)
+{
+    Assert(Window);
+
+    // TODO(mdeforge): We have a problem here that GLFW and ImGui's Win32
+    // example do not have, which is that because we're caching this value
+    // in the AxWindow and not setting ImGUI's IO directly, it persists.
+    // ImGui resets the wheel values to zero in EndFrame(), but since we
+    // save the value, when it goes to read from AxWindow, it's not from zero
+    // but the cached value. We don't have a good way to reset this internally
+    // right now, so we'll cheese it a bit in this function. We had to get rid
+    // of const on the AxWindow parameter to achieve this for now.
+    float MouseWheel = Window->Platform.Win32.MouseWheel;
+    Window->Platform.Win32.MouseWheel = 0.0f;
+
+    return (MouseWheel);
+}
+
 // TODO(mdeforge): Update cursor image using enable/disable cursor functions
 static void SetCursorMode(AxWindow *Window, enum AxCursorMode CursorMode)
 {
@@ -1086,6 +1111,7 @@ struct AxWindowAPI *WindowAPI = &(struct AxWindowAPI) {
     .GetPlatformData = GetPlatformData,
     .GetMouseCoords = GetMouseCoords,
     .GetMouseButton = GetMouseButton,
+    .GetMouseWheel = GetMouseWheel,
     .SetCursorMode = SetCursorMode,
     .GetCursorMode = GetCursorMode,
     .SetKeyboardMode = SetKeyboardMode,

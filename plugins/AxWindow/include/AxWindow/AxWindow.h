@@ -194,6 +194,7 @@ typedef struct AxWin32WindowData
     bool CursorInWindow;
 
     AxVec2 LastCursorPos;
+    float MouseWheel;
 } AxWin32WindowData;
 
 typedef struct AxLinuxWindowData
@@ -312,6 +313,13 @@ struct AxWindowAPI
      * @return An integer representing the AxKeyState of the button.
      */
     int32_t (*GetMouseButton)(const AxWindow *Window, int32_t Button);
+
+    /**
+     * @brief Gets the state of the mouse wheel on the target window.
+     * @param Window The target window.
+     * @return A float representing the state of the mouse wheel.
+    */
+    float (*GetMouseWheel)(AxWindow *Window);
 
     /**
      * @brief Sets the cursor mode of the target window.
