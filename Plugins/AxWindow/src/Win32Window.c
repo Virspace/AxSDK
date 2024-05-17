@@ -5,6 +5,7 @@
 #include "AxWindow.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <float.h>
 
 // NOTE(mdeforge): Uncomment to get some leak detection
 //#define _CRTDBG_MAP_ALLOC
@@ -20,6 +21,13 @@
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
+
+#define AX_MOD_MASK (AX_MOD_SHIFT | \
+                       AX_MOD_CONTROL | \
+                       AX_MOD_ALT | \
+                       AX_MOD_SUPER | \
+                       AX_MOD_CAPS_LOCK | \
+                       AX_MOD_NUM_LOCK)
 
 #include <windows.h>
 #include <commdlg.h>
@@ -87,7 +95,16 @@ struct AxWindow
     // Virtual cursor position
     AxVec2 VirtualCursorPos;
     // Mouse button state
-    char MouseButtons[AX_MOUSE_BUTTON_LAST];
+    char MouseButtons[AX_MOUSE_BUTTON_LAST + 1];
+    char Keys[AX_KEY_LAST + 1];
+
+    struct {
+        AxKeyCallback Key;
+        AxMousePosCallback MousePos;
+        AxMouseButtonCallback MouseButton;
+        AxMouseScrollCallback Scroll;
+        AxCharCallback Char;
+    } Callbacks;
 };
 
 static AxRect RectToAxRect(RECT Rect)
@@ -116,28 +133,257 @@ static RECT AxRectToRect(AxRect Rect)
 
 struct AxPlatformAPI *PlatformAPI;
 
-static enum AxKeyModifier GetKeyModifiers(void)
+static void CreateKeyTable(AxWindow *Window)
 {
-    enum AxKeyModifier Mods;
+    AXON_ASSERT(Window);
+
+    memset(Window->Platform.Win32.KeyCodes, -1, sizeof(Window->Platform.Win32.KeyCodes));
+    memset(Window->Platform.Win32.ScanCodes, -1, sizeof(Window->Platform.Win32.ScanCodes));
+
+    Window->Platform.Win32.KeyCodes[0x00B] = AX_KEY_0;
+    Window->Platform.Win32.KeyCodes[0x002] = AX_KEY_1;
+    Window->Platform.Win32.KeyCodes[0x003] = AX_KEY_2;
+    Window->Platform.Win32.KeyCodes[0x004] = AX_KEY_3;
+    Window->Platform.Win32.KeyCodes[0x005] = AX_KEY_4;
+    Window->Platform.Win32.KeyCodes[0x006] = AX_KEY_5;
+    Window->Platform.Win32.KeyCodes[0x007] = AX_KEY_6;
+    Window->Platform.Win32.KeyCodes[0x008] = AX_KEY_7;
+    Window->Platform.Win32.KeyCodes[0x009] = AX_KEY_8;
+    Window->Platform.Win32.KeyCodes[0x00A] = AX_KEY_9;
+    Window->Platform.Win32.KeyCodes[0x01E] = AX_KEY_A;
+    Window->Platform.Win32.KeyCodes[0x030] = AX_KEY_B;
+    Window->Platform.Win32.KeyCodes[0x02E] = AX_KEY_C;
+    Window->Platform.Win32.KeyCodes[0x020] = AX_KEY_D;
+    Window->Platform.Win32.KeyCodes[0x012] = AX_KEY_E;
+    Window->Platform.Win32.KeyCodes[0x021] = AX_KEY_F;
+    Window->Platform.Win32.KeyCodes[0x022] = AX_KEY_G;
+    Window->Platform.Win32.KeyCodes[0x023] = AX_KEY_H;
+    Window->Platform.Win32.KeyCodes[0x017] = AX_KEY_I;
+    Window->Platform.Win32.KeyCodes[0x024] = AX_KEY_J;
+    Window->Platform.Win32.KeyCodes[0x025] = AX_KEY_K;
+    Window->Platform.Win32.KeyCodes[0x026] = AX_KEY_L;
+    Window->Platform.Win32.KeyCodes[0x032] = AX_KEY_M;
+    Window->Platform.Win32.KeyCodes[0x031] = AX_KEY_N;
+    Window->Platform.Win32.KeyCodes[0x018] = AX_KEY_O;
+    Window->Platform.Win32.KeyCodes[0x019] = AX_KEY_P;
+    Window->Platform.Win32.KeyCodes[0x010] = AX_KEY_Q;
+    Window->Platform.Win32.KeyCodes[0x013] = AX_KEY_R;
+    Window->Platform.Win32.KeyCodes[0x01F] = AX_KEY_S;
+    Window->Platform.Win32.KeyCodes[0x014] = AX_KEY_T;
+    Window->Platform.Win32.KeyCodes[0x016] = AX_KEY_U;
+    Window->Platform.Win32.KeyCodes[0x02F] = AX_KEY_V;
+    Window->Platform.Win32.KeyCodes[0x011] = AX_KEY_W;
+    Window->Platform.Win32.KeyCodes[0x02D] = AX_KEY_X;
+    Window->Platform.Win32.KeyCodes[0x015] = AX_KEY_Y;
+    Window->Platform.Win32.KeyCodes[0x02C] = AX_KEY_Z;
+
+    Window->Platform.Win32.KeyCodes[0x028] = AX_KEY_APOSTROPHE;
+    Window->Platform.Win32.KeyCodes[0x02B] = AX_KEY_BACKSLASH;
+    Window->Platform.Win32.KeyCodes[0x033] = AX_KEY_COMMA;
+    Window->Platform.Win32.KeyCodes[0x00D] = AX_KEY_EQUAL;
+    Window->Platform.Win32.KeyCodes[0x029] = AX_KEY_GRAVE_ACCENT;
+    Window->Platform.Win32.KeyCodes[0x01A] = AX_KEY_LEFT_BRACKET;
+    Window->Platform.Win32.KeyCodes[0x00C] = AX_KEY_MINUS;
+    Window->Platform.Win32.KeyCodes[0x034] = AX_KEY_PERIOD;
+    Window->Platform.Win32.KeyCodes[0x01B] = AX_KEY_RIGHT_BRACKET;
+    Window->Platform.Win32.KeyCodes[0x027] = AX_KEY_SEMICOLON;
+    Window->Platform.Win32.KeyCodes[0x035] = AX_KEY_SLASH;
+    Window->Platform.Win32.KeyCodes[0x056] = AX_KEY_WORLD_2;
+
+    Window->Platform.Win32.KeyCodes[0x00E] = AX_KEY_BACKSPACE;
+    Window->Platform.Win32.KeyCodes[0x153] = AX_KEY_DELETE;
+    Window->Platform.Win32.KeyCodes[0x14F] = AX_KEY_END;
+    Window->Platform.Win32.KeyCodes[0x01C] = AX_KEY_ENTER;
+    Window->Platform.Win32.KeyCodes[0x001] = AX_KEY_ESCAPE;
+    Window->Platform.Win32.KeyCodes[0x147] = AX_KEY_HOME;
+    Window->Platform.Win32.KeyCodes[0x152] = AX_KEY_INSERT;
+    Window->Platform.Win32.KeyCodes[0x15D] = AX_KEY_MENU;
+    Window->Platform.Win32.KeyCodes[0x151] = AX_KEY_PAGE_DOWN;
+    Window->Platform.Win32.KeyCodes[0x149] = AX_KEY_PAGE_UP;
+    Window->Platform.Win32.KeyCodes[0x045] = AX_KEY_PAUSE;
+    Window->Platform.Win32.KeyCodes[0x039] = AX_KEY_SPACE;
+    Window->Platform.Win32.KeyCodes[0x00F] = AX_KEY_TAB;
+    Window->Platform.Win32.KeyCodes[0x03A] = AX_KEY_CAPS_LOCK;
+    Window->Platform.Win32.KeyCodes[0x145] = AX_KEY_NUM_LOCK;
+    Window->Platform.Win32.KeyCodes[0x046] = AX_KEY_SCROLL_LOCK;
+    Window->Platform.Win32.KeyCodes[0x03B] = AX_KEY_F1;
+    Window->Platform.Win32.KeyCodes[0x03C] = AX_KEY_F2;
+    Window->Platform.Win32.KeyCodes[0x03D] = AX_KEY_F3;
+    Window->Platform.Win32.KeyCodes[0x03E] = AX_KEY_F4;
+    Window->Platform.Win32.KeyCodes[0x03F] = AX_KEY_F5;
+    Window->Platform.Win32.KeyCodes[0x040] = AX_KEY_F6;
+    Window->Platform.Win32.KeyCodes[0x041] = AX_KEY_F7;
+    Window->Platform.Win32.KeyCodes[0x042] = AX_KEY_F8;
+    Window->Platform.Win32.KeyCodes[0x043] = AX_KEY_F9;
+    Window->Platform.Win32.KeyCodes[0x044] = AX_KEY_F10;
+    Window->Platform.Win32.KeyCodes[0x057] = AX_KEY_F11;
+    Window->Platform.Win32.KeyCodes[0x058] = AX_KEY_F12;
+    Window->Platform.Win32.KeyCodes[0x064] = AX_KEY_F13;
+    Window->Platform.Win32.KeyCodes[0x065] = AX_KEY_F14;
+    Window->Platform.Win32.KeyCodes[0x066] = AX_KEY_F15;
+    Window->Platform.Win32.KeyCodes[0x067] = AX_KEY_F16;
+    Window->Platform.Win32.KeyCodes[0x068] = AX_KEY_F17;
+    Window->Platform.Win32.KeyCodes[0x069] = AX_KEY_F18;
+    Window->Platform.Win32.KeyCodes[0x06A] = AX_KEY_F19;
+    Window->Platform.Win32.KeyCodes[0x06B] = AX_KEY_F20;
+    Window->Platform.Win32.KeyCodes[0x06C] = AX_KEY_F21;
+    Window->Platform.Win32.KeyCodes[0x06D] = AX_KEY_F22;
+    Window->Platform.Win32.KeyCodes[0x06E] = AX_KEY_F23;
+    Window->Platform.Win32.KeyCodes[0x076] = AX_KEY_F24;
+    Window->Platform.Win32.KeyCodes[0x038] = AX_KEY_LEFT_ALT;
+    Window->Platform.Win32.KeyCodes[0x01D] = AX_KEY_LEFT_CONTROL;
+    Window->Platform.Win32.KeyCodes[0x02A] = AX_KEY_LEFT_SHIFT;
+    Window->Platform.Win32.KeyCodes[0x15B] = AX_KEY_LEFT_SUPER;
+    Window->Platform.Win32.KeyCodes[0x137] = AX_KEY_PRINT_SCREEN;
+    Window->Platform.Win32.KeyCodes[0x138] = AX_KEY_RIGHT_ALT;
+    Window->Platform.Win32.KeyCodes[0x11D] = AX_KEY_RIGHT_CONTROL;
+    Window->Platform.Win32.KeyCodes[0x036] = AX_KEY_RIGHT_SHIFT;
+    Window->Platform.Win32.KeyCodes[0x15C] = AX_KEY_RIGHT_SUPER;
+    Window->Platform.Win32.KeyCodes[0x150] = AX_KEY_DOWN;
+    Window->Platform.Win32.KeyCodes[0x14B] = AX_KEY_LEFT;
+    Window->Platform.Win32.KeyCodes[0x14D] = AX_KEY_RIGHT;
+    Window->Platform.Win32.KeyCodes[0x148] = AX_KEY_UP;
+
+    Window->Platform.Win32.KeyCodes[0x052] = AX_KEY_KP_0;
+    Window->Platform.Win32.KeyCodes[0x04F] = AX_KEY_KP_1;
+    Window->Platform.Win32.KeyCodes[0x050] = AX_KEY_KP_2;
+    Window->Platform.Win32.KeyCodes[0x051] = AX_KEY_KP_3;
+    Window->Platform.Win32.KeyCodes[0x04B] = AX_KEY_KP_4;
+    Window->Platform.Win32.KeyCodes[0x04C] = AX_KEY_KP_5;
+    Window->Platform.Win32.KeyCodes[0x04D] = AX_KEY_KP_6;
+    Window->Platform.Win32.KeyCodes[0x047] = AX_KEY_KP_7;
+    Window->Platform.Win32.KeyCodes[0x048] = AX_KEY_KP_8;
+    Window->Platform.Win32.KeyCodes[0x049] = AX_KEY_KP_9;
+    Window->Platform.Win32.KeyCodes[0x04E] = AX_KEY_KP_ADD;
+    Window->Platform.Win32.KeyCodes[0x053] = AX_KEY_KP_DECIMAL;
+    Window->Platform.Win32.KeyCodes[0x135] = AX_KEY_KP_DIVIDE;
+    Window->Platform.Win32.KeyCodes[0x11C] = AX_KEY_KP_ENTER;
+    Window->Platform.Win32.KeyCodes[0x059] = AX_KEY_KP_EQUAL;
+    Window->Platform.Win32.KeyCodes[0x037] = AX_KEY_KP_MULTIPLY;
+    Window->Platform.Win32.KeyCodes[0x04A] = AX_KEY_KP_SUBTRACT;
+
+    for (int16_t ScanCode = 0;  ScanCode < 512;  ScanCode++)
+    {
+        if (Window->Platform.Win32.KeyCodes[ScanCode] > 0) {
+            Window->Platform.Win32.ScanCodes[Window->Platform.Win32.ScanCodes[ScanCode]] = ScanCode;
+        }
+    }
+}
+
+void InputKey(AxWindow *Window, int Key, int ScanCode, int Action, int Mods)
+{
+    AXON_ASSERT(Window);
+    AXON_ASSERT(Key >= 0 || Key == AX_KEY_UNKNOWN);
+    AXON_ASSERT(Key <= AX_KEY_LAST);
+    AXON_ASSERT(Action == AX_PRESS || Action == AX_RELEASE);
+    AXON_ASSERT(Mods == (Mods & AX_MOD_MASK));
+
+    if (Key >= 0 && Key <= AX_KEY_LAST)
+    {
+        bool Repeated = false;
+        if (Action == AX_RELEASE && Window->Keys[Key] == AX_RELEASE) {
+            return;
+        }
+
+        if (Action == AX_PRESS && Window->Keys[Key] == AX_PRESS) {
+            Repeated = true;
+        }
+
+        Window->Keys[Key] = (char)Action;
+
+        if (Repeated) {
+            Action = AX_REPEAT;
+        }
+    }
+
+    if (Window->Callbacks.Key) {
+        Window->Callbacks.Key(Window, Key, ScanCode, Action, Mods);
+    }
+}
+
+void InputChar(AxWindow *Window, uint32_t CodePoint, int Mods, bool Plain)
+{
+    AXON_ASSERT(Window);
+    AXON_ASSERT(Mods == (Mods & AX_MOD_MASK));
+
+    if (CodePoint < 32 || (CodePoint > 126 && CodePoint < 160))
+        return;
+
+    // if (!Window->lockKeyMods)
+    //     Mods &= ~(AX_MOD_CAPS_LOCK | AX_MOD_NUM_LOCK);
+
+    // if (Window->Callbacks.charmods)
+    //     Window->Callbacks.charmods(Window, CodePoint, Mods);
+
+    if (Plain)
+    {
+        if (Window->Callbacks.Char)
+            Window->Callbacks.Char(Window, CodePoint);
+    }
+}
+
+void InputMouseClick(AxWindow *Window, int Button, int Action, int Mods)
+{
+    AXON_ASSERT(Window);
+    AXON_ASSERT(Button >= 0);
+    AXON_ASSERT(Action == AX_PRESS || Action == AX_RELEASE);
+    AXON_ASSERT(Mods == (Mods & AX_MOD_MASK))
+
+    if (Window->Callbacks.MouseButton) {
+        Window->Callbacks.MouseButton(Window, Button, Action, Mods);
+    }
+}
+
+void InputMouseScroll(AxWindow *Window, AxVec2 Offset)
+{
+    AXON_ASSERT(Window);
+
+    if (Window->Callbacks.Scroll) {
+        Window->Callbacks.Scroll(Window, Offset);
+    }
+}
+
+void InputMousePos(AxWindow *Window, AxVec2 Pos)
+{
+    AXON_ASSERT(Window);
+    AXON_ASSERT(Pos.X > -FLT_MAX);
+    AXON_ASSERT(Pos.X < FLT_MAX);
+    AXON_ASSERT(Pos.Y > -FLT_MAX);
+    AXON_ASSERT(Pos.Y < FLT_MAX);
+
+    Window->VirtualCursorPos = Pos;
+
+    if (Window->Callbacks.MousePos) {
+        Window->Callbacks.MousePos(Window, Pos.X, Pos.Y);
+    }
+}
+
+static int GetKeyModifiers(void)
+{
+    int Mods = 0;
 
     if (GetKeyState(VK_CONTROL) & 0x8000) {
-        Mods |= AX_KEY_CTRL;
+        Mods |= AX_MOD_CONTROL;
     }
 
     if (GetKeyState(VK_MENU) & 0x8000) {
-        Mods |= AX_KEY_ALT;
+        Mods |= AX_MOD_ALT;
     }
 
     if (GetKeyState(VK_SHIFT) & 0x8000) {
-        Mods |= AX_KEY_SHIFT;
+        Mods |= AX_MOD_SHIFT;
     }
 
     if ((GetKeyState(VK_LWIN) | GetKeyState(VK_RWIN)) & 0x8000) {
-        Mods |= AX_KEY_WIN;
+        Mods |= AX_MOD_SUPER;
     }
 
-    if (GetKeyState(VK_CAPITAL) & 0x8000) {
-        Mods |= AX_KEY_CAPS;
+    if (GetKeyState(VK_CAPITAL) & 1) {
+        Mods |= AX_MOD_CAPS_LOCK;
+    }
+
+    if (GetKeyState(VK_NUMLOCK) & 1) {
+        Mods |= AX_MOD_NUM_LOCK;
     }
 
     return (Mods);
@@ -237,12 +483,89 @@ static LRESULT CALLBACK Win32MainWindowCallback(HWND Hwnd, UINT Message, WPARAM 
         case WM_KEYUP:
         {
             int Key, ScanCode;
-            const enum AxKeyState State = (HIWORD(LParam) & KF_UP) ? AX_KEY_RELEASED : AX_KEY_PRESSED;
-            const enum AxKeyModifier Mods = GetKeyModifiers();
+            const int Action = (HIWORD(LParam) & KF_UP) ? AX_RELEASE : AX_PRESS;
+            const int Mods = GetKeyModifiers();
 
             ScanCode = (HIWORD(LParam) & (KF_EXTENDED | 0xff));
             if (!ScanCode) {
                 ScanCode = MapVirtualKey((UINT)WParam, MAPVK_VK_TO_VSC);
+            }
+
+            // Alt+PrtSc has a different scancode than just PrtSc
+            if (ScanCode == 0x54)
+                ScanCode = 0x137;
+
+            // Ctrl+Pause has a different scancode than just Pause
+            if (ScanCode == 0x146)
+                ScanCode = 0x45;
+
+            // CJK IME sets the extended bit for right Shift
+            if (ScanCode == 0x136)
+                ScanCode = 0x36;
+
+            Key = Window->Platform.Win32.KeyCodes[ScanCode];
+
+            // The Ctrl keys require special handling
+            if (WParam == VK_CONTROL)
+            {
+                if (HIWORD(LParam) & KF_EXTENDED)
+                {
+                    // Right side keys have the extended key bit set
+                    Key = AX_KEY_RIGHT_CONTROL;
+                }
+                else
+                {
+                    // NOTE: Alt Gr sends Left Ctrl followed by Right Alt
+                    // HACK: We only want one event for Alt Gr, so if we detect
+                    //       this sequence we discard this Left Ctrl message now
+                    //       and later report Right Alt normally
+                    MSG Next;
+                    const DWORD Time = GetMessageTime();
+
+                    if (PeekMessageW(&Next, NULL, 0, 0, PM_NOREMOVE))
+                    {
+                        if (Next.message == WM_KEYDOWN ||
+                            Next.message == WM_SYSKEYDOWN ||
+                            Next.message == WM_KEYUP ||
+                            Next.message == WM_SYSKEYUP)
+                        {
+                            if (Next.wParam == VK_MENU &&
+                                (HIWORD(Next.lParam) & KF_EXTENDED) &&
+                                Next.time == Time) {
+                                // Next message is Right Alt down so discard this
+                                break;
+                            }
+                        }
+                    }
+
+                    // This is a regular Left Ctrl message
+                    Key = AX_KEY_LEFT_CONTROL;
+                }
+            }
+            else if (WParam == VK_PROCESSKEY)
+            {
+                // IME notifies that keys have been filtered by setting the
+                // virtual key-code to VK_PROCESSKEY
+                break;
+            }
+
+            if (Action == AX_RELEASE && WParam == VK_SHIFT)
+            {
+                // HACK: Release both Shift keys on Shift up event, as when both
+                //       are pressed the first release does not emit any event
+                // NOTE: The other half of this is in _glfwPollEventsWin32
+                InputKey(Window, AX_KEY_LEFT_SHIFT, ScanCode, Action, Mods);
+                InputKey(Window, AX_KEY_RIGHT_SHIFT, ScanCode, Action, Mods);
+            }
+            else if (WParam == VK_SNAPSHOT)
+            {
+                // HACK: Key down is not reported for the Print Screen key
+                InputKey(Window, Key, ScanCode, AX_PRESS, Mods);
+                InputKey(Window, Key, ScanCode, AX_RELEASE, Mods);
+            }
+            else
+            {
+                InputKey(Window, Key, ScanCode, Action, Mods);
             }
         } break;
 
@@ -280,9 +603,30 @@ static LRESULT CALLBACK Win32MainWindowCallback(HWND Hwnd, UINT Message, WPARAM 
                 Action = AX_RELEASE;
             }
 
-            // TODO(mdeforge): More detection needed here, sticky keys? caps lock?
-            // TODO(mdeforge): Click callback?
-            Window->MouseButtons[Button] = (char)Action;
+            int i = 0;
+            for (i = 0; i <= AX_MOUSE_BUTTON_LAST; i++)
+            {
+                if (Window->MouseButtons[i] == AX_PRESS) {
+                    break;
+                }
+            }
+
+            if (i > AX_MOUSE_BUTTON_LAST) {
+                SetCapture(Hwnd);
+            }
+
+            InputMouseClick(Window, Button, Action, GetKeyModifiers());
+
+            for (i = 0; i <= AX_MOUSE_BUTTON_LAST; i++)
+            {
+                if (Window->MouseButtons[i] == AX_PRESS) {
+                    break;
+                }
+            }
+
+            if (i > AX_MOUSE_BUTTON_LAST) {
+                ReleaseCapture();
+            }
 
             if (Message == WM_XBUTTONDOWN || Message == WM_XBUTTONUP) {
                 return TRUE;
@@ -316,7 +660,7 @@ static LRESULT CALLBACK Win32MainWindowCallback(HWND Hwnd, UINT Message, WPARAM 
                 break;
             } else {
                 // Use the X and Y directly from WM_MOUSEMOVE (cursor bounded to the resolution)
-                Window->VirtualCursorPos = (AxVec2){ (float)X, (float)Y };
+                InputMousePos(Window, (AxVec2){(float)X, (float)Y});
             }
 
             Window->Platform.Win32.LastCursorPos = (AxVec2){ (float)X, (float)Y };
@@ -327,7 +671,9 @@ static LRESULT CALLBACK Win32MainWindowCallback(HWND Hwnd, UINT Message, WPARAM 
         case WM_MOUSEWHEEL:
         {
             // We += here because it's possible to accrue a few messages before the value actually gets used
-            Window->Platform.Win32.MouseWheel += (float)GET_WHEEL_DELTA_WPARAM(WParam) / (float)WHEEL_DELTA;
+            AxVec2 Offset = { 0.0f, (float)GET_WHEEL_DELTA_WPARAM(WParam) / (float)WHEEL_DELTA };
+            InputMouseScroll(Window, Offset);
+
             return (0);
         }
 
@@ -359,8 +705,7 @@ static LRESULT CALLBACK Win32MainWindowCallback(HWND Hwnd, UINT Message, WPARAM 
                 }
                 else
                 {
-                    MouseDelta = (AxVec2)
-                    {
+                    MouseDelta = (AxVec2) {
                         .X = (float)RawInput->data.mouse.lLastX,
                         .Y = (float)RawInput->data.mouse.lLastY
                     };
@@ -409,7 +754,7 @@ static LRESULT CALLBACK Win32MainWindowCallback(HWND Hwnd, UINT Message, WPARAM 
                     // Right-hand CONTROL and ALT have their E0 bit set
                     case VK_CONTROL:
                     {
-                        VirtualKey = (IsEscSeq0) ? AX_KEY_RIGHT_CTRL : AX_KEY_LEFT_CTRL;
+                        //VirtualKey = (IsEscSeq0) ? AX_KEY_RIGHT_CTRL : AX_KEY_LEFT_CTRL;
                     } break;
 
                     case VK_MENU:
@@ -421,7 +766,7 @@ static LRESULT CALLBACK Win32MainWindowCallback(HWND Hwnd, UINT Message, WPARAM 
                     case VK_RETURN:
                     {
                         if (IsEscSeq0) {
-                            VirtualKey = AX_KEY_NUMPAD_ENTER;
+                            //VirtualKey = AX_KEY_NUMPAD_ENTER;
                         }
                     } break;
 
@@ -430,42 +775,42 @@ static LRESULT CALLBACK Win32MainWindowCallback(HWND Hwnd, UINT Message, WPARAM 
                     case VK_INSERT:
                     {
                         if (!IsEscSeq0) {
-                            VirtualKey = AX_KEY_NUMPAD_0;
+                            //VirtualKey = AX_KEY_NUMPAD_0;
                         }
                     } break;
 
                     case VK_DELETE:
                     {
                         if (!IsEscSeq0) {
-                            VirtualKey = AX_KEY_NUMPAD_DECIMAL;
+                            //VirtualKey = AX_KEY_NUMPAD_DECIMAL;
                         }
                     } break;
 
                     case VK_HOME:
                     {
                         if (!IsEscSeq0) {
-                            VirtualKey = AX_KEY_NUMPAD_7;
+                            //VirtualKey = AX_KEY_NUMPAD_7;
                         }
                     } break;
 
                     case VK_END:
                     {
                         if (!IsEscSeq0) {
-                            VirtualKey = AX_KEY_NUMPAD_1;
+                            //VirtualKey = AX_KEY_NUMPAD_1;
                         }
                     } break;
 
                     case VK_PRIOR:
                     {
                         if (!IsEscSeq0) {
-                            VirtualKey = AX_KEY_NUMPAD_9;
+                            //VirtualKey = AX_KEY_NUMPAD_9;
                         }
                     } break;
 
                     case VK_NEXT:
                     {
                         if (!IsEscSeq0) {
-                            VirtualKey = AX_KEY_NUMPAD_3;
+                            //VirtualKey = AX_KEY_NUMPAD_3;
                         }
                     } break;
 
@@ -474,34 +819,34 @@ static LRESULT CALLBACK Win32MainWindowCallback(HWND Hwnd, UINT Message, WPARAM 
                     case VK_UP:
                     {
                         if (!IsEscSeq0) {
-                            VirtualKey = AX_KEY_NUMPAD_8;
+                            //VirtualKey = AX_KEY_NUMPAD_8;
                         }
                     } break;
 
                     case VK_DOWN:
                     {
                         if (!IsEscSeq0) {
-                            VirtualKey = AX_KEY_NUMPAD_2;
+                            //VirtualKey = AX_KEY_NUMPAD_2;
                         }
                     } break;
 
                     case VK_LEFT:
                     {
                         if (!IsEscSeq0) {
-                            VirtualKey = AX_KEY_NUMPAD_4;
+                            //VirtualKey = AX_KEY_NUMPAD_4;
                         }
                     } break;
 
                     case VK_RIGHT:
                     {
                         if (!IsEscSeq0) {
-                            VirtualKey = AX_KEY_NUMPAD_6;
+                            //VirtualKey = AX_KEY_NUMPAD_6;
                         }
                     } break;
                 }
             }
 
-            Window->VirtualCursorPos = Vec2Add(Window->VirtualCursorPos, MouseDelta);
+            InputMousePos(Window, Vec2Add(Window->VirtualCursorPos, MouseDelta));
             Window->Platform.Win32.LastCursorPos = Vec2Add(Window->Platform.Win32.LastCursorPos, MouseDelta);
 
             break;
@@ -512,6 +857,39 @@ static LRESULT CALLBACK Win32MainWindowCallback(HWND Hwnd, UINT Message, WPARAM 
             Window->Platform.Win32.CursorInWindow = false;
 
             return (0);
+        }
+
+        case WM_CHAR:
+        case WM_SYSCHAR:
+        {
+            if (WParam >= 0xd800 && WParam <= 0xdbff)
+                Window->Platform.Win32.HighSurrogate = (WCHAR)WParam;
+            else
+            {
+                uint32_t codepoint = 0;
+
+                if (WParam >= 0xdc00 && WParam <= 0xdfff)
+                {
+                    if (Window->Platform.Win32.HighSurrogate)
+                    {
+                        codepoint += (Window->Platform.Win32.HighSurrogate - 0xd800) << 10;
+                        codepoint += (WCHAR)WParam - 0xdc00;
+                        codepoint += 0x10000;
+                    }
+                }
+                else
+                    codepoint = (WCHAR) WParam;
+
+                Window->Platform.Win32.HighSurrogate = 0;
+                InputChar(Window, codepoint, GetKeyModifiers(), Message != WM_SYSCHAR);
+            }
+
+            // TODO(mdeforge): There should be a  && Window->Platform.Win32.keymenu here
+            if (Message == WM_SYSCHAR) {
+                break;
+            }
+
+            return 0;
         }
 
         // Only useful if we need to scale the window non-linearly
@@ -674,6 +1052,10 @@ static bool CreateNativeWindow(AxWindow *Window)
     // Add the AxWindow pointer to the window property list
     SetProp(Handle, "AxonEngine", Window);
     Window->Platform.Win32.Handle = (uint64_t)Handle;
+    Window->Platform.Win32.KeyMenu = 
+
+    // Create key table for platform
+    CreateKeyTable(Window);
 
     // If fullscreen, disable legacy window messages such as WM_KEYDOWN, WM_CHAR, WM_MOUSEMOVE, etc.
     DWORD Flags = 0;
@@ -764,7 +1146,7 @@ static void PollEvents(AxWindow *Window)
 {
     Assert(Window);
 
-    MSG Message = {0};
+    MSG Msg = {0};
 
     for (;;)
     {
@@ -775,7 +1157,7 @@ static void PollEvents(AxWindow *Window)
         for (uint32_t SkipIndex = 0; SkipIndex < ArrayCount(SkipMessages); ++SkipIndex)
         {
             DWORD Skip = SkipMessages[SkipIndex];
-            GotMessage = PeekMessage(&Message, 0, LastMessage, Skip - 1, PM_REMOVE);
+            GotMessage = PeekMessage(&Msg, 0, LastMessage, Skip - 1, PM_REMOVE);
             if (GotMessage) {
                 break;
             }
@@ -787,25 +1169,35 @@ static void PollEvents(AxWindow *Window)
             break;
         }
 
-        switch(Message.message)
+        if(Msg.message == WM_QUIT)
         {
-            case WM_QUIT:
-            {
-                Window->IsRequestingClose = true;
-            } break;
-            case WM_SYSKEYDOWN:
-            case WM_SYSKEYUP:
-            case WM_KEYDOWN:
-            case WM_KEYUP:
-            {
-                // TODO(mdeforge): Consider input
-            } break;
-            default:
-            {
-                TranslateMessage(&Message);
-                DispatchMessage(&Message);
-            } break;
+            Window->IsRequestingClose = true;
+        } else {
+            TranslateMessage(&Msg);
+            DispatchMessage(&Msg);
         }
+    }
+
+    const int Keys[4][2] =
+    {
+        { VK_LSHIFT, AX_KEY_LEFT_SHIFT },
+        { VK_RSHIFT, AX_KEY_RIGHT_SHIFT },
+        { VK_LWIN, AX_KEY_LEFT_SUPER },
+        { VK_RWIN, AX_KEY_RIGHT_SUPER }
+    };
+
+    for (int32_t i = 0; i < 4;  i++)
+    {
+        const int VK = Keys[i][0];
+        const int Key = Keys[i][1];
+        const int ScanCode = Window->Platform.Win32.ScanCodes[Key];
+
+        if ((GetKeyState(VK) & 0x8000))
+            continue;
+        if (Window->Keys[Key] != AX_PRESS)
+            continue;
+
+        InputKey(Window, Key, ScanCode, AX_RELEASE, GetKeyModifiers());
     }
 }
 
@@ -947,24 +1339,6 @@ static int32_t GetMouseButton(const AxWindow *Window, int32_t Button)
     return (Window->MouseButtons[Button]);
 }
 
-static float GetMouseWheel(AxWindow *Window)
-{
-    Assert(Window);
-
-    // TODO(mdeforge): We have a problem here that GLFW and ImGui's Win32
-    // example do not have, which is that because we're caching this value
-    // in the AxWindow and not setting ImGUI's IO directly, it persists.
-    // ImGui resets the wheel values to zero in EndFrame(), but since we
-    // save the value, when it goes to read from AxWindow, it's not from zero
-    // but the cached value. We don't have a good way to reset this internally
-    // right now, so we'll cheese it a bit in this function. We had to get rid
-    // of const on the AxWindow parameter to achieve this for now.
-    float MouseWheel = Window->Platform.Win32.MouseWheel;
-    Window->Platform.Win32.MouseWheel = 0.0f;
-
-    return (MouseWheel);
-}
-
 // TODO(mdeforge): Update cursor image using enable/disable cursor functions
 static void SetCursorMode(AxWindow *Window, enum AxCursorMode CursorMode)
 {
@@ -988,6 +1362,19 @@ static void SetKeyboardMode(AxWindow *Window, enum AxKeyboardMode KeyboardMode)
 
     // TODO(mdeforge): Validate KeyboardMode?
     Window->KeyboardMode = KeyboardMode;
+}
+
+static int32_t GetKey(AxWindow *Window, int32_t Key)
+{
+    AXON_ASSERT(Window);
+
+    if (Key < AX_KEY_SPACE || Key > AX_KEY_LAST)
+    {
+        // TODO(mdeforge): Invalid key error
+        return AX_RELEASE;
+    }
+
+    return (Window->Keys[Key]);
 }
 
 static bool OpenFileDialog(const AxWindow *Window, const char *Title, const char *Filter, const char *InitialDirectory, char *FileName, uint32_t FileNameSize)
@@ -1096,6 +1483,13 @@ static enum AxMessageBoxResponse CreateMessageBox(const AxWindow *Window, const 
     return (Result);
 }
 
+// We forward declare these functions because these functions need the WindowAPI declared below
+static AxKeyCallback SetKeyCallback(AxWindow *Window, AxKeyCallback Callback);
+static AxMousePosCallback SetMousePosCallback(AxWindow *Window, AxMousePosCallback Callback);
+static AxMouseButtonCallback SetMouseButtonCallback(AxWindow *Window, AxMouseButtonCallback Callback);
+static AxMouseScrollCallback SetMouseScrollCallback(AxWindow *Window, AxMouseScrollCallback Callback);
+static AxCharCallback SetCharCallback(AxWindow *Window, AxCharCallback Callback);
+
 // Use a compound literal to construct an unnamed object of API type in-place
 struct AxWindowAPI *WindowAPI = &(struct AxWindowAPI) {
     .Init = Init,
@@ -1111,10 +1505,15 @@ struct AxWindowAPI *WindowAPI = &(struct AxWindowAPI) {
     .GetPlatformData = GetPlatformData,
     .GetMouseCoords = GetMouseCoords,
     .GetMouseButton = GetMouseButton,
-    .GetMouseWheel = GetMouseWheel,
     .SetCursorMode = SetCursorMode,
     .GetCursorMode = GetCursorMode,
     .SetKeyboardMode = SetKeyboardMode,
+    .GetKey = GetKey,
+    .SetKeyCallback = SetKeyCallback,
+    .SetMousePosCallback = SetMousePosCallback,
+    .SetMouseButtonCallback = SetMouseButtonCallback,
+    .SetMouseScrollCallback = SetMouseScrollCallback,
+    .SetCharCallback = SetCharCallback,
     .OpenFileDialog = OpenFileDialog,
     .SaveFileDialog = SaveFileDialog,
     .OpenFolderDialog = OpenFolderDialog,
@@ -1122,6 +1521,69 @@ struct AxWindowAPI *WindowAPI = &(struct AxWindowAPI) {
     // .EnableCursor = EnableCursor,
     // .DisableCursor = DisableCursor
 };
+
+static AxKeyCallback SetKeyCallback(AxWindow *Window, AxKeyCallback Callback)
+{
+    AXON_ASSERT(Window);
+
+    // _GLFW_SWAP(GLFWkeyfun, window->callbacks.key, cbfun);
+    // return cbfun;
+
+    AxKeyCallback type;
+    type = Window->Callbacks.Key;
+    Window->Callbacks.Key = Callback;
+    Callback = type;
+
+    return (Callback);
+}
+
+static AxMousePosCallback SetMousePosCallback(AxWindow *Window, AxMousePosCallback Callback)
+{
+    AXON_ASSERT(Window);
+
+    AxMousePosCallback type;
+    type = Window->Callbacks.MousePos;
+    Window->Callbacks.MousePos = Callback;
+    Callback = type;
+
+    return (Callback);
+}
+
+static AxMouseButtonCallback SetMouseButtonCallback(AxWindow *Window, AxMouseButtonCallback Callback)
+{
+    AXON_ASSERT(Window);
+
+    AxMouseButtonCallback type;
+    type = Window->Callbacks.MouseButton;
+    Window->Callbacks.MouseButton = Callback;
+    Callback = type;
+
+    return (Callback);
+}
+
+static AxMouseScrollCallback SetMouseScrollCallback(AxWindow *Window, AxMouseScrollCallback Callback)
+{
+    AXON_ASSERT(Window);
+
+    AxMouseScrollCallback type;
+    type = Window->Callbacks.Scroll;
+    Window->Callbacks.Scroll = Callback;
+    Callback = type;
+
+    return (Callback);
+}
+
+static AxCharCallback SetCharCallback(AxWindow *Window, AxCharCallback Callback)
+{
+    AXON_ASSERT(Window);
+
+    AxCharCallback type;
+    type = Window->Callbacks.Char;
+    Window->Callbacks.Char = Callback;
+    Callback = type;
+
+    return (Callback);
+}
 
 AXON_DLL_EXPORT void LoadPlugin(struct AxAPIRegistry *APIRegistry, bool Load)
 {
