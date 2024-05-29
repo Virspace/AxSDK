@@ -25,7 +25,7 @@ struct AxPlatformPathAPI
 {
     bool (*FileExists)(const char *Path);
     bool (*DirectoryExists)(const char *Path);
-    char *(*CurrentWorkingDirectory)(void);
+    //char *(*CurrentWorkingDirectory)(void);
 };
 
 // Interface for File I/O
@@ -34,6 +34,9 @@ struct AxPlatformFileAPI
     // Opens the specified file for read. If opening fails, returns an invalid file handle.
     AxFile (*OpenForRead)(const char *Path);
 
+    // Opens the specifiefd file for write. If opening fails, returns an invalid file handle.
+    AxFile (*OpenForWrite)(const char *Path);
+
     // Sets the read/write offset from the start of the file.
     int64_t (*SetPosition)(AxFile File, int64_t Position);
 
@@ -41,7 +44,10 @@ struct AxPlatformFileAPI
     uint64_t (*Size)(AxFile File);
 
     // Reads size bytes into the buffer from the current file position.
-    int64_t (*Read)(AxFile File, void *Buffer, uint64_t BytesToRead);
+    uint64_t (*Read)(AxFile File, void *Buffer, uint32_t BytesToRead);
+
+    // Writes size bytes to file
+    uint64_t (*Write)(AxFile File, void *Buffer, uint32_t BytesToWrite);
 
     // Checks to see if a file handle is valid.
     bool (*IsValid)(AxFile File);
@@ -92,9 +98,10 @@ void GetSysInfo(uint32_t *PageSize, uint32_t *AllocationGranularity);
 
 struct AxPlatformAPI
 {
-    struct AxPlatformFileAPI *FileAPI;
     struct AxPlatformDirectoryAPI *DirectoryAPI;
     struct AxPlatformDLLAPI *DLLAPI;
+    struct AxPlatformFileAPI *FileAPI;
+    struct AxPlatformPathAPI *PathAPI;
     struct AxTimeAPI *TimeAPI;
 };
 
