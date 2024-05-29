@@ -8,12 +8,16 @@
 #include "AxHashTable.h"
 #include "Axplatform.h"
 
+// TODO(mdeforge): Need to read large files better
+
 /* ========================================================================
    Axon Path
    ======================================================================== */
 
 static bool FileExists(const char *Path)
 {
+    AXON_ASSERT(Path);
+
     uint32_t result = GetFileAttributes(Path);
     if (result != 0xFFFFFFFF && !(result & FILE_ATTRIBUTE_DIRECTORY)) {
         return (true);
@@ -24,6 +28,7 @@ static bool FileExists(const char *Path)
 
 static bool DirectoryExists(const char *Path)
 {
+    AXON_ASSERT(Path);
     // bool exists = !dir.Len();
     // if (!exists)
     // {
@@ -59,8 +64,25 @@ static AxFile FileOpenForRead(const char *Path)
     uint32_t Create = OPEN_EXISTING;
 
     HANDLE Handle = CreateFileA(Path, Access, WinFlags, NULL, Create, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (Handle != INVALID_HANDLE_VALUE)
-    {
+    if (Handle != INVALID_HANDLE_VALUE) {
+        File.Handle = (uint64_t)Handle;
+    }
+
+    return(File);
+}
+
+static AxFile FileOpenForWrite(const char *Path)
+{
+    AXON_ASSERT(Path);
+
+    AxFile File = { 0 };
+
+    uint32_t Access = GENERIC_WRITE;
+    uint32_t WinFlags = 0;
+    uint32_t Create = CREATE_ALWAYS;
+
+    HANDLE Handle = CreateFileA(Path, Access, WinFlags, NULL, Create, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (Handle != INVALID_HANDLE_VALUE) {
         File.Handle = (uint64_t)Handle;
     }
 
@@ -69,8 +91,8 @@ static AxFile FileOpenForRead(const char *Path)
 
 static int64_t FileSetPosition(AxFile File, int64_t Position)
 {
-    Assert(FileIsValid(File));
-    Assert(Position >= 0);
+    AXON_ASSERT(FileIsValid(File));
+    AXON_ASSERT(Position >= 0);
 
     DWORD MoveMethod = FILE_BEGIN;
 
@@ -88,7 +110,7 @@ static int64_t FileSetPosition(AxFile File, int64_t Position)
 
 static uint64_t FileSize(AxFile File)
 {
-    Assert(FileIsValid(File));
+    AXON_ASSERT(FileIsValid(File));
 
     LARGE_INTEGER LargeInt;
     GetFileSizeEx((HANDLE)File.Handle, &LargeInt);
@@ -96,10 +118,10 @@ static uint64_t FileSize(AxFile File)
     return(LargeInt.QuadPart);
 }
 
-static int64_t FileRead(AxFile File, void *Buffer, uint64_t BytesToRead)
+static uint64_t FileRead(AxFile File, void *Buffer, uint32_t BytesToRead)
 {
-    Assert(FileIsValid(File));
-    Assert(Buffer != NULL);
+    AXON_ASSERT(FileIsValid(File));
+    AXON_ASSERT(Buffer != NULL);
 
     //axon_platform_file_io &file_io = AxPlatformAPI->file_io;
 
@@ -111,26 +133,38 @@ static int64_t FileRead(AxFile File, void *Buffer, uint64_t BytesToRead)
 
     // If file size is smaller than requested read, read the number 
     // of bytes that are available and return the number of read bytes.
-    uint64_t size = FileSize(File);
-    if (size < BytesToRead)
+    uint64_t Size = FileSize(File);
+    if (Size < BytesToRead)
     {
-        BytesToRead = size;
+        BytesToRead = (uint32_t)Size;
     }
 
     // TODO(mdeforge): If EOF, return 0
 
-    uint32_t NumBytesRead;
-    if (!ReadFile((HANDLE)File.Handle, Buffer, (DWORD)BytesToRead, (DWORD*)&NumBytesRead, NULL))
-    {
-        return(-1);
+    LPDWORD NumBytesRead = 0;
+    if (!ReadFile((HANDLE)File.Handle, Buffer, (DWORD)BytesToRead, NumBytesRead, NULL)) {
+        return(0);
     }
 
-    return(NumBytesRead);
+    return((uint64_t)NumBytesRead);
+}
+
+static uint64_t FileWrite(AxFile File, void* Buffer, uint32_t BytesToWrite)
+{
+    AXON_ASSERT(FileIsValid(File));
+    AXON_ASSERT(Buffer != NULL);
+
+    LPDWORD NumBytesWritten = 0;
+    if (!WriteFile((HANDLE)File.Handle, Buffer, BytesToWrite, NumBytesWritten, NULL)) {
+        return(0);
+    }
+
+    return((uint64_t)NumBytesWritten);
 }
 
 static void FileClose(AxFile File)
 {
-    Assert(FileIsValid(File));
+    AXON_ASSERT(FileIsValid(File));
     CloseHandle((HANDLE)File.Handle);
 }
 
@@ -233,14 +267,6 @@ void GetSysInfo(uint32_t *PageSize, uint32_t *AllocationGranularity)
    ======================================================================== */
 
 struct AxPlatformAPI *PlatformAPI = &(struct AxPlatformAPI) {
-    .FileAPI = &(struct AxPlatformFileAPI) {
-        .IsValid = FileIsValid,
-        .OpenForRead = FileOpenForRead,
-        .SetPosition = FileSetPosition,
-        .Size = FileSize,
-        .Read = FileRead,
-        .Close = FileClose
-    },
     .DirectoryAPI = &(struct AxPlatformDirectoryAPI) {
         .CreateDir = CreateDir,
         .RemoveDir = RemoveDir
@@ -250,6 +276,20 @@ struct AxPlatformAPI *PlatformAPI = &(struct AxPlatformAPI) {
         .Unload = DLLUnload,
         .IsValid = DLLIsValid,
         .Symbol = DLLSymbol
+    },
+    .FileAPI = &(struct AxPlatformFileAPI) {
+        .IsValid = FileIsValid,
+        .OpenForRead = FileOpenForRead,
+        .OpenForWrite = FileOpenForWrite,
+        .SetPosition = FileSetPosition,
+        .Size = FileSize,
+        .Read = FileRead,
+        .Write = FileWrite,
+        .Close = FileClose
+    },
+    .PathAPI = &(struct AxPlatformPathAPI) {
+        .FileExists = FileExists,
+        .DirectoryExists = DirectoryExists,
     },
     .TimeAPI = &(struct AxTimeAPI) {
         .WallTime = WallTime,
@@ -283,7 +323,7 @@ GetEXEFileName(win32_state *State)
 void
 GetInputFileLocation(win32_state *State, int SlotIndex, int DestCount, char *Dest)
 {
-    Assert(SlotIndex == 1);
+    AXON_ASSERT(SlotIndex == 1);
     Win32BuildEXEPathFileName(State, "foo.ai", DestCount, Dest);
 }
 
