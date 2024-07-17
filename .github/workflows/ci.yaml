@@ -9,7 +9,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@latest
 
     - name: Set up CMake
       uses: lukka/get-cmake@latest
@@ -17,7 +17,7 @@ jobs:
         cmakeVersion: '3.29.2'
 
     - name: Install dependencies
-      run: sudo apt-get install -y g++ make
+      run: choco install visualstudio2022buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --includeOptional --quiet --wait"
 
     - name: Configure CMake
       run: cmake -S . -B build
