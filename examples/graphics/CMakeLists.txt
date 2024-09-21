@@ -24,10 +24,10 @@ target_sources(OpenGLExample
 )
 
 # Add the executable
-add_executable(Host)
+add_executable(ExampleHost)
 
 # Add source to executable target
-target_sources(Host
+target_sources(ExampleHost
     PRIVATE
         src/Host.cpp
 )
@@ -78,8 +78,8 @@ else()
 endif()
 
 # Add compiler features and definitions
-target_compile_features(Host PRIVATE cxx_std_20)
-target_compile_definitions(Host
+target_compile_features(ExampleHost PRIVATE cxx_std_20)
+target_compile_definitions(ExampleHost
     PRIVATE
         AXON_LINKS_FOUNDATION
 )
@@ -108,13 +108,13 @@ target_link_libraries(OpenGLExample
         Virspace::Foundation
 )
 
-target_link_libraries(Host
+target_link_libraries(ExampleHost
     PRIVATE
         Virspace::Foundation
         shell32
 )
 
-# target_link_options(Host
+# target_link_options(ExampleHost
 #     PRIVATE
 #         -mwindows
 # )
