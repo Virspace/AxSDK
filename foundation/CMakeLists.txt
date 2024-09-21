@@ -25,6 +25,7 @@ target_sources(Foundation
         include/Foundation/AxApplication.h
         include/Foundation/AxArray.h
         include/Foundation/AxCamera.h
+        #include/Foundation/AxDrawable.h
         include/Foundation/AxHeap.h
         #include/Foundation/AxStackAllocator.h
         include/Foundation/AxEditorPlugin.h
@@ -43,6 +44,7 @@ target_sources(Foundation
         src/AxAllocatorRegistry.c
         src/AxAllocUtils.c
         src/AxCamera.c
+        #src/AxDrawable.c
         src/AxLinearAllocatorWin32.c
         src/AxHeapWin32.c
         #src/ImageLoader.c

@@ -136,9 +136,10 @@ typedef union AxVec4
   float E[4];
 } AxVec4;
 
+// A row major 4x4 matrix
 typedef struct AxMat4x4
 {
-    float E[4][4]; // ROW MAJOR!
+    float E[4][4];
 } AxMat4x4;
 
 typedef struct AxMat4x4f

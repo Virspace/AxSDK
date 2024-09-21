@@ -1,9 +1,0 @@
-@PACKAGE_INIT@
-
-find_package(Foundation CONFIG REQUIRED)
-find_package(Drawable CONFIG REQUIRED)
-find_package(GTest REQUIRED)
-
-if(NOT TARGET Virspace::DrawableTests)
-	include(${CMAKE_CURRENT_LIST_DIR}/DrawableTestsTargets.cmake)
-endif()

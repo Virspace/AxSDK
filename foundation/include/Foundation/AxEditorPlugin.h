@@ -9,9 +9,9 @@ extern "C" {
 struct ImGuiContext;
 struct EditorPluginAPI
 {
-    void (*Init)(struct ImGuiContext *Context);
+    bool (*Init)(struct ImGuiContext *Context);
     bool (*Tick)(void);
-    void (*Term)(void);
+    bool (*Term)(void);
 };
 
 #ifdef __cplusplus

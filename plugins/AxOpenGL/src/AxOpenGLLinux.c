@@ -93,7 +93,7 @@ struct OpenGLData
     GLuint AttribLocationVertexColor;
     GLuint AttribLocationProjectMatrix;
     uint32_t VBOHandle;
-    uint32_t ElementsHandle;
+    uint32_t EBOHandle;
     bool SupportsSRGBFramebuffer;
 };
 
@@ -237,7 +237,7 @@ static bool CreateDeviceObjects(/*struct OpenGLData* Data*/)
 
     // Create buffers
     glGenBuffers(1, &Data->VBOHandle);
-    glGenBuffers(1, &Data->ElementsHandle);
+    glGenBuffers(1, &Data->EBOHandle);
 
     return (true);
 }
@@ -250,10 +250,10 @@ static void DestroyDeviceObjects(/*struct OpenGLData *Data*/)
         Data->VBOHandle = 0;
     }
 
-    if (Data->ElementsHandle)
+    if (Data->EBOHandle)
     {
-        glDeleteBuffers(1, &Data->ElementsHandle);
-        Data->ElementsHandle = 0;
+        glDeleteBuffers(1, &Data->EBOHandle);
+        Data->EBOHandle = 0;
     }
 
     if (Data->ShaderHandle)
@@ -369,7 +369,7 @@ static void SetupRenderState(AxDrawData *DrawData, int FramebufferWidth, int Fra
 
     // Buffer Element Data
     glBindBuffer(GL_ARRAY_BUFFER, Data->VBOHandle);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Data->ElementsHandle);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Data->EBOHandle);
 
     // Position Attribute
     glEnableVertexAttribArray(Data->AttribLocationVertexPos);
@@ -552,10 +552,10 @@ void RenderDrawData(AxDrawData *DrawData)
     AxVec2 ClipScale = DrawData->FramebufferScale;
 
     // Render command lists
-    size_t a = ArraySize(DrawData->CommandList);
-    for (int i = 0; i < ArraySize(DrawData->CommandList); i++)
+    size_t a = ArraySize(DrawData->DrawLists);
+    for (int i = 0; i < ArraySize(DrawData->DrawLists); i++)
     {
-        struct AxDrawList *DrawList = &DrawData->CommandList[i];
+        struct AxDrawList *DrawList = &DrawData->DrawLists[i];
 
         // If the draw list dirty, buffer data
         if (DrawList->IsDirty)
