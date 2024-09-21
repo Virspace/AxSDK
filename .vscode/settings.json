@@ -9,6 +9,9 @@
         "axheap.h": "c",
         "axtypes.h": "c",
         "axallocatorinfo.h": "c",
-        "unistd.h": "c"
+        "unistd.h": "c",
+        "axwindow.h": "c",
+        "axdrawlist.h": "c",
+        "axarray.h": "c"
     }
 }

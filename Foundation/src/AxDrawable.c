@@ -1,11 +1,33 @@
 #pragma once
 
-#include "AxDrawList.h"
-#include "AxDrawCommand.h"
-#include <string.h>
+#include "AxDrawable.h"
 #include "Foundation/AxArray.h"
+#include <string.h>
 
-void DrawListAddDrawable(struct AxDrawList *DrawList, const struct AxDrawVert *Vertices, const AxDrawIndex *Indices, const size_t VertexCount, const size_t IndexCount)
+struct AxDrawable *DrawableCreate()
+{
+
+}
+
+void DrawDataAddDrawList(struct AxDrawData *DrawData, const struct AxDrawList *DrawList)
+{
+    DrawData->TotalVertexCount += ArraySize(DrawList.VertexBuffer);
+    DrawData->TotalIndexCount += ArraySize(DrawList.IndexBuffer);
+
+    ArrayPush(DrawData->DrawLists, DrawList);
+}
+
+void DrawDataClear(struct AxDrawData *DrawData)
+{
+    for (int i = 0; i < ArraySize(DrawData->DrawLists); ++i) {
+        DrawListClear(&DrawData->DrawLists[i]);
+    }
+
+    ArrayFree(DrawData->DrawLists);
+    memset(&DrawData, 0, sizeof(DrawData));
+}
+
+void DrawListAddDrawable(struct AxDrawList *DrawList, const struct AxDrawable Drawable)
 {
     Assert(DrawList);
 
@@ -13,12 +35,12 @@ void DrawListAddDrawable(struct AxDrawList *DrawList, const struct AxDrawVert *V
         .TextureID = 0,
         .VertexOffset = ArraySize(DrawList->VertexBuffer), // Size of the buffer up until this point
         .IndexOffset = ArraySize(DrawList->IndexBuffer),   // Size of the buffer up until this point
-        .ElementCount = ArraySize(Indices)
+        .ElementCount = ArraySize(Drawable.Indices)
     };
 
     ArrayPush(DrawList->CommandBuffer, DrawCommand);
-    ArrayPushArray(DrawList->VertexBuffer, Vertices);
-    ArrayPushArray(DrawList->IndexBuffer, Indices);
+    ArrayPushArray(DrawList->VertexBuffer, Drawable.Vertices);
+    ArrayPushArray(DrawList->IndexBuffer, Drawable.Indices);
     DrawList->IsDirty = true;
 }
 
@@ -42,7 +64,14 @@ void DrawListAddQuad(struct AxDrawList *DrawList, const AxVert TopRight, const A
     ArrayPush(Indices, 2);
     ArrayPush(Indices, 3);
 
-    DrawListAddDrawable(DrawList, Vertices, Indices, ArraySize(Vertices), ArraySize(Indices));
+    const struct AxDrawable Drawable = {
+        .Vertices = Vertices,
+        .Indices = Indices,
+        .VertexCount = ArraySize(Vertices),
+        .IndexCount = ArraySize(Indices)
+    };
+
+    DrawListAddDrawable(DrawList, Drawable);
 
     ArrayFree(Vertices);
     ArrayFree(Indices);

@@ -3,9 +3,6 @@
 #include "GL/gl3w.h"
 
 #include "AxOpenGL.h"
-#include "Drawable/AxDrawData.h"
-#include "Drawable/AxDrawCommand.h"
-#include "Drawable/AxDrawList.h"
 
 #include "AxWindow/AxWindow.h"
 #include "Foundation/AxAPIRegistry.h"
@@ -63,40 +60,17 @@ int32_t Win32OpenGLAttribs[] =
 struct AxWindowAPI *WindowAPI;
 struct AxPlatformAPI *PlatformAPI;
 
-typedef struct AxTexture
-{
-    GLuint ID;
-    uint32_t Width;
-    uint32_t Height;
-} AxTexture;
-
-// typedef struct AxMesh
+// struct OpenGLData
 // {
-//     uint32_t VertexBuffer;
-//     uint32_t ElementBuffer;
-//     uint32_t VertexArray;
-//     uint32_t Texture;
-//     AxTransform Transform; // TODO(mdeforge): Want to eventually keep this separate
-// } AxMesh;
-
-typedef struct AxViewport
-{
-    struct AxDrawData *DrawData;
-} AxViewport;
-
-struct OpenGLData
-{
-    GLuint ShaderHandle;
-    GLuint IMGUIShaderHandle;
-    GLuint AttribLocationTexture;
-    GLuint AttribLocationVertexPos;
-    GLuint AttribLocationVertexUV;
-    GLuint AttribLocationVertexColor;
-    GLuint AttribLocationProjectMatrix;
-    uint32_t VBOHandle;
-    uint32_t ElementsHandle;
-    bool SupportsSRGBFramebuffer;
-};
+//     GLuint ShaderHandle;
+//     GLuint IMGUIShaderHandle;
+//     GLuint AttribLocationTexture;
+//     GLuint AttribLocationVertexPos;
+//     GLuint AttribLocationVertexUV;
+//     GLuint AttribLocationVertexColor;
+//     GLuint AttribLocationProjectMatrix;
+//     bool SupportsSRGBFramebuffer;
+// };
 
 // Global data
 struct OpenGLData *Data;
@@ -145,13 +119,23 @@ static bool CheckShader(GLuint Handle, const char *Description)
     return ((GLboolean)Status == GL_TRUE);
 }
 
+static void SetUniform(struct AxShaderData *ShaderData, const char *UniformName, const void *Value)
+{
+    if (ShaderData->AttribLocationProjectMatrix != -1) {
+        glProgramUniformMatrix4fv(ShaderData->ShaderHandle, ShaderData->AttribLocationProjectMatrix, 1, GL_FALSE, (const GLfloat *)Value);
+    }
+
+    uint32_t Result = glGetError();
+    AXON_ASSERT(!Result && "OpenGL Error in CreateProgram()!");
+}
+
 static bool CheckProgram(GLuint Handle, const char *Description)
 {
     GLint Status = 0, LogLength = 0;
     glGetProgramiv(Handle, GL_LINK_STATUS, &Status);
     glGetProgramiv(Handle, GL_INFO_LOG_LENGTH, &LogLength);
     if ((GLboolean)Status == GL_FALSE) {
-        fprintf(stderr, "ERROR: CreateDeviceObjects failed to link %s!\n", Description);
+        fprintf(stderr, "ERROR: CheckProgram failed to link %s!\n", Description);
     }
 
     if (LogLength > 1)
@@ -167,101 +151,77 @@ static bool CheckProgram(GLuint Handle, const char *Description)
     return ((GLboolean)Status == GL_TRUE);
 }
 
-static GLuint CreateProgram(char *HeaderCode, char *VertexCode, char *FragmentCode)
+static uint32_t CreateProgram(const char *HeaderCode, const char *VertexCode, const char *FragmentCode)
 {
+    AXON_ASSERT(HeaderCode && "HeaderCode is NULL in CreateProgram()!");
+    AXON_ASSERT(VertexCode && "VertexCode is NULL in CreatePrgoram()!");
+    AXON_ASSERT(FragmentCode && "FragmentCode is NULL in CreateProgram()!");
+
     // Create Shaders
     GLuint VertexShaderID = glCreateShader(GL_VERTEX_SHADER);
-    GLchar *VertexShaderCode[2] = { HeaderCode, VertexCode };
+    const GLchar *VertexShaderCode[2] = { HeaderCode, VertexCode };
     glShaderSource(VertexShaderID, ArrayCount(VertexShaderCode), VertexShaderCode, 0);
     glCompileShader(VertexShaderID);
-    CheckShader(VertexShaderID, "Vertex Shader");
+    if (!CheckShader(VertexShaderID, "Vertex Shader")) {
+        return 0;
+    }
 
     GLuint FragmentShaderID = glCreateShader(GL_FRAGMENT_SHADER);
-    GLchar *FragmentShaderCode[2] = { HeaderCode, FragmentCode };
+    const GLchar *FragmentShaderCode[2] = { HeaderCode, FragmentCode };
     glShaderSource(FragmentShaderID, ArrayCount(FragmentShaderCode), FragmentShaderCode, 0);
     glCompileShader(FragmentShaderID);
-    CheckShader(FragmentShaderID, "Fragment Shader");
+    if (!CheckShader(FragmentShaderID, "Fragment Shader")) {
+        return 0;
+    }
 
     // Link
     GLuint ProgramID = glCreateProgram();
     glAttachShader(ProgramID, VertexShaderID);
     glAttachShader(ProgramID, FragmentShaderID);
     glLinkProgram(ProgramID);
-    CheckProgram(ProgramID, "Shader Program");
+    if (!CheckProgram(ProgramID, "Shader Program")) {
+        return 0;
+    }
 
     glDetachShader(ProgramID, VertexShaderID);
     glDetachShader(ProgramID, FragmentShaderID);
     glDeleteShader(VertexShaderID);
     glDeleteShader(FragmentShaderID);
 
-    return(ProgramID);
+    uint32_t Result = glGetError();
+    AXON_ASSERT(!Result && "OpenGL Error in CreateProgram()!");
+
+    return((uint32_t)ProgramID);
 }
 
-// TODO(mdeforge): Maybe move this to a script file since not being able to do multiline string literals in C sucks
-static bool CreateDeviceObjects(/*struct OpenGLData* Data*/)
+static void DestroyProgram(uint32_t ProgramID)
 {
-    char *Header = "";
+    AXON_ASSERT(ProgramID && "ProgramID is 0 in DestroyProgram()!");
 
-    char* VertexCode = "#version 460 core\n\
-        layout (location = 0) in vec3 Position;\n\
-        layout (location = 1) in vec2 UV;\n\
-        layout (location = 2) in vec4 Color;\n\
-        uniform mat4 ProjMtx;\n\
-        out vec2 Frag_UV;\n\
-        out vec4 Frag_Color;\n\
-        void main()\n\
-        {\n\
-            Frag_UV = UV;\n\
-            Frag_Color = Color;\n\
-            //gl_Position = vec4(Position, 1.0);\n\
-            gl_Position = ProjMtx * vec4(Position.xy, 0, 1);\n\
-        }";
+    if (ProgramID != 0)
+    {
+        // Get the attached shaders
+        GLint shaderCount = 0;
+        GLuint shaders[5]; // TODO(mdeforge): Can we not hardcode this?
+        glGetAttachedShaders(ProgramID, 5, &shaderCount, shaders);
 
-    char* FragmentCode = "#version 460 core\n\
-        in vec2 Frag_UV;\n\
-        in vec4 Frag_Color;\n\
-        uniform sampler2D Texture;\n\
-        layout (location = 0) out vec4 Out_Color;\n\
-        void main()\n\
-        {\n\
-           Out_Color = Frag_Color * texture(Texture, Frag_UV.st);\n\
-        }";
+        // Detach and delete each shader
+        for (GLint i = 0; i < shaderCount; ++i)
+        {
+            glDetachShader(ProgramID, shaders[i]);
+            glDeleteShader(shaders[i]);
+        }
 
-    Data->ShaderHandle = CreateProgram(Header, VertexCode, FragmentCode);
-
-    // TODO(mdeforge): glGetUniformLocation for Texture
-    Data->AttribLocationTexture = glGetUniformLocation(Data->ShaderHandle, "Texture");
-    Data->AttribLocationProjectMatrix = glGetUniformLocation(Data->ShaderHandle, "ProjMtx");
-    Data->AttribLocationVertexPos = glGetAttribLocation(Data->ShaderHandle, "Position");
-    Data->AttribLocationVertexUV = glGetAttribLocation(Data->ShaderHandle, "UV");
-    Data->AttribLocationVertexColor = glGetAttribLocation(Data->ShaderHandle, "Color");
-
-    // Create buffers
-    glGenBuffers(1, &Data->VBOHandle);
-    glGenBuffers(1, &Data->ElementsHandle);
-
-    return (true);
+        // Delete the shader program
+        glDeleteProgram(ProgramID);
+    }
 }
 
-static void DestroyDeviceObjects(/*struct OpenGLData *Data*/)
+static void DrawableDestroy(struct AxDrawable *Drawable)
 {
-    if (Data->VBOHandle)
-    {
-        glDeleteBuffers(1, &Data->VBOHandle);
-        Data->VBOHandle = 0;
-    }
+    AXON_ASSERT(Drawable && "Drawable is NULL in DrawableDestroy()!");
 
-    if (Data->ElementsHandle)
-    {
-        glDeleteBuffers(1, &Data->ElementsHandle);
-        Data->ElementsHandle = 0;
-    }
 
-    if (Data->ShaderHandle)
-    {
-        glDeleteProgram(Data->ShaderHandle);
-        Data->ShaderHandle = 0;
-    }
 }
 
 static bool IsValidArray(GLuint Index)
@@ -286,9 +246,9 @@ static void Win32SetPixelFormat(/*struct OpenGLData *Data,*/ HDC WindowDC)
             0,
         };
 
-        if(!Data->SupportsSRGBFramebuffer) {
-            IntAttribList[10] = 0;
-        }
+        // if(!Data->SupportsSRGBFramebuffer) {
+        //     IntAttribList[10] = 0;
+        // }
 
         wglChoosePixelFormatARB(WindowDC, IntAttribList, 0, 1, &SuggestedPixelFormatIndex, &ExtendedPick);
     }
@@ -313,42 +273,25 @@ static void Win32SetPixelFormat(/*struct OpenGLData *Data,*/ HDC WindowDC)
     SetPixelFormat(WindowDC, SuggestedPixelFormatIndex, &SuggestedPixelFormat);
 }
 
-static void SetupRenderState(AxDrawData *DrawData, int FramebufferWidth, int FramebufferHeight, GLuint VAO)
+static void SetupRenderState(struct AxDrawData *DrawData, int FramebufferWidth, int FramebufferHeight)
 {
-    // NOTE(mdeforge): This is currently setup for orthographic sprite drawing since the immediate focus is 2D sprites.
-
-    // TODO(mdeforge): Instead of each object going through it's own render setup, batch like objects as a part of the
-    // same AxDrawData. The editor should help achieve this. All objects with the same VAO should be together.
-
-    // TODO(mdeforge): Create the concept of a camera and organize ortho vs perp based on camera
-
     // Enable alpha blending and scissor test, disable face culling and depth test
 	// TODO(mdeforge): This is currently causing an issue but probably because I have to put back in textures
     // glEnable(GL_BLEND);
     // glBlendEquation(GL_FUNC_ADD);
     // glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-    glDisable(GL_CULL_FACE);
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_STENCIL_TEST);
-    glEnable(GL_SCISSOR_TEST);
-    glDisable(GL_PRIMITIVE_RESTART);
-    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    uint32_t Result = glGetError();
+    AXON_ASSERT(!Result && "OpenGL Error in CreateProgram()!");
 
-    // Setup view port, orthographic projection matrix
-    glViewport(0, 0, (GLsizei)FramebufferWidth, (GLsizei)FramebufferHeight);
+    //glDisable(GL_CULL_FACE);
+    //glDisable(GL_DEPTH_TEST);
+    //glDisable(GL_STENCIL_TEST);
+    //glEnable(GL_SCISSOR_TEST);
+    //glDisable(GL_PRIMITIVE_RESTART);
+    //glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
-    float L = (float)DrawData->DisplayPos.X;
-    float R = (float)DrawData->DisplayPos.X + (float)DrawData->DisplaySize.X;
-    float B = (float)DrawData->DisplayPos.Y;
-    float T = (float)DrawData->DisplayPos.Y + (float)DrawData->DisplaySize.Y;
-
-    AxMat4x4f OrthoProjection = CameraAPI->CalcOrthographicProjection(L, R, B, T, 0.1f, 100.0f);
-    OrthoProjection = Transpose(OrthoProjection);
-
-    glUseProgram(Data->ShaderHandle);
-    glUniform1i(Data->AttribLocationTexture, 0);
-    glUniformMatrix4fv(Data->AttribLocationProjectMatrix, 1, GL_FALSE, &OrthoProjection.E[0][0]);
-
+    Result = glGetError();
+    AXON_ASSERT(!Result && "OpenGL Error in CreateProgram()!");
     // float AspectRatio = (float)WindowWidth / (float)WindowHeight;
     // AxMat4x4Inv ProjectionMatrix = PerspectiveProjection(AspectRatio, 0.1f, 0.50f, 100.0f);
 
@@ -362,33 +305,13 @@ static void SetupRenderState(AxDrawData *DrawData, int FramebufferWidth, int Fra
     // AxMat4x4 ModelMatrix = Transform;
     // AxMat4x4 ModelView = Mat4x4Mul(ViewMatrix, ModelMatrix);
     // AxMat4x4 MVP = Mat4x4Mul(ProjectionMatrix.Forward, ModelView);
-
     //glProgramUniformMatrix4fv(Program->ProgramHandle, FullTransformMatrixLocation, 1, GL_FALSE, &MVP.E[0][0]);
-
-    // Bind the VAO first
-    glBindVertexArray(VAO);
-
-    // Buffer Element Data
-    glBindBuffer(GL_ARRAY_BUFFER, Data->VBOHandle);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Data->ElementsHandle);
-
-    // Position Attribute
-    glEnableVertexAttribArray(Data->AttribLocationVertexPos);
-    glVertexAttribPointer(Data->AttribLocationVertexPos, 3, GL_FLOAT, GL_FALSE, sizeof(struct AxDrawVert), (GLvoid *)offsetof(struct AxDrawVert, Position));
-
-    // UV Attribute
-    glEnableVertexAttribArray(Data->AttribLocationVertexUV);
-    glVertexAttribPointer(Data->AttribLocationVertexUV, 2, GL_FLOAT, GL_FALSE, sizeof(struct AxDrawVert), (GLvoid *)offsetof(struct AxDrawVert, UV));
-
-    // Color Attribute
-    glEnableVertexAttribArray(Data->AttribLocationVertexColor);
-    glVertexAttribPointer(Data->AttribLocationVertexColor, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(struct AxDrawVert), (GLvoid *)offsetof(struct AxDrawVert, Color));
 }
 
 static void Win32LoadWGLExtensions(/*struct OpenGLData *Data*/)
 {
     // Before we can load extensions we need a dummy OpenGL context which is
-    // created used a dummy window. We do this because you can only set a 
+    // created used a dummy window. We do this because you can only set a
     // pixel format for a window once. For the real window, we want to use
     // wglChoosePixelFormatARB (so we can potentially specify options that
     // aren't available in PIXELFORMATDESCRIPTOR), but we can't load and use
@@ -431,36 +354,10 @@ static void Win32LoadWGLExtensions(/*struct OpenGLData *Data*/)
 
     if(wglMakeCurrent(DummyWindowDC, DummyContext))
     {
-        wglChoosePixelFormatARB =
-            (wgl_choose_pixel_format_arb *)wglGetProcAddress("wglChoosePixelFormatARB");
-        wglCreateContextAttribsARB =
-            (wgl_create_context_attribs_arb *)wglGetProcAddress("wglCreateContextAttribsARB");
-        wglGetExtensionsStringEXT =
-            (wgl_get_extensions_string_ext *)wglGetProcAddress("wglGetExtensionStringEXT");
-        wglSwapIntervalEXT =
-            (wgl_swap_interval_ext *)wglGetProcAddress("wglSwapIntervalEXT");
-
-        if (wglGetExtensionsStringEXT)
-        {
-            char *Extensions = (char *)glGetString(GL_EXTENSIONS);
-            char *At = Extensions;
-            while(*At)
-            {
-                while(IsWhitespace(*At)) { ++At; }
-                char *End = At;
-                while(*End && !IsWhitespace(*End)) { ++End; }
-
-                uintptr_t Count = End - At;
-
-                if(strncmp(At, "WGL_EXT_framebuffer_sRGB", Count)) {
-                    Data->SupportsSRGBFramebuffer = true;
-                } else if(strncmp(At, "WGL_ARB_framebuffer_sRGB", Count)) {
-                    Data->SupportsSRGBFramebuffer = true;
-                }
-
-                At = End;
-            }
-        }
+        wglChoosePixelFormatARB = (wgl_choose_pixel_format_arb *)wglGetProcAddress("wglChoosePixelFormatARB");
+        wglCreateContextAttribsARB = (wgl_create_context_attribs_arb *)wglGetProcAddress("wglCreateContextAttribsARB");
+        wglGetExtensionsStringEXT = (wgl_get_extensions_string_ext *)wglGetProcAddress("wglGetExtensionStringEXT");
+        wglSwapIntervalEXT = (wgl_swap_interval_ext *)wglGetProcAddress("wglSwapIntervalEXT");
 
         wglMakeCurrent(DummyWindowDC, 0);
     }
@@ -470,13 +367,9 @@ static void Win32LoadWGLExtensions(/*struct OpenGLData *Data*/)
     DestroyWindow(DummyWindow);
 }
 
-static GLuint VAO = 0;
-void Create(AxWindow *Window)
+void Create(struct AxWindow *Window)
 {
-    Assert(Window && "Create passed NULL Window pointer!");
-
-    // Initialize global data
-    Data = calloc(1, sizeof(struct OpenGLData));
+    AXON_ASSERT(Window && "Window is NULL in Create()!");
 
     // Trampoline the OpenGL 1.0 context to 4.6
     Win32LoadWGLExtensions(Data);
@@ -508,30 +401,169 @@ void Create(AxWindow *Window)
     // Load OpenGL Extensions
     gl3wInit();
 
-    // The call to glVertexAttribPointer registered VBO as the vertex attribute's
-    // bound vertex buffer object so afterwards we can safely unbind
-    //glBindBuffer(GL_ARRAY_BUFFER, 0);
-    //glBindVertexArray(0);
-
     // Create default viewport
     Viewport = calloc(1, sizeof(struct AxViewport));
+}
 
-    // Create default vertex array object
-    glGenVertexArrays(1, &VAO);
+void DrawableInit(struct AxDrawable *Drawable, struct AxMesh *Mesh, struct AxMaterial *Material, AxMat4x4 Transform)
+{
+    AXON_ASSERT(Drawable && "Drawable is NULL in DrawableInit()!");
+    AXON_ASSERT(Mesh && "Mesh is NULL in DrawableInit()!");
+    AXON_ASSERT(Material && "Material is NULL in DrawableInit()!");
+
+    Drawable->Mesh = Mesh;
+    Drawable->Material = Material;
+    Drawable->Transform = Transform;
+}
+
+static void DrawListInit(struct AxDrawList *DrawList)
+{
+    AXON_ASSERT(DrawList && "DrawList is NULL in DrawListInit()!");
+
+    glGenVertexArrays(1, &DrawList->VAO);
+    glGenBuffers(1, &DrawList->VBO);
+    glGenBuffers(1, &DrawList->EBO);
+
+    DrawList->IsDirty = true;
+}
+
+void DrawListBufferData(struct AxDrawList *DrawList, struct AxDrawVert *Vertices, AxDrawIndex *Indices, size_t NumVertices, size_t NumIndices)
+{
+    AXON_ASSERT(DrawList && "Drawable is NULL in DrawListBind()!");
+    AXON_ASSERT(DrawList->VAO && "The VAO has not been generated in DrawListBind()!");
+
+    glBindBuffer(GL_ARRAY_BUFFER, DrawList->VBO);
+    glBufferData(GL_ARRAY_BUFFER, ArraySizeInBytes(Vertices), Vertices, GL_STATIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, DrawList->EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, ArraySizeInBytes(Indices), Indices, GL_STATIC_DRAW);
+
+    uint32_t Result = glGetError();
+    AXON_ASSERT(!Result && "OpenGL Error in CreateProgram()!");
+}
+
+void DrawListAddDrawable(struct AxDrawList *DrawList, struct AxDrawable *Drawable, const AxVec4 ClipRect)
+{
+    AXON_ASSERT(DrawList && "DrawList is NULL in DrawListAddDrawable()!");
+    AXON_ASSERT(Drawable && "Drawable is NULL in DrawListAddDrawable()!");
+
+    ArrayPushArray(DrawList->VertexBuffer, Drawable->Mesh->Vertices);
+    ArrayPushArray(DrawList->IndexBuffer, Drawable->Mesh->Indices);
+
+    DrawList->IsDirty = true;
+}
+
+static void DrawListAddCommand(struct AxDrawList *DrawList, struct AxDrawCommand DrawCommand)
+{
+    ArrayPush(DrawList->CommandBuffer, DrawCommand);
+}
+
+void DrawListBind(struct AxDrawList *DrawList)
+{
+    glBindVertexArray(DrawList->VAO);
+}
+
+void DrawListUnbind()
+{
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+}
+
+static void DrawDataInit(struct AxDrawData *DrawData, const AxVec2 DisplayPos, const AxVec2 DisplaySize, const AxVec2 FrameBufferScale)
+{
+    DrawData->DisplayPos = DisplayPos;
+    DrawData->DisplaySize = DisplaySize;
+    DrawData->FramebufferScale = FrameBufferScale;
+}
+
+static void DrawDataDestroy(struct AxDrawData *DrawData)
+{
+    // Free DrawList ** here?
+}
+
+void DrawDataAddDrawList(struct AxDrawData *DrawData, struct AxDrawList *DrawList)
+{
+    AXON_ASSERT(DrawData && "DrawData is NULL in DrawDataAddDrawList()!");
+    AXON_ASSERT(DrawList && "DrawList is NULL in DrawDataAddDrawList()!");
+
+    DrawData->TotalVertexCount += ArraySize(DrawList->VertexBuffer);
+    DrawData->TotalIndexCount += ArraySize(DrawList->IndexBuffer);
+
+    ArrayPush(DrawData->DrawLists, DrawList); // ArrayPushArray? Why?
+}
+
+static void DrawListDestroy(struct AxDrawList *DrawList)
+{
+    AXON_ASSERT(DrawList && "DrawList is NULL in DrawListDestroy()!");
+    if (DrawList->VBO)
+    {
+        glDeleteBuffers(1, &DrawList->VBO);
+        DrawList->VBO = 0;
+    }
+
+    if (DrawList->EBO)
+    {
+        glDeleteBuffers(1, &DrawList->EBO);
+        DrawList->EBO = 0;
+    }
+}
+
+void DrawableAddShaderData(struct AxDrawable *Drawable, struct AxShaderData *ShaderData)
+{
+    AXON_ASSERT(Drawable && "Drawable is NULL in DrawableAddShaderData()!");
+    AXON_ASSERT(ShaderData && "ShaderData is NULL in DrawableAddShaderData()!");
+
+    uint32_t Result;
+
+    // Position Attribute
+    glVertexAttribPointer(ShaderData->AttribLocationVertexPos, 3, GL_FLOAT, GL_FALSE, sizeof(struct AxDrawVert), (GLvoid *)offsetof(struct AxDrawVert, Position));
+    glEnableVertexAttribArray(ShaderData->AttribLocationVertexPos);
+    Result = glGetError();
+    AXON_ASSERT(!Result && "OpenGL Error in CreateProgram()!");
+
+    // // UV Attribute
+    // glVertexAttribPointer(ShaderData->AttribLocationVertexUV, 2, GL_FLOAT, GL_FALSE, sizeof(struct AxDrawVert), (GLvoid *)offsetof(struct AxDrawVert, UV));
+    // glEnableVertexAttribArray(ShaderData->AttribLocationVertexUV);
+    // Result = glGetError();
+    // AXON_ASSERT(!Result && "OpenGL Error in CreateProgram()!");
+
+    // Color Attribute
+    glVertexAttribPointer(ShaderData->AttribLocationVertexColor, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(struct AxDrawVert), (GLvoid *)offsetof(struct AxDrawVert, Color));
+    glEnableVertexAttribArray(ShaderData->AttribLocationVertexColor);
+
+    Result = glGetError();
+    AXON_ASSERT(!Result && "OpenGL Error in CreateProgram()!");
+
+    if (wglGetExtensionsStringEXT)
+    {
+        char *Extensions = (char *)glGetString(GL_EXTENSIONS);
+        char *At = Extensions;
+        while(*At)
+        {
+            while(IsWhitespace(*At)) { ++At; }
+            char *End = At;
+            while(*End && !IsWhitespace(*End)) { ++End; }
+
+            uintptr_t Count = End - At;
+
+            if(strncmp(At, "WGL_EXT_framebuffer_sRGB", Count)) {
+                ShaderData->SupportsSRGBFramebuffer = true;
+            } else if(strncmp(At, "WGL_ARB_framebuffer_sRGB", Count)) {
+                ShaderData->SupportsSRGBFramebuffer = true;
+            }
+
+            At = End;
+        }
+    }
+
+    Result = glGetError();
+    AXON_ASSERT(!Result && "OpenGL Error in CreateProgram()!");
 }
 
 void NewFrame(void)
 {
-    Assert(Data && "NewFrame passed NULL OpenGLData pointer!");
+    uint32_t Result = glGetError();
+    AXON_ASSERT(!Result && "OpenGL Error in CreateProgram()!");
 
-    if (Data)
-    {
-        if (!Data->ShaderHandle) {
-            CreateDeviceObjects(Data);
-        }
-    }
-
-    //glViewport(0, 0, (GLsizei)DrawData->DisplaySize.X, (GLsizei)DrawData->DisplaySize.Y);
     glClearColor(0.42f, 0.51f, 0.54f, 0.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 }
@@ -540,69 +572,83 @@ void RenderDrawData(AxDrawData *DrawData)
 {
     // TODO(mdeforge): Avoid rendering when minimized
 
-    int FramebufferWidth = (int)(DrawData->DisplaySize.X * DrawData->FramebufferScale.X);
-    int FramebufferHeight = (int)(DrawData->DisplaySize.Y * DrawData->FramebufferScale.Y);
-    if (FramebufferWidth <= 0 || FramebufferHeight <= 0) {
-        return;
-    }
-
-    SetupRenderState(DrawData, FramebufferWidth, FramebufferHeight, VAO);
+    //SetupRenderState(DrawData, FramebufferWidth, FramebufferHeight);
+    glDisable(GL_FRAMEBUFFER_SRGB);
 
     // Will project scissor/clipping rectangles into framebuffer space
-    AxVec2 ClipOff = DrawData->DisplayPos;
-    AxVec2 ClipScale = DrawData->FramebufferScale;
+    // AxVec2 ClipOff = DrawData->DisplayPos;
+    // AxVec2 ClipScale = DrawData->FramebufferScale;
 
     // Render command lists
-    size_t a = ArraySize(DrawData->CommandList);
-    for (int i = 0; i < ArraySize(DrawData->CommandList); i++)
+    for (int i = 0; i < ArraySize(DrawData->DrawLists); i++)
     {
-        struct AxDrawList *DrawList = &DrawData->CommandList[i];
+        struct AxDrawList *DrawList = DrawData->DrawLists[i];
+        glBindVertexArray(DrawList->VAO);
 
         // If the draw list dirty, buffer data
-        if (DrawList->IsDirty)
-        {
-            const struct AxDrawVert *VertexBuffer = DrawList->VertexBuffer;
-            const AxDrawIndex *IndexBuffer = DrawList->IndexBuffer;
-            // TODO(mdeforge): SubData???
-            // TODO(mdeforge): Better to do at DrawList level like before or at command level?
-            // Upload vertex and index buffers
-            glBufferData(GL_ARRAY_BUFFER, ArraySizeInBytes(VertexBuffer), VertexBuffer, GL_STATIC_DRAW);
-            glBufferData(GL_ELEMENT_ARRAY_BUFFER, ArraySizeInBytes(IndexBuffer), IndexBuffer, GL_STATIC_DRAW);
-            DrawList->IsDirty = false;
-        }
+        // if (DrawList->IsDirty)
+        // {
+        //     const struct AxDrawVert *VertexBuffer = DrawList->VertexBuffer;
+        //     const AxDrawIndex *IndexBuffer = DrawList->IndexBuffer;
+        //     fprintf(stdout, "GL Error: %d\n", glGetError());
+
+        //     // Upload vertex and index buffers
+        //     glBufferData(GL_ARRAY_BUFFER, ArraySizeInBytes(VertexBuffer), VertexBuffer, GL_STATIC_DRAW);
+        //     glBufferData(GL_ELEMENT_ARRAY_BUFFER, ArraySizeInBytes(IndexBuffer), IndexBuffer, GL_STATIC_DRAW);
+        //     fprintf(stdout, "GL Error: %d\n", glGetError());
+        //     DrawList->IsDirty = false;
+        // }
 
         size_t CommandBufferSize = ArraySize(DrawList->CommandBuffer);
-        for (int j = 0; j < ArraySize(DrawList->CommandBuffer); j++)
+        for (int j = 0; j < CommandBufferSize; j++)
         {
             const struct AxDrawCommand *Command = &DrawList->CommandBuffer[j];
             if (Command)
             {
+                struct AxDrawable *Drawable = Command->Drawable;
+                AXON_ASSERT(Drawable && "Drawable is NULL in RenderDrawData()!");
+
+                struct AxShaderData *ShaderData = Drawable->Material->ShaderData;
+                AXON_ASSERT(ShaderData && "ShaderData is NULL in RenderDrawData()!");
+
+                glUseProgram(ShaderData->ShaderHandle);
+
+                // Update projection matrix
+                float L = (float)DrawData->DisplayPos.X;
+                float R = (float)DrawData->DisplayPos.X + (float)DrawData->DisplaySize.X;
+                float B = (float)DrawData->DisplayPos.Y;
+                float T = (float)DrawData->DisplayPos.Y + (float)DrawData->DisplaySize.Y;
+                AxMat4x4f OrthoProjection = CameraAPI->CalcOrthographicProjection(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f);
+                OrthoProjection = Transpose(OrthoProjection);
+                SetUniform(ShaderData, "ProjMtx", &OrthoProjection);
+
                 // Project scissor/clipping rectangles into framebuffer space
-                AxVec2 ClipMin = {
-                    (Command->ClipRect.X - ClipOff.X) * ClipScale.X,
-                    (Command->ClipRect.Y - ClipOff.Y) * ClipScale.Y
-                };
+                // AxVec2 ClipMin = {
+                //     (Command->ClipRect.X - ClipOff.X) * ClipScale.X,
+                //     (Command->ClipRect.Y - ClipOff.Y) * ClipScale.Y
+                // };
 
-                AxVec2 ClipMax = {
-                    (Command->ClipRect.Z - ClipOff.X) * ClipScale.X,
-                    (Command->ClipRect.W - ClipOff.Y) * ClipScale.Y
-                };
+                // AxVec2 ClipMax = {
+                //     (Command->ClipRect.Z - ClipOff.X) * ClipScale.X,
+                //     (Command->ClipRect.W - ClipOff.Y) * ClipScale.Y
+                // };
 
-                if (ClipMax.X < ClipMin.X || ClipMax.Y < ClipMin.Y) {
-                    continue;
-                }
+                // if (ClipMax.X < ClipMin.X || ClipMax.Y < ClipMin.Y) {
+                //     continue;
+                // }
 
                 // Apply scissor/clipping rectangle (Y is inverted in OpenGL)
                 //glScissor((int)ClipMin.X, (int)(FramebufferHeight - ClipMax.Y), (int)(ClipMax.X - ClipMin.X), (int)(ClipMax.Y - ClipMin.Y));
 
                 // Bind texture and draw
-                glBindTexture(GL_TEXTURE_2D, (GLuint)Command->TextureID);
+                //glBindTexture(GL_TEXTURE_2D, (GLuint)Command->TextureID);
+                //fprintf(stdout, "GL Error: %d\n", glGetError());
                 glDrawElementsBaseVertex(
                     GL_TRIANGLES,
                     (GLsizei)Command->ElementCount,
                     GL_UNSIGNED_INT,
                     0,
-                    (GLint)Command->VertexOffset
+                    0
                 );
             }
         }
@@ -611,9 +657,7 @@ void RenderDrawData(AxDrawData *DrawData)
 
 void Render(AxDrawData *DrawData)
 {
-    //glViewport(0, 0, (GLsizei)DrawData->DisplaySize.X, (GLsizei)DrawData->DisplaySize.Y);
-    //glClearColor(0.42f, 0.51f, 0.54f, 0.0f);
-    //glClear(GL_COLOR_BUFFER_BIT);
+    glViewport(0, 0, (GLsizei)DrawData->DisplaySize.X, (GLsizei)DrawData->DisplaySize.Y);
 
     RenderDrawData(DrawData);
 
@@ -642,9 +686,59 @@ static struct AxOpenGLInfo GetInfo(bool ModernContext)
     return (Result);
 }
 
-struct AxDrawData *GetDrawData(void)
+bool GetAttributeLocations(const uint32_t ProgramID, struct AxShaderData *ShaderData)
 {
-    return (Viewport->DrawData->Valid ? Viewport->DrawData : NULL);
+    // TODO(mdeforge): Turn this into a SetAttrib function where the user passes in a string
+    // and value and, part of what it does it call this, and the calls the second part of the function
+    // (not present here) to actually set it. The calling code is responsible for this.
+
+    ShaderData->ShaderHandle = ProgramID;
+    glUseProgram(ProgramID);
+
+    uint32_t Result = glGetError();
+    AXON_ASSERT(!Result && "OpenGL Error in CreateProgram()!");
+
+    // ShaderData->AttribLocationTexture = glGetUniformLocation(ShaderData->ShaderHandle, "Texture");
+    // if (ShaderData->AttribLocationTexture < 0) {
+    //     return (false);
+    // }
+
+    // Result = glGetError();
+    // AXON_ASSERT(!Result && "OpenGL Error in CreateProgram()!");
+
+    ShaderData->AttribLocationProjectMatrix = glGetUniformLocation(ShaderData->ShaderHandle, "ProjMtx");
+    if (ShaderData->AttribLocationProjectMatrix < 0) {
+        return (false);
+    }
+
+    Result = glGetError();
+    AXON_ASSERT(!Result && "OpenGL Error in CreateProgram()!");
+
+    ShaderData->AttribLocationVertexPos = glGetAttribLocation(ShaderData->ShaderHandle, "Position");
+    if (ShaderData->AttribLocationVertexPos < 0) {
+        return (false);
+    }
+
+    Result = glGetError();
+    AXON_ASSERT(!Result && "OpenGL Error in CreateProgram()!");
+
+    // ShaderData->AttribLocationVertexUV = glGetAttribLocation(ShaderData->ShaderHandle, "UV");
+    // if (ShaderData->AttribLocationVertexUV < 0) {
+    //     return (false);
+    // }
+
+    // Result = glGetError();
+    // AXON_ASSERT(!Result && "OpenGL Error in CreateProgram()!");
+
+    ShaderData->AttribLocationVertexColor = glGetAttribLocation(ShaderData->ShaderHandle, "Color");
+    if (ShaderData->AttribLocationVertexColor < 0) {
+        return (false);
+    }
+
+    Result = glGetError();
+    AXON_ASSERT(!Result && "OpenGL Error in CreateProgram()!");
+
+    return true;
 }
 
 void AxSwapBuffers(void)
@@ -654,7 +748,7 @@ void AxSwapBuffers(void)
 
 static AxTexture *CreateTexture(const uint32_t Width, const uint32_t Height, const void *Pixels)
 {
-    //Assert(OpenGL && "CreateTexture passed NULL OpenGL Pointer!");
+    AXON_ASSERT(Pixels && "Pixels is NULL in CreateTexture()!");
 
     AxTexture *Texture = calloc(1, sizeof(AxTexture));
     if (!Texture) {
@@ -688,14 +782,36 @@ static AxTexture *CreateTexture(const uint32_t Width, const uint32_t Height, con
 
 static uint32_t TextureID(const struct AxTexture *Texture)
 {
-    Assert(Texture);
+    AXON_ASSERT(Texture && "Texture is NULL in TextureID()!");
 
     return ((Texture) ? Texture->ID : 0);
 }
 
+static void MeshInit(struct AxMesh *Mesh)
+{
+    AXON_ASSERT(Mesh && "Mesh is NULL in MeshInit()!");
+}
+
+static void MeshDestroy(struct AxMesh *Mesh)
+{
+    AXON_ASSERT(Mesh && "Mesh is NULL in MeshDestroy()!");
+
+    ArrayFree(Mesh->Vertices);
+    ArrayFree(Mesh->Indices);
+}
+
+static void MaterialDestroy(struct AxMaterial *Material)
+{
+    if (Material->ShaderData->ShaderHandle)
+    {
+        glDeleteProgram(Material->ShaderData->ShaderHandle);
+        Material->ShaderData->ShaderHandle = 0;
+    }
+}
+
 static void Destroy(void)
 {
-    SAFE_FREE(Data);
+
 }
 
 // Use a compound literal to construct an unnamed object of API type in-place
@@ -703,11 +819,29 @@ struct AxOpenGLAPI *AxOpenGLAPI = &(struct AxOpenGLAPI) {
     .Create = Create,
     .Destroy = Destroy,
     .GetInfo = GetInfo,
+    .DrawableInit = DrawableInit,
+    .DrawableAddShaderData = DrawableAddShaderData,
+    .DrawableDestroy = DrawableDestroy,
+    .DrawListInit = DrawListInit,
+    .DrawListBufferData = DrawListBufferData,
+    .DrawListAddDrawable = DrawListAddDrawable,
+    .DrawListAddCommand = DrawListAddCommand,
+    .DrawListBind = DrawListBind,
+    .DrawListUnbind = DrawListUnbind,
+    .DrawListDestroy = DrawListDestroy,
+    .DrawDataInit = DrawDataInit,
+    .DrawDataAddDrawList = DrawDataAddDrawList,
+    .DrawDataDestroy = DrawDataDestroy,
     .NewFrame = NewFrame,
-    .GetDrawData = GetDrawData,
     .Render = Render,
     .CreateTexture = CreateTexture,
     .TextureID = TextureID,
+    .MeshInit = MeshInit,
+    .MeshDestroy = MeshDestroy,
+    .MaterialDestroy = MaterialDestroy,
+    .CreateProgram = CreateProgram,
+    .DestroyProgram = DestroyProgram,
+    .GetAttributeLocations = GetAttributeLocations,
     .SwapBuffers = AxSwapBuffers
 };
 

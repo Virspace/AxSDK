@@ -14,7 +14,7 @@ struct AxApplicationAPI
 {
     AxApplication *(*Create)(int argc, char **argv);
     bool (*Tick)(AxApplication *App);
-    void (*Destroy)(AxApplication *App);
+    bool (*Destroy)(AxApplication *App);
 };
 
 #ifdef __cplusplus
