@@ -108,7 +108,7 @@ bool Run(int argc, char *argv[])
     AxonRegisterAllFoundationAPIs(AxonGlobalAPIRegistry);
 
     // Load the main DLL
-    PluginAPI->Load("Z:/AxSDK/build/examples/graphics/Debug/OpenGLExample.dll", false);
+    PluginAPI->Load("OpenGLGame.dll", false);
 
     // Get the application interface
     struct AxApplicationAPI *AppAPI = (struct AxApplicationAPI *)AxonGlobalAPIRegistry->Get(AXON_APPLICATION_API_NAME);

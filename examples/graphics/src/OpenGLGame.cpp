@@ -58,7 +58,7 @@ static AxWindow *CreateWindow()
 {
     int32_t StyleFlags = AX_WINDOW_STYLE_VISIBLE | AX_WINDOW_STYLE_DECORATED | AX_WINDOW_STYLE_RESIZABLE;
     TheApp->Window = WindowAPI->CreateWindow(
-        "Axon Engine",
+        "AxonSDK OpenGL Example",
         100,
         100,
         static_cast<int32_t>(DISPLAY_SIZE.Width),
@@ -228,8 +228,8 @@ static AxApplication *Create(int argc, char **argv)
 
     // Attempt to load plugins
     AxWallClock DLLLoadStartTime = PlatformAPI->TimeAPI->WallTime();
-    PluginAPI->Load("Z:/AxSDK/build/Plugins/AxWindow/Debug/AxWindow.dll", false);
-    PluginAPI->Load("Z:/AxSDK/build/Plugins/AxOpenGL/Debug/AxOpenGL.dll", false);
+    PluginAPI->Load("AxWindow.dll", false);
+    PluginAPI->Load("AxOpenGL.dll", false);
     AxWallClock DLLLoadEndTime = PlatformAPI->TimeAPI->WallTime();
 
     float DLLLoadElapsedTime = PlatformAPI->TimeAPI->ElapsedWallTime(DLLLoadStartTime, DLLLoadEndTime);
