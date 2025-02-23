@@ -373,15 +373,15 @@ static void SetupRenderState(AxDrawData *DrawData, int FramebufferWidth, int Fra
 
     // Position Attribute
     glEnableVertexAttribArray(Data->AttribLocationVertexPos);
-    glVertexAttribPointer(Data->AttribLocationVertexPos, 3, GL_FLOAT, GL_FALSE, sizeof(struct AxDrawVert), (GLvoid *)offsetof(struct AxDrawVert, Position));
+    glVertexAttribPointer(Data->AttribLocationVertexPos, 3, GL_FLOAT, GL_FALSE, sizeof(struct AxVertex), (GLvoid *)offsetof(struct AxVertex, Position));
 
     // UV Attribute
     glEnableVertexAttribArray(Data->AttribLocationVertexUV);
-    glVertexAttribPointer(Data->AttribLocationVertexUV, 2, GL_FLOAT, GL_FALSE, sizeof(struct AxDrawVert), (GLvoid *)offsetof(struct AxDrawVert, UV));
+    glVertexAttribPointer(Data->AttribLocationVertexUV, 2, GL_FLOAT, GL_FALSE, sizeof(struct AxVertex), (GLvoid *)offsetof(struct AxVertex, UV));
 
     // Color Attribute
     glEnableVertexAttribArray(Data->AttribLocationVertexColor);
-    glVertexAttribPointer(Data->AttribLocationVertexColor, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(struct AxDrawVert), (GLvoid *)offsetof(struct AxDrawVert, Color));
+    glVertexAttribPointer(Data->AttribLocationVertexColor, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(struct AxVertex), (GLvoid *)offsetof(struct AxVertex, Color));
 }
 
 static void Win32LoadWGLExtensions(/*struct OpenGLData *Data*/)
@@ -560,7 +560,7 @@ void RenderDrawData(AxDrawData *DrawData)
         // If the draw list dirty, buffer data
         if (DrawList->IsDirty)
         {
-            const struct AxDrawVert *VertexBuffer = DrawList->VertexBuffer;
+            const struct AxVertex *VertexBuffer = DrawList->VertexBuffer;
             const AxDrawIndex *IndexBuffer = DrawList->IndexBuffer;
             // TODO(mdeforge): SubData???
             // TODO(mdeforge): Better to do at DrawList level like before or at command level?

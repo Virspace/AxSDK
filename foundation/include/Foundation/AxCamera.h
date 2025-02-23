@@ -15,7 +15,8 @@ struct AxCamera;
 
 struct AxCameraAPI
 {
-    AxMat4x4f (*CalcOrthographicProjection)(float Left, float Right, float Bottom, float Top, float Near, float Far);
+    AxMat4x4Inv (*CalcOrthographicProjection)(float Left, float Right, float Bottom, float Top, float Near, float Far);
+    AxMat4x4Inv (*CalcPerspectiveProjection)(float AspectRatio, float FocalLength, float NearClip, float FarClip);
 };
 
 #define AXON_CAMERA_API_NAME "AxCameraAPI"

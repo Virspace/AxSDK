@@ -1,10 +1,13 @@
 #include "gtest/gtest.h"
 #include "Foundation/AxTypes.h"
 
-#define AXARRAY_IMPLEMENTATION
+// #ifndef AXARRAY_IMPLEMENTATION
+// #define AXARRAY_IMPLEMENTATION
+// #endif
+
 #include "Foundation/AxArray.h"
 
-struct Foo { int32_t a; char *b; };
+struct Foo { int32_t a; const char *b; };
 #define FooConstruct(n, t) (Foo { n, t })
 
 class AxArrayTest : public testing::Test
@@ -54,6 +57,9 @@ TEST_F(AxArrayTest, SetCapacity)
 {
     EXPECT_EQ(ArrayCapacity(Arr), 16);
     ArraySetCapacity(Arr, 32);
+    for (size_t i = 0; i < ArraySize(Arr); ++i) {
+        EXPECT_EQ(Arr[i].a, i + 1);
+    }
     EXPECT_EQ(ArrayCapacity(Arr), 32);
 }
 

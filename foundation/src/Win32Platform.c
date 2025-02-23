@@ -6,7 +6,7 @@
 #include <ShObjIdl.h>
 #include <shellapi.h>
 #include "AxHashTable.h"
-#include "Axplatform.h"
+#include "AxPlatform.h"
 
 // TODO(mdeforge): Need to read large files better
 
@@ -38,11 +38,42 @@ static bool DirectoryExists(const char *Path)
     // }
 
     // return exists;
+    return false;
+}
+
+static const char *BasePath(const char *Path)
+{
+    AXON_ASSERT(Path);
+
+    // Find the last occurrence of both '/' and '\\'
+    const char *LastSlash = strrchr(Path, '/');
+    const char *LastBackslash = strrchr(Path, '\\');
+
+    // Use the latter of the two separators
+    const char *lastSeparator = (LastSlash > LastBackslash) ? LastSlash : LastBackslash;
+
+    if (lastSeparator == NULL) {
+        // No directory separator found, return the full path
+        return Path;
+    }
+
+    // Calculate the length of the base path
+    size_t BaseLength = lastSeparator - Path + 1;
+
+    // Create a static buffer to store the base path
+    static char BasePath[MAX_PATH];
+
+    // Copy the base path
+    strncpy(BasePath, Path, BaseLength);
+    BasePath[BaseLength] = '\0';
+
+    return BasePath;
 }
 
 static char *CurrentWorkingDirectory(void)
 {
-
+    //return (GetCurrentDirectoryA(MAX_PATH, CurrentDirectory));
+    return NULL;
 }
 
 
@@ -290,6 +321,7 @@ struct AxPlatformAPI *PlatformAPI = &(struct AxPlatformAPI) {
     .PathAPI = &(struct AxPlatformPathAPI) {
         .FileExists = FileExists,
         .DirectoryExists = DirectoryExists,
+        .BasePath = BasePath
     },
     .TimeAPI = &(struct AxTimeAPI) {
         .WallTime = WallTime,

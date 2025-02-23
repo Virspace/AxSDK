@@ -1,5 +1,3 @@
-#pragma once
-
 #include "AxAllocUtils.h"
 #include "AxMath.h"
 

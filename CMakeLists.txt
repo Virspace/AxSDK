@@ -4,13 +4,19 @@ project(AxSDK VERSION 1.0.0)
 include(CTest)
 
 # Project-wide Setup
+enable_testing()
 
 # Enable folders in IDE Solution
 if (CMAKE_GENERATOR MATCHES "Visual Studio")
     set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 endif()
 
-add_definitions(-DAX_OS_WINDOWS)
+if (WIN32)
+    add_definitions(-DAX_OS_WINDOWS)
+    add_definitions(-DWINVER=0x0A00)
+
+    #set(CMAKE_SHARED_LIBRARY_SUFFIX ".dll")
+endif()
 
 # TODO(mdeforge): Maybe the Modern CMake approach is to do this per target in their CMakeList files.
 if (MSVC)
@@ -41,13 +47,14 @@ if (MSVC)
 
     add_link_options(/incremental:no /opt:ref user32.lib gdi32.lib winmm.lib kernel32.lib)
 else()
-    # add_compile_options(-Wall -Wextra -pedantic -Werror)
+    add_compile_options(-g)
 endif()
 
 # Basic directory setup
-#set(CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/Install)
-#set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/Bin)
-#set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/Bin)
+set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/install)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 add_subdirectory(foundation)
 set_target_properties(Foundation PROPERTIES FOLDER Foundation)

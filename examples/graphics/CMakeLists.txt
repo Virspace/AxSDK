@@ -1,12 +1,46 @@
 # Preamble
 cmake_minimum_required(VERSION 3.15)
-project(OpenGLExample VERSION 1.0.0 LANGUAGES C CXX)
-
-find_package(Vulkan REQUIRED)
+project(OpenGLGame VERSION 1.0.0 LANGUAGES C CXX)
 
 # Enable folders in IDE Solution
 if (CMAKE_GENERATOR MATCHES "Visual Studio")
     set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+endif()
+
+# Get cgltf
+FetchContent_Declare(
+    cgltf
+    GIT_REPOSITORY https://github.com/jkuhlmann/cgltf.git
+    GIT_TAG v1.14
+    GIT_SHALLOW     TRUE
+    GIT_PROGRESS    TRUE
+)
+
+FetchContent_GetProperties(cgltf)
+if(NOT cgltf_POPULATED)
+    FetchContent_Populate(cgltf)
+    message("Fetching cgltf")
+
+    add_library(cgltf INTERFACE ${cgltf_SOURCE_DIR}/cgltf.h)
+    target_include_directories(cgltf INTERFACE ${cgltf_SOURCE_DIR})
+endif()
+
+# Get stb
+FetchContent_Declare(
+    stb
+    GIT_REPOSITORY https://github.com/nothings/stb.git
+    GIT_TAG master
+    GIT_SHALLOW     TRUE
+    GIT_PROGRESS    TRUE
+)
+
+FetchContent_GetProperties(stb)
+if(NOT stb_POPULATED)
+    FetchContent_Populate(stb)
+    message("Fetching stb")
+
+    add_library(stb INTERFACE)
+    target_include_directories(stb INTERFACE ${stb_SOURCE_DIR})
 endif()
 
 #
@@ -14,20 +48,20 @@ endif()
 #
 
 # Add the library
-add_library(OpenGLExample SHARED)
-add_library(Virspace::OpenGLExample ALIAS OpenGLExample)
+add_library(OpenGLGame SHARED)
+add_library(Virspace::OpenGLGame ALIAS OpenGLGame)
 
 # Add sources to library target
-target_sources(OpenGLExample
+target_sources(OpenGLGame
     PRIVATE
-        src/OpenGLExample.cpp
+        src/OpenGLGame.cpp
 )
 
 # Add the executable
-add_executable(ExampleHost)
+add_executable(OpenGLExample)
 
 # Add source to executable target
-target_sources(ExampleHost
+target_sources(OpenGLExample
     PRIVATE
         src/Host.cpp
 )
@@ -40,7 +74,7 @@ target_sources(ExampleHost
 add_definitions(-DAX_OS_WINDOWS)
 
 # Set compile and link options
-set(OpenGLExample_COMPILE_OPTIONS
+set(OpenGLGame_COMPILE_OPTIONS
     /nologo     # Suppresses the display of the copyright banner when the compiler starts up and display of informational messages during compiling.
     /fp:fast    # Allows the compiler to reorder, combine, or simplify floating-point operations to optimize floating-point code for speed and space.
     /fp:except- # DISABLES code generation that to ensures that any unmasked floating-point exceptions are raised at the exact point at which they occur.
@@ -65,70 +99,68 @@ set(OpenGLExample_COMPILE_OPTIONS
     /Gs9999999  # Controls the threshold for stack probes -- the number of bytes that local variables can occupy before a stack probe is initiated.
 )
 
-set(OpenGLExample_LINK_OPTIONS /incremental:no /opt:ref user32.lib gdi32.lib winmm.lib kernel32.lib)
+set(OpenGLGame_LINK_OPTIONS /incremental:no /opt:ref user32.lib gdi32.lib winmm.lib kernel32.lib)
 
 if(MSVC)
-    target_compile_options(OpenGLExample PRIVATE ${OpenGLExample_COMPILE_OPTIONS})
-    target_link_options(OpenGLExample PRIVATE ${OpenGLExample_LINK_OPTIONS})
+    target_compile_options(OpenGLGame PRIVATE ${OpenGLGame_COMPILE_OPTIONS})
+    target_link_options(OpenGLGame PRIVATE ${OpenGLGame_LINK_OPTIONS})
 
-    target_compile_options(OpenGLExample PRIVATE ${OpenGLExample_COMPILE_OPTIONS})
-    target_link_options(OpenGLExample PRIVATE ${OpenGLExample_LINK_OPTIONS})
+    target_compile_options(OpenGLGame PRIVATE ${OpenGLGame_COMPILE_OPTIONS})
+    target_link_options(OpenGLGame PRIVATE ${OpenGLGame_LINK_OPTIONS})
 else()
     # add_compile_options(-Wall -Wextra -pedantic -Werror)
 endif()
 
 # Add compiler features and definitions
-target_compile_features(ExampleHost PRIVATE cxx_std_20)
-target_compile_definitions(ExampleHost
-    PRIVATE
-        AXON_LINKS_FOUNDATION
-)
-
 target_compile_features(OpenGLExample PRIVATE cxx_std_20)
 target_compile_definitions(OpenGLExample
     PRIVATE
         AXON_LINKS_FOUNDATION
 )
 
+target_compile_features(OpenGLGame PRIVATE cxx_std_20)
+target_compile_definitions(OpenGLGame
+    PRIVATE
+        AXON_LINKS_FOUNDATION
+        _CRT_SECURE_NO_WARNINGS
+)
+
 include_directories("$<JOIN:$<TARGET_PROPERTY:AxWindow,INCLUDE_DIRECTORIES>,;>")
 include_directories("$<JOIN:$<TARGET_PROPERTY:AxOpenGL,INCLUDE_DIRECTORIES>,;>")
 
 # Specify include directories to use when compiling a given target
-target_include_directories(OpenGLExample
+target_include_directories(OpenGLGame
     PUBLIC
-        $<INSTALL_INTERFACE:include/OpenGLExample> # Used for working with an 'install tree'
+        $<INSTALL_INTERFACE:include/OpenGLGame> # Used for working with an 'install tree'
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> # Used for working with a 'build tree'
     PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/include/OpenGLExample
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/OpenGLGame
 )
 
 # Link dependencies
-target_link_libraries(OpenGLExample
+target_link_libraries(OpenGLGame
     PRIVATE
         Virspace::Foundation
+        cgltf
+        stb
 )
 
-target_link_libraries(ExampleHost
+target_link_libraries(OpenGLExample
     PRIVATE
         Virspace::Foundation
         shell32
 )
-
-# target_link_options(ExampleHost
-#     PRIVATE
-#         -mwindows
-# )
 
 #
 # Install and Export
 #
 
 # Set the install destination for cmake files
-set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/OpenGLExample)
+set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/OpenGLGame)
 
 # Specify the name of the export set the targets belong to
-install(TARGETS OpenGLExample
-    EXPORT OpenGLExampleTargets
+install(TARGETS OpenGLGame
+    EXPORT OpenGLGameTargets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/$<CONFIG>
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/$<CONFIG>
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}/$<CONFIG>
@@ -136,15 +168,23 @@ install(TARGETS OpenGLExample
 )
 
 # Copy shaders to build directory during build
-set(SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shaders")
-set(DESTINATION_DIR "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/shaders")
-message(status ${SOURCE_DIR})
-message(status ${DESTINATION_DIR})
+set(SHADERS_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shaders")
+set(SHADERS_DESTINATION_DIR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders")
 add_custom_command(
-    TARGET OpenGLExample  # Target executable to associate the copy command with
+    TARGET OpenGLGame  # Target executable to associate the copy command with
     POST_BUILD  # Specify that this should happen after building the executable
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${SOURCE_DIR} ${DESTINATION_DIR}
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${SHADERS_SOURCE_DIR} ${SHADERS_DESTINATION_DIR}
     COMMENT "Copying shader folder to the build folder"
+)
+
+# Copy model to build directory during guild
+set(MODEL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/models")
+set(MODEL_DESTINATION_DIR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/models")
+add_custom_command(
+    TARGET OpenGLGame  # Target executable to associate the copy command with
+    POST_BUILD  # Specify that this should happen after building the executable
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${MODEL_SOURCE_DIR} ${MODEL_DESTINATION_DIR}
+    COMMENT "Copying models folder to the build folder"
 )
 
 # TODO(mdeforge): See if we can precompile the shaders
@@ -171,10 +211,10 @@ function(add_shaders SHADER_DIR)
         list(APPEND SHADER_COMMANDS Vulkan::glslc)
         list(APPEND SHADER_COMMANDS "${SHADER_SOURCE}")
         list(APPEND SHADER_COMMANDS "-o")
-        list(APPEND SHADER_COMMANDS "${CMAKE_CURRENT_BINARY_DIR}/${SHADER_NAME}.spv")
+        list(APPEND SHADER_COMMANDS "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${SHADER_NAME}.spv")
 
         # Add product
-        list(APPEND SHADER_PRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/${SHADER_NAME}.spv")
+        list(APPEND SHADER_PRODUCTS "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${SHADER_NAME}.spv")
 
     endforeach()
 

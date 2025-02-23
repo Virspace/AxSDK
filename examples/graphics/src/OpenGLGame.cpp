@@ -20,6 +20,12 @@
 #include "AxWindow/AxWindow.h"
 #include "AxOpenGL/AxOpenGL.h"
 
+#define CGLTF_IMPLEMENTATION
+#include "cgltf.h"
+
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 static constexpr AxVec2 DISPLAY_SIZE = { 1920, 1080 };
 
 // NOTE(mdeforge): These get assigned to in LoadPlugin().
@@ -29,20 +35,16 @@ struct AxWindowAPI *WindowAPI;
 struct AxOpenGLAPI *RenderAPI;
 struct AxPlatformAPI *PlatformAPI;
 struct AxPlatformFileAPI *FileAPI;
-struct AxMesh *Mesh;
-
-static AxDrawVert *VertexBuffer;
+static AxVertex *VertexBuffer;
 static AxDrawIndex *IndexBuffer;
+static AxShaderData *ShaderData;
+static AxDrawData *DrawData;
+static AxMesh Mesh;
 
 static AxApplication *TheApp;
 
 // TODO(mdeforge): In lieu of having a scene to manage...
-static AxDrawData *DrawData;
-static AxDrawList *DrawList;
-static AxDrawable *Drawable;
-static AxShaderData *ShaderData;
-static AxTexture *Texture;
-static AxMaterial *Material;
+static AxModel GlobalModel;
 static uint32_t ShaderProgramID;
 
 static void ResetState()
@@ -57,7 +59,7 @@ static void ResetState()
 static AxWindow *CreateWindow()
 {
     int32_t StyleFlags = AX_WINDOW_STYLE_VISIBLE | AX_WINDOW_STYLE_DECORATED | AX_WINDOW_STYLE_RESIZABLE;
-    TheApp->Window = WindowAPI->CreateWindow(
+    AxWindow *Window = WindowAPI->CreateWindow(
         "AxonSDK OpenGL Example",
         100,
         100,
@@ -67,29 +69,18 @@ static AxWindow *CreateWindow()
     );
 
     enum AxCursorMode CursorMode = AX_CURSOR_NORMAL;
-    WindowAPI->SetCursorMode(TheApp->Window, CursorMode);
+    WindowAPI->SetCursorMode(Window, CursorMode);
 
-    return (TheApp->Window);
-}
-
-static bool SetupInitialWindow()
-{
-    // TODO(mdeforge): Clamp window size based on display once display API is done
-    WindowAPI->Init();
-
-    return (CreateWindow());
-}
-
-static void InitializeRenderer()
-{
-    RenderAPI->Create(TheApp->Window);
+    return (Window);
 }
 
 static void ConstructShader()
 {
     // Load shaders
     AxFile VertShader = FileAPI->OpenForRead("shaders/vert.glsl");
+    AXON_ASSERT(FileAPI->IsValid(VertShader) && "Vertex shader file size is invalid!");
     AxFile FragShader = FileAPI->OpenForRead("shaders/frag.glsl");
+    AXON_ASSERT(FileAPI->IsValid(FragShader) && "Fragment shader file size is invalid!");
 
     uint64_t VertFileSize = FileAPI->Size(VertShader);
     uint64_t FragFileSize = FileAPI->Size(FragShader);
@@ -123,56 +114,215 @@ static void ConstructShader()
     AXON_ASSERT(Result && "Failed to get shader attribute locations!");
 }
 
-static void ConstructObject()
+static bool LoadTexture(AxTexture *Texture, cgltf_texture_view TextureView, cgltf_data *ModelData, const char *BasePath)
 {
-    // Define vertices for a square (two triangles)
-    AxDrawVert Vertices[] = {
-        // Position            // Color (ABGR)
-        {{-0.5f,  0.5f, 1.0f}, {0x000000FF}}, // Bottom-left
-        {{ 0.5f,  0.5f, 0.0f}, {0x0000FF00}}, // Bottom-right
-        {{ 0.5f, -0.5f, 0.0f}, {0x00FF0000}}, // Top-right
-        {{-0.5f, -0.5f, 1.0f}, {0x00FFFFFF}}  // Top-left
-    };
-
-    AxDrawIndex Indices[] = {
-        0, 1, 2, // First triangle
-        2, 3, 0  // Second triangle
-    };
-
-    for (size_t i = 0; i < sizeof(Vertices) / sizeof(Vertices[0]); ++i) {
-        ArrayPush(VertexBuffer, Vertices[i]);
+    if (!TextureView.texture || !TextureView.texture->image) {
+        return (false);
     }
 
-    for (size_t i = 0; i < sizeof(Indices) / sizeof(Indices[0]); ++i) {
-        ArrayPush(IndexBuffer, Indices[i]);
+    cgltf_image *Image = TextureView.texture->image;
+
+    stbi_uc *Pixels = nullptr;
+    int32_t Width, Height, Channels;
+    if (Image->uri)
+    {
+        char ImagePath[1024];
+        snprintf(ImagePath, sizeof(ImagePath), "%s%s", BasePath, Image->uri);
+
+        Pixels = stbi_load(ImagePath, &Width, &Height, &Channels, 0);
+        if (!Pixels) {
+            fprintf(stderr, "Error: Failed to load image '%s'\n", ImagePath);
+
+            return (false);
+        }
+    } else if (Image->buffer_view) {
+        cgltf_buffer_view* BufferView = Image->buffer_view;
+        cgltf_buffer* Buffer = BufferView->buffer;
+
+        // Pointer to the image data within the buffer
+        const stbi_uc* image_ptr = (const stbi_uc*)Buffer->data + BufferView->offset;
+
+        // Use stb_image to load from memory
+        stbi_set_flip_vertically_on_load(true);
+        Pixels = stbi_load_from_memory(image_ptr, (int32_t)BufferView->size, &Width, &Height, &Channels, 0);
+        if (!Pixels) {
+            fprintf(stderr, "Error: Failed to load embedded image");
+            return (false);
+        }
+    } else {
+        fprintf(stderr, "Warning: Image '%s' has neither URI nor buffer view.\n", Image->name ? Image->name : "Unnamed");
+        return (false);
     }
 
-    // Create mesh
-    Mesh = (struct AxMesh *)calloc(1, sizeof(AxMesh));
-    for (size_t i = 0; i < sizeof(Vertices) / sizeof(Vertices[0]); ++i) {
-        ArrayPush(Mesh->Vertices, Vertices[i]);
+    Texture->Width = Width;
+    Texture->Height = Height;
+    Texture->Channels = Channels;
+
+    RenderAPI->InitTexture(Texture, Pixels);
+    RenderAPI->BindTexture(Texture, Texture->ID);
+
+    if (Pixels) {
+        printf("Texture loaded successfully: %dx%d with %d channels\n", 
+               Width, Height, Channels);
+        printf("First few pixels (RGBA): ");
+        for (int i = 0; i < std::min(4, Width * Height * Channels); i += Channels) {
+            for (int c = 0; c < Channels; c++) {
+                printf("%d ", Pixels[i + c]);
+            }
+            printf(", ");
+        }
+        printf("\n");
+    } else {
+        printf("Failed to load texture pixels!\n");
+        return false;
     }
 
-    for (size_t i = 0; i < sizeof(Indices) / sizeof(Indices[0]); ++i) {
-        ArrayPush(Mesh->Indices, Indices[i]);
+    free(Pixels);
+
+    return (true);
+}
+
+void LoadFloatAttribute(cgltf_accessor* Accessor, std::vector<float>& AttributeData, const size_t Components) {
+    for (cgltf_size i = 0; i < Accessor->count; ++i)
+    {
+        float Values[4] = {0};
+        cgltf_accessor_read_float(Accessor, i, Values, Components);
+
+        // Push each component of the attribute into the vector
+        for (size_t j = 0; j < Components; ++j) {
+            AttributeData.push_back(Values[j]);
+        }
     }
 }
 
-void ConstructMaterial()
+bool LoadModel(std::string_view File, AxModel *Model)
 {
-    // Material
-    Material = (struct AxMaterial *)calloc(1, sizeof(AxMaterial));
-    Texture = (struct AxTexture *)calloc(1, sizeof(AxTexture));
-    Material->ShaderData = ShaderData;
-    Material->Texture = Texture;
+    cgltf_options Options = {};
+    cgltf_data* ModelData = nullptr;
+    cgltf_result Result = cgltf_parse_file(&Options, File.data(), &ModelData);
+    if (Result != cgltf_result_success) {
+        return false;
+    }
+
+    Result = cgltf_load_buffers(&Options, ModelData, File.data());
+    if (Result != cgltf_result_success) {
+        cgltf_free(ModelData);
+        return false;
+    }
+
+    const char *BasePath = PlatformAPI->PathAPI->BasePath(File.data());
+    size_t NumMaterials = ModelData->materials_count;
+
+    std::unordered_map<std::string, size_t> TextureIDs;
+    std::vector<AxVertex> VertexData;
+    std::vector<uint32_t> IndexData;
+
+    for (cgltf_size i = 0; i < ModelData->materials_count; ++i)
+    {
+        AxTexture Texture = {};  // Create temporary texture
+        const auto& Material = ModelData->materials[i];
+        const cgltf_pbr_metallic_roughness* pbr = &Material.pbr_metallic_roughness;
+
+        // Load Base Color Texture
+        if (pbr->base_color_texture.texture) {
+            if (LoadTexture(&Texture, pbr->base_color_texture, ModelData, BasePath)) {
+                ArrayPush(Model->Textures, Texture);  // Only push if load successful
+            }
+        }
+    }
+
+    // Iterate over meshes and primitives
+    for (int i = 0; i < ModelData->meshes_count; ++i) {
+        cgltf_mesh* mesh = &ModelData->meshes[i];
+        for (int j = 0; j < mesh->primitives_count; ++j) {
+            cgltf_primitive* primitive = &mesh->primitives[j];
+
+            // Temporary vectors to hold attribute data
+            std::vector<float> PositionData;
+            std::vector<float> NormalData;
+            std::vector<float> TexCoordData;
+
+            // Load all attributes first
+            for (int k = 0; k < primitive->attributes_count; ++k) {
+                cgltf_attribute* attribute = &primitive->attributes[k];
+                cgltf_accessor* accessor = attribute->data;
+
+                if (attribute->type == cgltf_attribute_type_position) {
+                    LoadFloatAttribute(accessor, PositionData, 3);
+                } else if (attribute->type == cgltf_attribute_type_normal) {
+                    LoadFloatAttribute(accessor, NormalData, 3);
+                } else if (attribute->type == cgltf_attribute_type_texcoord) {
+                    LoadFloatAttribute(accessor, TexCoordData, 2);
+                }
+            }
+
+            // Create vertices combining all attributes
+            size_t vertexCount = PositionData.size() / 3;
+            VertexData.clear();
+            for (size_t i = 0; i < vertexCount; ++i) {
+                AxVertex Vertex = {};
+
+                // Position (always present)
+                Vertex.Position = {
+                    PositionData[i * 3],
+                    PositionData[i * 3 + 1],
+                    PositionData[i * 3 + 2]
+                };
+
+                // Normal (if present)
+                if (!NormalData.empty()) {
+                    Vertex.Normal = {
+                        NormalData[i * 3],
+                        NormalData[i * 3 + 1],
+                        NormalData[i * 3 + 2]
+                    };
+                }
+
+                // TexCoord (if present)
+                if (!TexCoordData.empty()) {
+                    Vertex.TexCoord = {
+                        TexCoordData[i * 2],
+                        TexCoordData[i * 2 + 1]
+                    };
+                }
+
+                VertexData.push_back(Vertex);
+            }
+
+            // Load indices
+            IndexData.clear();
+            if (primitive->indices) {
+                cgltf_accessor* accessor = primitive->indices;
+                for (cgltf_size i = 0; i < accessor->count; ++i) {
+                    uint32_t index = (uint32_t)cgltf_accessor_read_index(accessor, i);
+                    IndexData.push_back(index);
+                }
+            } else {
+                // If no indices, create sequential indices
+                for (size_t i = 0; i < vertexCount; ++i) {
+                    IndexData.push_back((uint32_t)i);
+                }
+            }
+
+            // Debug print
+            printf("Loaded mesh with %zu vertices and %zu indices\n", VertexData.size(), IndexData.size());
+
+            // Create the mesh
+            RenderAPI->InitMesh(&Mesh, VertexData.data(), IndexData.data(),
+                                (uint32_t)VertexData.size(), (uint32_t)IndexData.size());
+            ArrayPush(Model->Meshes, Mesh);
+        }
+    }
+
+    cgltf_free(ModelData);
+    return true;
 }
 
-void ConstructSceneObject()
+static bool ConstructObject()
 {
-    // Create and initialize the drawable
-    AxMat4x4 Mat = {0};
-    Drawable = (struct AxDrawable *)calloc(1, sizeof(AxDrawable));
-    RenderAPI->DrawableInit(Drawable, Mesh, Material, Mat);
+    return (LoadModel("models/suzanne.glb", &GlobalModel));
+
+    //ArrayPush(Model.Meshes, Mesh);
 }
 
 static void ConstructScene()
@@ -182,38 +332,10 @@ static void ConstructScene()
     AxVec2 DisplaySize = DISPLAY_SIZE;
     AxVec2 FramebufferScale = { 1.0f, 1.0f };
     DrawData = (struct AxDrawData *)calloc(1, sizeof(AxDrawData));
-    RenderAPI->DrawDataInit(DrawData, DisplayPos, DisplaySize, FramebufferScale);
-
-    ConstructObject();
-    ConstructShader();
-    ConstructMaterial();
-    ConstructSceneObject();
-
-    // Create and initialize the draw list
-    DrawList = (struct AxDrawList *)calloc(1, sizeof(AxDrawList));
-    RenderAPI->DrawListInit(DrawList);
-
-    // Bind vertex and index data to drawable
-    RenderAPI->DrawListBind(DrawList);
-    RenderAPI->DrawListBufferData(DrawList, VertexBuffer, IndexBuffer, ArraySize(VertexBuffer), ArraySize(IndexBuffer));
-    RenderAPI->DrawableAddShaderData(Drawable, ShaderData);
-
-    // Add the drawable to the draw list
-    AxVec4 ClipRect = { 0.0f, 0.0f, DrawData->DisplaySize.X, DrawData->DisplaySize.Y };
-    struct AxDrawCommand DrawCommand = {
-        .VertexOffset = ArraySize(DrawList->VertexBuffer), // Size of the buffer up until this point
-        .IndexOffset = ArraySize(DrawList->IndexBuffer),   // Size of the buffer up until this point
-        .ElementCount = ArraySize(Mesh->Indices),
-        .ClipRect = ClipRect,
-        .Drawable = Drawable
-    };
-
-    RenderAPI->DrawListAddCommand(DrawList, DrawCommand);
-    RenderAPI->DrawListAddDrawable(DrawList, Drawable, ClipRect);
-
-    // Create draw data
-    RenderAPI->DrawDataAddDrawList(DrawData, DrawList);
-    RenderAPI->DrawListUnbind();
+    DrawData->Valid = true;
+    DrawData->DisplayPos = DisplayPos;
+    DrawData->DisplaySize = DisplaySize;
+    DrawData->FramebufferScale = FramebufferScale;
 }
 
 static AxApplication *Create(int argc, char **argv)
@@ -228,10 +350,17 @@ static AxApplication *Create(int argc, char **argv)
 
     // Attempt to load plugins
     AxWallClock DLLLoadStartTime = PlatformAPI->TimeAPI->WallTime();
-    PluginAPI->Load("AxWindow.dll", false);
-    PluginAPI->Load("AxOpenGL.dll", false);
-    AxWallClock DLLLoadEndTime = PlatformAPI->TimeAPI->WallTime();
+    if (!PluginAPI->Load("libAxWindow.dll", false)) {
+        fprintf(stderr, "Failed to load AxWindow!\n");
+        return (nullptr);
+    }
 
+    if (!PluginAPI->Load("libAxOpenGL.dll", false)) {
+        fprintf(stderr, "Failed to load AxOpenGL!\n");
+        return (nullptr);
+    }
+
+    AxWallClock DLLLoadEndTime = PlatformAPI->TimeAPI->WallTime();
     float DLLLoadElapsedTime = PlatformAPI->TimeAPI->ElapsedWallTime(DLLLoadStartTime, DLLLoadEndTime);
     printf("DLL Load %f\n", DLLLoadElapsedTime);
 
@@ -244,19 +373,78 @@ static AxApplication *Create(int argc, char **argv)
     ResetState();
 
     // Create default window
-    if (!SetupInitialWindow()) {
-        return (nullptr);
-    }
+    WindowAPI->Init();
+
+    TheApp->Window = CreateWindow();
+    AXON_ASSERT(TheApp->Window && "Window is NULL!");
 
     // Initialize the renderer and setup backend
-    InitializeRenderer();
+    RenderAPI->CreateContext(TheApp->Window);
+
+    auto Info = RenderAPI->GetInfo(true);
+    printf("Vendor: %s\n", Info.Vendor);
+    printf("Renderer: %s\n", Info.Renderer);
+    printf("GL Version: %s\n", Info.GLVersion);
+    printf("GLSL Version: %s\n", Info.GLSLVersion);
+
+    ConstructShader();
+
+    ConstructScene();
 
     // Create scene
-    ConstructScene();
+    if (!ConstructObject()) {
+        fprintf(stderr, "Failed to construct object!\n");
+        return (nullptr);
+    }
 
     WindowAPI->SetWindowVisible(TheApp->Window, true);
 
     return (TheApp);
+}
+
+static void Update()
+{
+    // Create matrices
+    float FOVRadians = 45.0f * (AX_PI / 180.0f);
+    float AspectRatio = DrawData->DisplaySize.X / DrawData->DisplaySize.Y;
+
+    // Create projection matrix - note we're using the Forward matrix
+    AxMat4x4Inv PerspectiveProjection = CameraAPI->CalcPerspectiveProjection(
+        FOVRadians, AspectRatio, 0.1f, 100.0f);
+
+    // Create view matrix - move camera back to see object
+    AxVec3 CameraPos = { 0.0f, 0.0f, 8.0f };
+    AxVec3 CameraTarget = { 0.0f, 0.0f, 0.0f };
+    AxVec3 Up = { 0.0f, 1.0f, 0.0f };
+    AxMat4x4 ViewMatrix = LookAt(CameraPos, CameraTarget, Up);
+
+    // Create model matrix
+    AxMat4x4 ModelMatrix = Identity();
+    Translate(ModelMatrix, (AxVec3){ 0.0f, 0.0f, 0.0f });
+    //ModelMatrix = MatZRotation(ModelMatrix, 90.0f);
+    ModelMatrix = MatXRotation(ModelMatrix, -90.0f);
+
+    // Create color
+    AxVec3 Color = { 1.0f, 1.0f, 1.0f };
+
+    // Debug texture binding
+    if (GlobalModel.Textures && ArraySize(GlobalModel.Textures) > 0) {
+        RenderAPI->BindTexture(&GlobalModel.Textures[0], 0);
+        RenderAPI->SetUniform(ShaderData, "Texture", 0);
+    } else {
+        printf("No textures available to bind!\n");
+    }
+
+    RenderAPI->SetUniform(ShaderData, "model", &ModelMatrix);
+    RenderAPI->SetUniform(ShaderData, "view", &ViewMatrix);
+    RenderAPI->SetUniform(ShaderData, "projection", &PerspectiveProjection.Forward);
+    RenderAPI->SetUniform(ShaderData, "color", &Color);
+
+    // Set light properties
+    AxVec3 LightPos = { 5.0f, 5.0f, 5.0f };
+    AxVec3 LightColor = { 1.0f, 1.0f, 1.0f };
+    RenderAPI->SetUniform(ShaderData, "LightPos", &LightPos);
+    RenderAPI->SetUniform(ShaderData, "LightColor", &LightColor);
 }
 
 static bool Tick(struct AxApplication *App)
@@ -281,7 +469,9 @@ static bool Tick(struct AxApplication *App)
 
     // Start the frame
     RenderAPI->NewFrame();
-    RenderAPI->Render(DrawData);
+    Update();
+
+    RenderAPI->Render(DrawData, &Mesh, ShaderData);
     RenderAPI->SwapBuffers();
 
     return(true);
@@ -292,16 +482,8 @@ static bool Destroy(struct AxApplication *App)
     // Clean up resources
     RenderAPI->DestroyProgram(ShaderProgramID);
 
-    RenderAPI->MaterialDestroy(Material);
-    RenderAPI->MeshDestroy(Mesh);
-
-    RenderAPI->DrawableDestroy(Drawable);
-
-    RenderAPI->DrawListDestroy(DrawList);
-    RenderAPI->DrawDataDestroy(DrawData);
-
     // Shutdown renderer
-    RenderAPI->Destroy();
+    RenderAPI->DestroyContext();
     WindowAPI->DestroyWindow(TheApp->Window);
 
     free(TheApp);

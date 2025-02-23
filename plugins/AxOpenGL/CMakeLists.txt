@@ -125,3 +125,5 @@ export(EXPORT AxOpenGLTargets
     FILE ${CMAKE_CURRENT_BINARY_DIR}/AxOpenGLTargets.cmake
     NAMESPACE Virspace::
 )
+
+#add_subdirectory(tests)

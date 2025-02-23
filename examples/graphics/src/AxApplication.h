@@ -7,7 +7,7 @@ struct AxWindowAPI;
 struct AxPluginAPI;
 struct AxAPIRegistry;
 struct AxPlugin;
-struct AxDrawVert;
+struct AxVertex;
 struct EditorPlugin;
 struct EditorPluginAPI;
 

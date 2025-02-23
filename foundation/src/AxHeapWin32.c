@@ -151,7 +151,7 @@ static void Free(void *Block)
 
 static size_t GetNumHeaps(void)
 {
-    Assert(HeapTable);
+    AXON_ASSERT(HeapTable);
     if (!HeapTable) {
         return (0);
     }
@@ -161,7 +161,7 @@ static size_t GetNumHeaps(void)
 
 static struct AxHeap *GetHeap(size_t Index)
 {
-    Assert(HeapTable);
+    AXON_ASSERT(HeapTable);
     if (!HeapTable) {
         return (NULL);
     }
@@ -171,7 +171,7 @@ static struct AxHeap *GetHeap(size_t Index)
 
 static const struct AxHeapHeader *GetHeapHeader(struct AxHeap *Heap)
 {
-    Assert(Heap);
+    AXON_ASSERT(Heap);
 
     return ((Heap) ? &Heap->Header : NULL);
 }

@@ -5,6 +5,7 @@ project(Foundation VERSION 1.0.0 LANGUAGES C CXX)
     include(CTest) # Enable unit testing via "make test" once the code has been compiled.
 #endif()
 
+
 #
 # Create Target
 #
@@ -49,6 +50,7 @@ target_sources(Foundation
         src/Hash.c
         src/AxHashTable.c
         #src/AxStackAllocatorWin32.c
+        src/AxIntrinsics.c
         src/AxMath.c
         src/Plugin.c
         src/Win32Platform.c
@@ -84,6 +86,7 @@ else()
             src/AxAllocUtils.c
             src/AxCamera.c
             #src/AxHeapLinux.c
+            src/AxIntrinsics.c
             src/AxLinearAllocatorLinux.c
             #src/ImageLoader.c
             src/Hash.c
@@ -112,9 +115,12 @@ target_include_directories(Foundation
     PUBLIC
         $<INSTALL_INTERFACE:include/Foundation> # Used for working with an 'install tree'
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> # Used for working with a 'build tree'
+        ${WINDOWS_SDK_INCLUDE_DIR}
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include/Foundation
 )
+
+target_link_libraries(Foundation Shell32 User32)
 
 #
 # Install and Export

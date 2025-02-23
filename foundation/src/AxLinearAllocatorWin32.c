@@ -29,7 +29,7 @@ struct AxLinearAllocator
  */
 static void *Alloc(struct AxLinearAllocator *Allocator, size_t Size, const char *File, uint32_t Line)
 {
-    Assert(Allocator && "AxLinearAllocator passed NULL allocator!");
+    AXON_ASSERT(Allocator && "AxLinearAllocator passed NULL allocator!");
     if (!Allocator) {
         return (NULL);
     }
@@ -118,7 +118,7 @@ static void *Alloc(struct AxLinearAllocator *Allocator, size_t Size, const char 
 
 static void Free(struct AxLinearAllocator *Allocator, const char *File, uint32_t Line)
 {
-    Assert(Allocator && "AxLinearAllocator passed NULL allocator!");
+    AXON_ASSERT(Allocator && "AxLinearAllocator passed NULL allocator!");
     if (!Allocator) {
         return;
     }
@@ -191,7 +191,7 @@ static struct AxLinearAllocator *Create(const char *Name, size_t MaxSize)
 
 static void Destroy(struct AxLinearAllocator *Allocator)
 {
-    Assert(Allocator && "AxLinearAllocator passed NULL allocator!");
+    AXON_ASSERT(Allocator && "AxLinearAllocator passed NULL allocator!");
     if (!Allocator) {
         return;
     }

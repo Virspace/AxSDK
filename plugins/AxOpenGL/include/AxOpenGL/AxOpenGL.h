@@ -28,11 +28,11 @@ typedef struct AxOpenGLInfo
 
 typedef uint32_t AxDrawIndex;
 
-struct AxDrawVert
+struct AxVertex
 {
-    AxVert Position;
-    //AxUV UV;
-    uint32_t Color;
+    AxVec3 Position;
+    AxVec3 Normal;
+    AxVec2 TexCoord;
 };
 
 struct AxShaderData
@@ -43,7 +43,12 @@ struct AxShaderData
     int32_t AttribLocationVertexPos;
     int32_t AttribLocationVertexUV;
     int32_t AttribLocationVertexColor;
-    int32_t AttribLocationProjectMatrix;
+    int32_t AttribLocationModelMatrix;
+    int32_t AttribLocationViewMatrix;
+    int32_t AttribLocationProjectionMatrix;
+    int32_t AttribLocationColor;
+    int32_t AttribLocationLightPos;
+    int32_t AttribLocationLightColor;
     bool SupportsSRGBFramebuffer;
 };
 
@@ -53,55 +58,47 @@ struct AxTexture
     uint32_t ID;
     uint32_t Width;
     uint32_t Height;
+    uint32_t Channels;
+};
+
+struct AxMeshCreateInfo
+{
+    struct AxVertex *Vertices;
+    uint32_t *Indices;
+    uint32_t TransformIndex;
+    uint32_t BaseColorTexture;
+    uint32_t NormalTexture;
+    size_t VertexOffset;
+    size_t IndexOffset;
+    uint32_t VertexBuffer;
+    uint32_t IndexBuffer;
 };
 
 struct AxMesh
 {
-    struct AxDrawVert *Vertices;
-    AxDrawIndex *Indices;
-};
-
-struct AxMaterial
-{
-    struct AxShaderData *ShaderData;
-    struct AxTexture *Texture;
-};
-
-struct AxDrawable
-{
-    struct AxMesh *Mesh;
-    struct AxMaterial *Material;
-    AxMat4x4 Transform;
-};
-
-struct AxDrawCommand
-{
-    // Buffer offsets
-    size_t VertexOffset; // Start offset in the vertex buffer
-    size_t IndexOffset;  // Start offset in the index buffer
-    size_t ElementCount; // Number of indices to be rendered as triangles
-
-    // Rendering state
-    AxVec4 ClipRect;
-    struct AxDrawable *Drawable;
-};
-
-struct AxDrawList
-{
-    // Buffer objects
     uint32_t VAO;
     uint32_t VBO;
     uint32_t EBO;
+    uint32_t IndexCount;
+    int32_t VertexOffset;
+    uint32_t IndexOffset;
+    // NOT OpenGL handles, just indices
+    uint32_t TransformIndex;
+    uint32_t BaseColorTexture;
+    uint32_t NormalTexture;
+};
 
-    // CPU-side buffers
-    struct AxDrawVert *VertexBuffer;      // Vertex Buffer
-    AxDrawIndex *IndexBuffer;             // Index Buffer
-
-    // Draw commands
-    struct AxDrawCommand *CommandBuffer;  // Draw commands
-
-    // Dirty flag
-    bool IsDirty;                         // Triggers upload of the buffers to GPU
+struct AxModel
+{
+    AxMesh *Meshes;
+    AxTexture *Textures;
+    AxMat4x4 *Transforms;
+    uint32_t InputLayout;
+    uint32_t VertexBuffer;
+    uint32_t IndexBuffer;
+    uint32_t *Commands;
+    uint32_t *ObjectData;
+    uint32_t TransformData;
 };
 
 struct AxViewport
@@ -124,53 +121,37 @@ struct AxOpenGLAPI
 {
     // Initializes the OpenGL rendering backend, creates an OpenGL context
     // associated with the given window, and loads necessary extensions.
-    void (*Create)(AxWindow *Window);
+    void (*CreateContext)(AxWindow *Window);
 
     // Destroys the OpenGL rendering backend
-    void (*Destroy)(void);
+
+    void (*DestroyContext)(void);
 
     // Get information about the current OpenGL Context
     struct AxOpenGLInfo (*GetInfo)(bool ModernContext);
-
-    void (*DrawableInit)(struct AxDrawable *Drawable, struct AxMesh *Mesh, struct AxMaterial *Material, AxMat4x4 Transform);
-    void (*DrawableAddShaderData)(struct AxDrawable *Drawable, struct AxShaderData *Data);
-    void (*DrawableDestroy)(struct AxDrawable *Drawable);
-
-
-    void (*DrawListInit)(struct AxDrawList *DrawList);
-    void (*DrawListBufferData)(struct AxDrawList *DrawList, struct AxDrawVert *Vertices, AxDrawIndex *Indices, size_t NumVertices, size_t NumIndices);
-    void (*DrawListAddDrawable)(struct AxDrawList *DrawList, struct AxDrawable *Drawable, const AxVec4 ClipRect);
-    void (*DrawListAddCommand)(struct AxDrawList *DrawList, struct AxDrawCommand Command);
-    void (*DrawListBind)(struct AxDrawList *DrawList);
-    void (*DrawListUnbind)();
-    void (*DrawListDestroy)(struct AxDrawList *DrawList);
-
-    void (*DrawDataInit)(struct AxDrawData *DrawData, const AxVec2 DisplayPos, const AxVec2 DisplaySize, const AxVec2 FrameBufferScale);
-    void (*DrawDataAddDrawList)(struct AxDrawData *DrawData, struct AxDrawList *DrawList);
-    void (*DrawDataDestroy)(struct AxDrawData *DrawData);
 
     // Updates the viewport and clears the buffer
     void (*NewFrame)(void);
 
     // Render DrawData
-    void (*Render)(AxDrawData *DrawData);
+    void (*Render)(AxDrawData *DrawData, struct AxMesh *Mesh, struct AxShaderData *ShaderData);
 
-    struct AxTexture *(*CreateTexture)(const uint32_t Width, const uint32_t Height, const void *Pixels);
-    //void (*TextureDestroy)(struct AxTexture *Texture);
-    uint32_t (*TextureID)(const struct AxTexture *Texture);
-
-    void (*MeshInit)(struct AxMesh *Mesh);
-    void (*MeshDestroy)(struct AxMesh *Mesh);
-
-    void (*MaterialDestroy)(struct AxMaterial *Material);
+    // Exchanges the front and back buffers in the current pixel format for the window referenced
+    void (*SwapBuffers)(void);
 
     // Create a shader program
     uint32_t (*CreateProgram)(const char* HeaderCode, const char* VertexCode, const char *FragmentCode);
     void (*DestroyProgram)(uint32_t ProgramID);
     bool (*GetAttributeLocations)(const uint32_t ProgramID, struct AxShaderData *Data);
+    void (*SetUniform)(struct AxShaderData *ShaderData, const char *Name, const void *Value);
 
-    // Exchanges the front and back buffers in the current pixel format for the window referenced
-    void (*SwapBuffers)(void);
+    void (*InitTexture)(AxTexture *Texture, uint8_t *Pixels);
+    void (*DestroyTexture)(AxTexture *Texture);
+    void (*SetTextureData)(AxTexture *Texture, uint8_t *Pixels);
+    void (*BindTexture)(AxTexture *Texture, uint32_t Slot);
+
+    void (*InitMesh)(AxMesh *Mesh, struct AxVertex *Vertices, uint32_t *Indices, uint32_t VertexCount, uint32_t IndexCount);
+    //void (*DestroyMesh)(AxMesh *Mesh);
 };
 
 // struct AxShaderData;

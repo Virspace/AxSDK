@@ -30,15 +30,14 @@ extern "C" {
 
 #define AXON_DLL_EXPORT __declspec(dllexport)
 
-#define Pi32 3.14159265359f
+#define AX_PI 3.14159265359f
 
 //#if AXON_SLOW
-#define Assert(Expression) if(!(Expression)) {*(int *)0 = 0;}
-//#else
-//#define Assert(Expression)
-//#endif
-
-#define AXON_ASSERT(Expression) Assert(Expression)
+#if defined(__clang__)
+#define AXON_ASSERT(Expression) if(!(Expression)) { __builtin_trap(); }
+#else
+#define AXON_ASSERT(Expression) if(!(Expression)) { *(volatile int *)0 = 0; }
+#endif
 
 #define AXON_UNUSED(Variable) ((void)(Variable)) // Used to silence "unused variable warnings"
 
@@ -62,31 +61,16 @@ typedef struct AxRect
     float Bottom;
 } AxRect;
 
-typedef union AxVert
-{
-    struct
-    {
-        float X, Y, Z;
-    };
-
-    float XYZ[3];
-} AxVert;
-
-typedef union AxUV
-{
-    struct
-    {
-        float U, V;
-    };
-
-    float UV[2];
-} AxUV;
-
 typedef union AxVec2
 {
     struct
     {
         float X, Y;
+    };
+
+    struct
+    {
+        float U, V;
     };
 
     struct
@@ -136,16 +120,11 @@ typedef union AxVec4
   float E[4];
 } AxVec4;
 
-// A row major 4x4 matrix
+// A column major 4x4 matrix
 typedef struct AxMat4x4
 {
-    float E[4][4];
+    float E[4][4]; // E[column][row]
 } AxMat4x4;
-
-typedef struct AxMat4x4f
-{
-    float E[4][4];
-} AxMat4x4f;
 
 typedef struct AxMat4x4Inv
 {

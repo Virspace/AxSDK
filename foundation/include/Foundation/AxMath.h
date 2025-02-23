@@ -2,10 +2,31 @@
 
 #include "Foundation/AxTypes.h"
 #include "Foundation/AxIntrinsics.h"
+#include <math.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+static inline float Floor(float Num)
+{
+    return floor(Num);
+}
+
+static inline float Log2(float Num)
+{
+    return log2(Num);
+}
+
+static inline float Max(float A, float B)
+{
+    return (A > B) ? A : B;
+}
+
+static inline float Min(float A, float B)
+{
+    return (A < B) ? A : B;
+}
 
 static inline float GetRectWidth(AxRect Rect)
 {
@@ -260,9 +281,9 @@ static AxMat4x4 Translate(AxMat4x4 A, AxVec3 T)
     return(R);
 }
 
-static AxMat4x4f Transpose(const AxMat4x4f Matrix)
+static AxMat4x4 Transpose(const AxMat4x4 Matrix)
 {
-    AxMat4x4f Result = {0};
+    AxMat4x4 Result = {0};
     for (int i = 0; i < 4; ++i)
     {
         for (int j = 0; j < 4; ++j) {
@@ -319,6 +340,21 @@ static inline AxMat4x4 ZRotation(float Angle)
     };
 
     return (R);
+}
+
+static inline AxMat4x4 MatXRotation(AxMat4x4 A, float Angle)
+{
+    return (Mat4x4Mul(A, XRotation(Angle)));
+}
+
+static inline AxMat4x4 MatYRotation(AxMat4x4 A, float Angle)
+{
+    return (Mat4x4Mul(A, YRotation(Angle)));
+}
+
+static inline AxMat4x4 MatZRotation(AxMat4x4 A, float Angle)
+{
+    return (Mat4x4Mul(A, ZRotation(Angle)));
 }
 
 static inline float Length(AxVec3 Vector)
@@ -437,7 +473,7 @@ static inline float Distance2D(AxVec2 A, AxVec2 B)
  * @param Value The value to check.
  * @return True if the value is a power of two, otherwise false.
  */
-inline bool IsPowerOfTwo(size_t Value)
+static inline bool IsPowerOfTwo(size_t Value)
 {
     return ((Value & (Value - 1)) == 0);
 }
@@ -448,7 +484,7 @@ inline bool IsPowerOfTwo(size_t Value)
  * @param PowerOfTwo The power of two to round up to.
  * @return The nearest power of two multiple, zero if Multiple is not a power of two.
  */
-inline size_t RoundUpToPowerOfTwo(size_t Value, size_t Multiple)
+static inline size_t RoundUpToPowerOfTwo(size_t Value, size_t Multiple)
 {
     if (!IsPowerOfTwo(Multiple)) {
         return (0);
@@ -463,7 +499,7 @@ inline size_t RoundUpToPowerOfTwo(size_t Value, size_t Multiple)
  * @param Multiple The power of two to round down to.
  * @return The nearest power of two multiple, zero if Multiple is not a power of two.
  */
-inline size_t RoundDownToPowerOfTwo(size_t Value, size_t Multiple)
+static inline size_t RoundDownToPowerOfTwo(size_t Value, size_t Multiple)
 {
     if (!IsPowerOfTwo(Multiple)) {
         return (0);
