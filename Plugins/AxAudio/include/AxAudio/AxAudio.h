@@ -13,7 +13,7 @@
 
 */
 
-typedef enum CompressionType { NONE };
+typedef enum CompressionType { NONE } CompressionType;
 
 typedef struct AxAudioData
 {

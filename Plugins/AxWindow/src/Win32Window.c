@@ -31,7 +31,8 @@
 
 #include <windows.h>
 #include <commdlg.h>
-#include <shlobj_core.h>
+#include <shlobj.h>
+#include <winuser.h>
 
 #undef CreateWindow
 
@@ -391,7 +392,7 @@ static int GetKeyModifiers(void)
 
 static DWORD GetWindowStyle(const AxWindow *Window)
 {
-    Assert(Window);
+    AXON_ASSERT(Window);
     if (!Window) {
         return (0);
     }
@@ -425,7 +426,7 @@ static DWORD GetWindowStyle(const AxWindow *Window)
 
 static void UpdateCursorImage(const AxWindow *Window)
 {
-    Assert(Window);
+    AXON_ASSERT(Window);
 
     if (Window->CursorMode == AX_CURSOR_NORMAL) {
         SetCursor(LoadCursor(0, IDC_ARROW));
@@ -680,7 +681,7 @@ static LRESULT CALLBACK Win32MainWindowCallback(HWND Hwnd, UINT Message, WPARAM 
         case WM_INPUT:
         {
             // If the cursor mode is normal or hidden, and the keyboard is disabled, break. This section is for raw input.
-            if (!Window->CursorMode == AX_CURSOR_DISABLED && Window->KeyboardMode == AX_KEYBOARD_DISABLED) {
+            if ((Window->CursorMode != AX_CURSOR_DISABLED) && (Window->KeyboardMode == AX_KEYBOARD_DISABLED)) {
                 break;
             }
 
@@ -998,7 +999,7 @@ static bool Win32RegisterWindowClass()
 // NOTE(mdeforge): Basically does what GetDpiForWindow() does, but is compatible back to Windows 8.1
 static UINT GetNearestMonitorDPI(const AxWindow *Window)
 {
-    Assert(Window);
+    AXON_ASSERT(Window);
 
     UINT XDPI, YDPI;
     HANDLE MonitorHandle = MonitorFromWindow((HWND)Window->Platform.Win32.Handle, MONITOR_DEFAULTTONEAREST);
@@ -1009,7 +1010,7 @@ static UINT GetNearestMonitorDPI(const AxWindow *Window)
 
 static bool CreateNativeWindow(AxWindow *Window)
 {
-    Assert(Window);
+    AXON_ASSERT(Window);
 
     if (!Window) {
         return (false);
@@ -1052,7 +1053,7 @@ static bool CreateNativeWindow(AxWindow *Window)
     // Add the AxWindow pointer to the window property list
     SetProp(Handle, "AxonEngine", Window);
     Window->Platform.Win32.Handle = (uint64_t)Handle;
-    Window->Platform.Win32.KeyMenu = 
+    //Window->Platform.Win32.KeyMenu = 
 
     // Create key table for platform
     CreateKeyTable(Window);
@@ -1083,7 +1084,7 @@ static void Init(void)
 
 static void DestroyWindow_(AxWindow *Window)
 {
-    Assert(Window);
+    AXON_ASSERT(Window);
     
     if (Window == NULL) {
         return;
@@ -1101,7 +1102,7 @@ static void DestroyWindow_(AxWindow *Window)
 
 static AxWindow *CreateWindow_(const char *Title, int32_t X, int32_t Y, int32_t Width, int32_t Height, enum AxWindowStyle Style)
 {
-    Assert(Title != NULL);
+    AXON_ASSERT(Title != NULL);
 
     if (Width <= 0 || Height <= 0) {
         return (false);
@@ -1144,7 +1145,7 @@ static AxWindow *CreateWindow_(const char *Title, int32_t X, int32_t Y, int32_t 
 
 static void PollEvents(AxWindow *Window)
 {
-    Assert(Window);
+    AXON_ASSERT(Window);
 
     MSG Msg = {0};
 
@@ -1203,7 +1204,7 @@ static void PollEvents(AxWindow *Window)
 
 static bool HasRequestedClose(AxWindow *Window)
 {
-    Assert(Window);
+    AXON_ASSERT(Window);
 
     if (Window)
     {
@@ -1215,7 +1216,7 @@ static bool HasRequestedClose(AxWindow *Window)
 
 static void GetWindowPosition(AxWindow *Window, int32_t *X, int32_t *Y)
 {
-    Assert(Window);
+    AXON_ASSERT(Window);
 
     *X = 0;
     *Y = 0;
@@ -1232,7 +1233,7 @@ static void GetWindowPosition(AxWindow *Window, int32_t *X, int32_t *Y)
 
 static void SetWindowPosition(AxWindow *Window, int32_t X, int32_t Y)
 {
-    Assert(Window);
+    AXON_ASSERT(Window);
 
     if (Window->Style & AX_WINDOW_STYLE_FULLSCREEN) {
         return;
@@ -1253,7 +1254,7 @@ static void SetWindowPosition(AxWindow *Window, int32_t X, int32_t Y)
 
 static void GetWindowSize(AxWindow *Window, int32_t *Width, int32_t *Height)
 {
-    Assert(Window);
+    AXON_ASSERT(Window);
 
     *Width = 0;
     *Height = 0;
@@ -1270,7 +1271,7 @@ static void GetWindowSize(AxWindow *Window, int32_t *Width, int32_t *Height)
 
 static void SetWindowSize(AxWindow *Window, int32_t Width, int32_t Height)
 {
-    Assert(Window);
+    AXON_ASSERT(Window);
 
     if (Window->Style & AX_WINDOW_STYLE_FULLSCREEN) {
         return;
@@ -1290,7 +1291,7 @@ static void SetWindowSize(AxWindow *Window, int32_t Width, int32_t Height)
 
 static void SetWindowVisible(AxWindow *Window, bool IsVisible)
 {
-    Assert(Window);
+    AXON_ASSERT(Window);
 
     if (IsVisible) {
         ShowWindow((HWND)Window->Platform.Win32.Handle, SW_SHOW);
@@ -1301,7 +1302,7 @@ static void SetWindowVisible(AxWindow *Window, bool IsVisible)
 
 static AxWindowPlatformData GetPlatformData(const AxWindow *Window)
 {
-    Assert(Window);
+    AXON_ASSERT(Window);
 
     AxWindowPlatformData Data = {0};
     if (Window) {
@@ -1313,7 +1314,7 @@ static AxWindowPlatformData GetPlatformData(const AxWindow *Window)
 
 static void GetMouseCoords(const AxWindow *Window, AxVec2 *Position)
 {
-    Assert(Window);
+    AXON_ASSERT(Window);
 
     if (Position) {
         *Position = (AxVec2){0};
@@ -1330,7 +1331,7 @@ static void GetMouseCoords(const AxWindow *Window, AxVec2 *Position)
 
 static int32_t GetMouseButton(const AxWindow *Window, int32_t Button)
 {
-    Assert(Window);
+    AXON_ASSERT(Window);
 
     if (Button < AX_MOUSE_BUTTON_1 || Button > AX_MOUSE_BUTTON_LAST) {
         return AX_RELEASE;
@@ -1342,7 +1343,7 @@ static int32_t GetMouseButton(const AxWindow *Window, int32_t Button)
 // TODO(mdeforge): Update cursor image using enable/disable cursor functions
 static void SetCursorMode(AxWindow *Window, enum AxCursorMode CursorMode)
 {
-    Assert(Window);
+    AXON_ASSERT(Window && "Window is NULL in SetCursorMode()!");
 
     // TODO(mdeforge): Validate CursorMode?
     Window->CursorMode = CursorMode;
@@ -1351,14 +1352,14 @@ static void SetCursorMode(AxWindow *Window, enum AxCursorMode CursorMode)
 
 static enum AxCursorMode GetCursorMode(AxWindow *Window)
 {
-  Assert(Window);
+  AXON_ASSERT(Window);
 
   return (Window->CursorMode);
 }
 
 static void SetKeyboardMode(AxWindow *Window, enum AxKeyboardMode KeyboardMode)
 {
-    Assert(Window);
+    AXON_ASSERT(Window);
 
     // TODO(mdeforge): Validate KeyboardMode?
     Window->KeyboardMode = KeyboardMode;

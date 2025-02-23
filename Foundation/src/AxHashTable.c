@@ -176,7 +176,7 @@ static bool HashTableExpand(AxHashTable *Table, size_t Capacity)
 
 static bool Set(AxHashTable *Table, const char *Key, const void *Value)
 {
-    Assert(Table);
+    AXON_ASSERT(Table);
 
     // If we don't have enough capacity to insert a new entry, expand
     if (Table->Size + 1 > Table->Capacity * MAX_LOAD)
@@ -204,7 +204,7 @@ static bool Set(AxHashTable *Table, const char *Key, const void *Value)
 
 static bool Remove(AxHashTable *Table, const char *Key)
 {
-    Assert(Table);
+    AXON_ASSERT(Table);
 
     // Early out if table has no entries
     if (Table->Size == 0) {
@@ -226,7 +226,7 @@ static bool Remove(AxHashTable *Table, const char *Key)
 
 static void *Find(const AxHashTable *Table, const char *Key)
 {
-    Assert(Table);
+    AXON_ASSERT(Table);
 
     if (Table->Size == 0) {
         return (NULL);
@@ -242,25 +242,25 @@ static void *Find(const AxHashTable *Table, const char *Key)
 
 static size_t Size(const AxHashTable *Table)
 {
-    Assert(Table);
+    AXON_ASSERT(Table);
     return (Table->Size);
 }
 
 static size_t Capacity(const AxHashTable *Table)
 {
-    Assert(Table);
+    AXON_ASSERT(Table);
     return (Table->Capacity);
 }
 
 static const char *GetKeyAtIndex(AxHashTable *Table, size_t Index)
 {
-    Assert(Table);
+    AXON_ASSERT(Table);
     return (GetEntryAtIndex(Table, Index)->Key);
 }
 
 static void *GetValueAtIndex(AxHashTable *Table, size_t Index)
 {
-    Assert(Table);
+    AXON_ASSERT(Table);
     return (GetEntryAtIndex(Table, Index)->Value);
 }
 

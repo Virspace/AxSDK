@@ -6,7 +6,10 @@
 #include <string.h> // _strdup
 #include <stdio.h>
 
+#ifndef AXARRAY_IMPLEMENTATION
 #define AXARRAY_IMPLEMENTATION
+#endif
+
 #include "AxArray.h"
 
 struct AxPlugin

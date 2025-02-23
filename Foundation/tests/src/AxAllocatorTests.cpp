@@ -109,6 +109,7 @@ TEST_F(LinearAllocatorTest, Info)
     EXPECT_EQ(AllocatorDataAPI->BytesCommitted(Data), Megabytes(3));
     EXPECT_EQ(AllocatorDataAPI->PagesReserved(Data), 1024);
     EXPECT_EQ(AllocatorDataAPI->PagesCommitted(Data), 768);
+    EXPECT_TRUE(IsAligned((uintptr_t)Mem2));
 
     // Check allocation
     void *Mem3 = LinearAllocatorAPI->Alloc(LinearAllocator, Kilobytes(64), __FILE__, __LINE__);
@@ -116,6 +117,7 @@ TEST_F(LinearAllocatorTest, Info)
     EXPECT_EQ(AllocatorDataAPI->BytesCommitted(Data), Megabytes(3) + Kilobytes(64));
     EXPECT_EQ(AllocatorDataAPI->PagesReserved(Data), 1024);
     EXPECT_EQ(AllocatorDataAPI->PagesCommitted(Data), 784);
+    EXPECT_TRUE(IsAligned((uintptr_t)Mem3));
 
     // Check allocation data
     for (size_t i = 0; i < AllocatorDataAPI->NumAllocs(Data); ++i) {

@@ -48,14 +48,14 @@ void DrawListAddQuad(struct AxDrawList *DrawList, const AxVert TopRight, const A
 {
     Assert(DrawList);
 
-    struct AxDrawVert *Vertices = NULL;
+    struct AxVertex *Vertices = NULL;
     AxDrawIndex *Indices = NULL;
     AxUV UV1 = (AxUV) { .U = 0, .V = 0 };
 
-    ArrayPush(Vertices, ((struct AxDrawVert){ .Position = TopRight, .UV = UV1, .Color = 0 }));
-    ArrayPush(Vertices, ((struct AxDrawVert){ .Position = BottomRight, .UV = UV1, .Color = 0 }));
-    ArrayPush(Vertices, ((struct AxDrawVert){ .Position = BottomLeft, .UV = UV1, .Color = 0 }));
-    ArrayPush(Vertices, ((struct AxDrawVert){ .Position = TopLeft, .UV = UV1, .Color = 0 }));
+    ArrayPush(Vertices, ((struct AxVertex){ .Position = TopRight, .TexCoord = UV1, .Color = 0 }));
+    ArrayPush(Vertices, ((struct AxVertex){ .Position = BottomRight, .TexCoord = UV1, .Color = 0 }));
+    ArrayPush(Vertices, ((struct AxVertex){ .Position = BottomLeft, .TexCoord = UV1, .Color = 0 }));
+    ArrayPush(Vertices, ((struct AxVertex){ .Position = TopLeft, .TexCoord = UV1, .Color = 0 }));
 
     ArrayPush(Indices, 0);
     ArrayPush(Indices, 1);

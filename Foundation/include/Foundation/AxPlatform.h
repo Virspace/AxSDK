@@ -25,6 +25,8 @@ struct AxPlatformPathAPI
 {
     bool (*FileExists)(const char *Path);
     bool (*DirectoryExists)(const char *Path);
+    const char *(*BasePath)(const char *Path);
+
     //char *(*CurrentWorkingDirectory)(void);
 };
 

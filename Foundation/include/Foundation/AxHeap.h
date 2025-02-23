@@ -63,9 +63,8 @@ struct AxHeapAPI
     /**
      * Frees a memory block allocated by Alloc.
      * @param Block The target memory block to free.
-     * @param Size The size of the block to be freed.
      */
-    void (*Free)(void *Block, size_t Size);
+    void (*Free)(void *Block);
 
     /**
      * Returns number of AxHeaps managed by the API.

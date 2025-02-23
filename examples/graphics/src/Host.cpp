@@ -2,16 +2,13 @@
 #include <stdlib.h>
 #include <crtdbg.h>
 
-extern "C"
-{
 #include "foundation/AxAPIRegistry.h"
 #include "foundation/AxPlugin.h"
 #include "foundation/AxApplication.h"
-}
 
 #ifdef AX_OS_WINDOWS
-#include <Windows.h>
-#include <consoleapi.h>
+#include <windows.h>
+#include <conio.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -101,24 +98,23 @@ static void RunApplication(const AppData *Data)
 bool Run(int argc, char *argv[])
 {
     ConsoleAttached = AttachOutputToConsole();
-    fprintf(stdout, "Hello world\n");
-    OutputDebugString("Hello");
 
     AxonInitGlobalAPIRegistry();
     AxonRegisterAllFoundationAPIs(AxonGlobalAPIRegistry);
 
     // Load the main DLL
-    PluginAPI->Load("OpenGLGame.dll", false);
+    PluginAPI->Load("libOpenGLGame.dll", false);
 
     // Get the application interface
     struct AxApplicationAPI *AppAPI = (struct AxApplicationAPI *)AxonGlobalAPIRegistry->Get(AXON_APPLICATION_API_NAME);
     if (AppAPI->Create) {
         AppData Data = { .AppAPI = AppAPI, .argc = argc, .argv = argv };
         RunApplication(&Data);
+    } else {
+        fprintf(stderr, "Failed to create application!\n");
     }
 
     AxonTermGlobalAPIRegistry();
-
     FreeCon();
 
     return (0);
