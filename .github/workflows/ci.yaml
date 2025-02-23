@@ -4,7 +4,6 @@ on: [push, pull_request]
 
 jobs:
   build:
-
     runs-on: windows-latest
 
     steps:
@@ -16,11 +15,19 @@ jobs:
       with:
         cmakeVersion: '3.29.2'
 
-    - name: Install dependencies
-      run: choco install visualstudio2022buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --includeOptional --quiet --wait"
+    - name: Install LLVM and Clang
+      run: |
+        choco install llvm --version=18.1.8 --allow-downgrade
+        echo "C:\Program Files\LLVM\bin" >> $GITHUB_PATH
+      shell: bash
 
-    - name: Configure CMake
-      run: cmake -S . -B build
+    - name: Configure CMake with Clang
+      run: |
+        cmake -S . -B build -G "Ninja" `
+        -DCMAKE_C_COMPILER=clang `
+        -DCMAKE_CXX_COMPILER=clang++ `
+        -DCMAKE_BUILD_TYPE=Release
+      shell: pwsh
 
     - name: Build
       run: cmake --build build

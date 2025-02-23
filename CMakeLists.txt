@@ -3,6 +3,27 @@ cmake_minimum_required(VERSION 3.15)
 project(AxSDK VERSION 1.0.0)
 include(CTest)
 
+# Specify Clang compiler version requirement
+set(CMAKE_C_COMPILER_ID "Clang")
+set(CMAKE_CXX_COMPILER_ID "Clang")
+set(CMAKE_C_COMPILER_VERSION "18.1.8")
+set(CMAKE_CXX_COMPILER_VERSION "18.1.8")
+
+if(NOT (CMAKE_C_COMPILER_ID STREQUAL "Clang" AND
+        CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND
+        CMAKE_C_COMPILER_VERSION VERSION_GREATER_EQUAL "18.1.0" AND
+        CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "18.1.0"))
+    message(FATAL_ERROR "This project requires Clang 18.1.0 or greater")
+endif()
+
+# Set compiler flags for x64 architecture
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64|x86_64")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -m64")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m64")
+else()
+    message(FATAL_ERROR "This project requires x64 architecture")
+endif()
+
 # Project-wide Setup
 enable_testing()
 
