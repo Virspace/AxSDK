@@ -1,7 +1,6 @@
 #include "AxAPIRegistry.h"
 #include "AxPlugin.h"
 #include "AxPlatform.h"
-#include "ImageLoader.h"
 #include "AxHashTable.h"
 #include "AxAllocatorRegistry.h"
 #include "AxLinearAllocator.h"

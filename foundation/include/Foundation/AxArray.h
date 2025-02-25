@@ -1,5 +1,4 @@
-#ifndef AXARRAY_INCLUDE
-#define AXARRAY_INCLUDE
+#pragma once
 
 #include "Foundation/AxTypes.h"
 
@@ -127,8 +126,6 @@ template<class T> static T* ArrayReserveWrapper(T *A, size_t BlockSize, size_t N
 #else
 // Reserves storage.
 #define ArrayReserveWrapper ArrayReserve
-#endif
-
 #endif
 
 // [Implementation] ///////////////////////////////////////////

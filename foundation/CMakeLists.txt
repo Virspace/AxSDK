@@ -38,7 +38,7 @@ target_sources(Foundation
         include/Foundation/AxPlugin.h
         include/Foundation/AxTypes.h
         include/Foundation/AxLinkedList.h
-        src/APIRegistry.c
+        src/AxAPIRegistry.c
         src/AxAllocatorData.h
         src/AxAllocatorInfo.c
         src/AxAllocatorRegistry.c
@@ -46,15 +46,15 @@ target_sources(Foundation
         src/AxCamera.c
         src/AxLinearAllocatorWin32.c
         src/AxHeapWin32.c
-        #src/ImageLoader.c
-        src/Hash.c
+        #src/AxImageLoader.c
+        src/AxHash.c
         src/AxHashTable.c
         #src/AxStackAllocatorWin32.c
         src/AxIntrinsics.c
         src/AxMath.c
-        src/Plugin.c
-        src/Win32Platform.c
-        src/LinkedList.c
+        src/AxPlugin.c
+        src/AxWin32Platform.c
+        src/AxLinkedList.c
 )
 else()
     target_sources(Foundation
@@ -79,7 +79,7 @@ else()
             include/Foundation/AxPlugin.h
             include/Foundation/AxTypes.h
             include/Foundation/AxLinkedList.h
-            src/APIRegistry.c
+            src/AxAPIRegistry.c
             src/AxAllocatorData.h
             src/AxAllocatorInfo.c
             src/AxAllocatorRegistry.c
@@ -88,14 +88,14 @@ else()
             #src/AxHeapLinux.c
             src/AxIntrinsics.c
             src/AxLinearAllocatorLinux.c
-            #src/ImageLoader.c
-            src/Hash.c
+            #src/AxImageLoader.c
+            src/AxHash.c
             src/AxHashTable.c
             #src/AxStackAllocatorWin32.c
             src/AxMath.c
-            src/Plugin.c
-            src/LinuxPlatform.c
-            src/LinkedList.c
+            src/AxPlugin.c
+            src/AxLinuxPlatform.c
+            src/AxLinkedList.c
     )
 endif()
 
