@@ -10,7 +10,6 @@
 #define AXARRAY_IMPLEMENTATION
 #include "Foundation/AxArray.h"
 #include "Foundation/AxPlugin.h"
-#include "Foundation/AxEditorPlugin.h"
 #include "Foundation/AxAPIRegistry.h"
 #include "Foundation/AxApplication.h"
 #include "Foundation/AxPlatform.h"

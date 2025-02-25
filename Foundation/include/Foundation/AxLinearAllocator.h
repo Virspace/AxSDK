@@ -3,7 +3,7 @@
 #include "Foundation/AxTypes.h"
 
 #ifdef __cplusplus
-extern  "C" {
+extern "C" {
 #endif
 
 /**
