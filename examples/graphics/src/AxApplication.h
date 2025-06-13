@@ -6,10 +6,6 @@ struct AxWindow;
 struct AxWindowAPI;
 struct AxPluginAPI;
 struct AxAPIRegistry;
-struct AxPlugin;
-struct AxVertex;
-struct EditorPlugin;
-struct EditorPluginAPI;
 
 struct Timing
 {
@@ -17,12 +13,6 @@ struct Timing
     AxWallClock WallClock;
     float ElapsedWallTime;
     float DeltaT;
-};
-
-struct Viewer
-{
-    AxMat4x4 ViewProjection;
-    AxTransform CameraTransform;
 };
 
 // NOTE(mdeforge): Application specific data goes here, could become a dumping ground
@@ -35,6 +25,7 @@ struct AxApplication
 
     AxWindow *Window;
     Timing Timing;
-    Viewer Viewer;
     const char *ProjectDirectory;
+
+    bool IsRequestingExit{false};
 };

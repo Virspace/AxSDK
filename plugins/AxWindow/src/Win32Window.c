@@ -1,6 +1,5 @@
 #include "Foundation/AxAPIRegistry.h"
 #include "Foundation/AxMath.h"
-#include "Foundation/AxHashTable.h"
 #include "Foundation/AxPlatform.h"
 #include "AxWindow.h"
 #include <stdio.h>
@@ -986,6 +985,7 @@ static bool Win32RegisterWindowClass()
     if (!RegisterClassEx(&WNDClass))
     {
         DWORD Error = GetLastError();
+        fprintf(stderr, "Failed to register window class: %lu\n", Error);
         MessageBox(NULL, "Window Registration Failed!", "Abandon Ship!",
             MB_ICONEXCLAMATION | MB_OK);
 
@@ -1076,16 +1076,27 @@ static bool CreateNativeWindow(AxWindow *Window)
     return (true);
 }
 
-static void Init(void)
+static enum AxWindowError Init(void)
 {
-    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-    Win32RegisterWindowClass();
+    // Set DPI awareness - this should be done before any window creation
+    if (!SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)) {
+        DWORD Error = GetLastError();
+        fprintf(stderr, "Failed to set DPI awareness: %lu\n", Error);
+        return AX_WINDOW_ERROR_UNKNOWN;
+    }
+
+    // Register window class
+    if (!Win32RegisterWindowClass()) {
+        return AX_WINDOW_ERROR_WINDOW_REGISTRATION_FAILED;
+    }
+
+    return AX_WINDOW_ERROR_NONE;
 }
 
 static void DestroyWindow_(AxWindow *Window)
 {
     AXON_ASSERT(Window);
-    
+
     if (Window == NULL) {
         return;
     }

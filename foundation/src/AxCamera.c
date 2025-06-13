@@ -12,31 +12,36 @@ struct AxCamera
 static AxMat4x4Inv AxCalcOrthographicProjection(float Left, float Right, float Bottom, float Top, float Near, float Far)
 {
     float WInv = 1.0f / (Right - Left);
-    float HInv = 1.0f / (Bottom - Top);
+    float HInv = 1.0f / (Top - Bottom);
     float DInv = 1.0f / (Far - Near);
 
     AxMat4x4Inv Result = { 0 };
 
-    // Forward
+    // Forward projection matrix
     Result.Forward.E[0][0] = 2.0f * WInv;
     Result.Forward.E[0][3] = -(Right + Left) * WInv;
+
     Result.Forward.E[1][1] = 2.0f * HInv;
-    Result.Forward.E[1][3] = -(Bottom + Top) * HInv;
+    Result.Forward.E[1][3] = -(Top + Bottom) * HInv;
+
     Result.Forward.E[2][2] = DInv;
     Result.Forward.E[2][3] = -Near * DInv;
     Result.Forward.E[3][3] = 1.0f;
 
-    // Inverse
-    Result.Inverse.E[0][0] = 1.0f / (2.0f * WInv);
+    // Inverse projection matrix
+    Result.Inverse.E[0][0] = 1.0f / (2.0f * WInv);  // equivalent to (Right - Left)/2
     Result.Inverse.E[0][3] = (Right + Left) / 2.0f;
-    Result.Inverse.E[1][1] = 1.0f / (2.0f * HInv);
-    Result.Inverse.E[1][3] = (Bottom + Top) / 2.0f;
-    Result.Inverse.E[2][2] = 1.0f / DInv;
+
+    Result.Inverse.E[1][1] = 1.0f / (2.0f * HInv);  // equivalent to (Top - Bottom)/2
+    Result.Inverse.E[1][3] = (Top + Bottom) / 2.0f;
+
+    Result.Inverse.E[2][2] = 1.0f / DInv;           // equals Far - Near
     Result.Inverse.E[2][3] = Near;
     Result.Inverse.E[3][3] = 1.0f;
 
-    return (Result);
+    return Result;
 }
+
 
 static AxMat4x4Inv AxCalcPerspectiveProjection(float FOV, float AspectRatio, float NearClip, float FarClip)
 {

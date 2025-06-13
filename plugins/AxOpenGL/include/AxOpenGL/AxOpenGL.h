@@ -52,6 +52,18 @@ struct AxShaderData
     bool SupportsSRGBFramebuffer;
 };
 
+struct AxCamera
+{
+    AxVec3 Position;          // Camera position in world space
+    AxVec3 Orientation;       // Camera orientation (e.g., direction it is facing)
+    float FieldOfView;       // Field of view for perspective projection
+    float AspectRatio;       // Aspect ratio for the camera
+    float NearPlane;         // Near clipping plane
+    float FarPlane;          // Far clipping plane
+    AxMat4x4 ViewMatrix;  // View matrix
+    AxMat4x4Inv ProjectionMatrix; // Projection matrix
+};
+
 // TODO(mdeforge): Add texture parameters such as format and filtering modes
 struct AxTexture
 {
@@ -103,7 +115,12 @@ struct AxModel
 
 struct AxViewport
 {
-    struct AxDrawData *DrawData;
+    AxVec2 Position;
+    AxVec2 Size;
+    AxVec2 Depth;
+    AxVec2 Scale;
+    bool IsActive;
+    AxVec4 ClearColor;
 };
 
 struct AxDrawData
@@ -111,10 +128,7 @@ struct AxDrawData
     bool Valid;
     size_t TotalIndexCount;
     size_t TotalVertexCount;
-    struct AxDrawList **DrawLists;
-    AxVec2 DisplayPos;
-    AxVec2 DisplaySize;
-    AxVec2 FramebufferScale;
+    //struct AxDrawList **DrawLists;
 };
 
 struct AxOpenGLAPI
@@ -130,11 +144,16 @@ struct AxOpenGLAPI
     // Get information about the current OpenGL Context
     struct AxOpenGLInfo (*GetInfo)(bool ModernContext);
 
+    // Get the current viewport
+    struct AxViewport* (*CreateViewport)(AxVec2 Position, AxVec2 Size);
+    void (*DestroyViewport)(struct AxViewport *Viewport);
+    void (*SetActiveViewport)(struct AxViewport *Viewport);
+
     // Updates the viewport and clears the buffer
     void (*NewFrame)(void);
 
     // Render DrawData
-    void (*Render)(AxDrawData *DrawData, struct AxMesh *Mesh, struct AxShaderData *ShaderData);
+    void (*Render)(struct AxViewport *Viewport, struct AxMesh *Mesh, struct AxShaderData *ShaderData);
 
     // Exchanges the front and back buffers in the current pixel format for the window referenced
     void (*SwapBuffers)(void);

@@ -88,7 +88,7 @@ static void RunApplication(const AppData *Data)
         return;
     }
 
-    while(AppAPI->Tick(App)) {
+    while(!AppAPI->Tick(App)) {
         // TODO(mdeforge): Check for plugin hot reload
     }
 

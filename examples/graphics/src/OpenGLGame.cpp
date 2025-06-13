@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -25,7 +26,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
-static constexpr AxVec2 DISPLAY_SIZE = { 1920, 1080 };
+static constexpr AxVec2 WINDOW_SIZE = { 1920, 1080 };
 
 // NOTE(mdeforge): These get assigned to in LoadPlugin().
 struct AxAPIRegistry *RegistryAPI;
@@ -34,25 +35,69 @@ struct AxWindowAPI *WindowAPI;
 struct AxOpenGLAPI *RenderAPI;
 struct AxPlatformAPI *PlatformAPI;
 struct AxPlatformFileAPI *FileAPI;
-static AxVertex *VertexBuffer;
-static AxDrawIndex *IndexBuffer;
-static AxShaderData *ShaderData;
+
+static AxCamera PerspCamera;
+static AxCamera DiffuseCamera;
+
+static AxShaderData *ModelShaderData;
+static AxShaderData *DiffuseShaderData;
+
+static AxViewport DiffuseViewport;
+static AxViewport Viewport;
 static AxDrawData *DrawData;
-static AxMesh Mesh;
+
+std::unordered_map<std::string, AxMesh> Meshes;
+std::unordered_map<std::string, AxModel> Models;
 
 static AxApplication *TheApp;
 
-// TODO(mdeforge): In lieu of having a scene to manage...
-static AxModel GlobalModel;
-static uint32_t ShaderProgramID;
-
-static void ResetState()
+static void RegisterCallbacks()
 {
-    TheApp->Viewer.CameraTransform = {
-        .Position = { 0, 0, 0 },
-        .Rotation = { 0, 0, 0 },
-        .Scale = { 1, 1, 1 }
-    };
+    WindowAPI->SetKeyCallback(TheApp->Window, [](AxWindow *Window, int Key, int ScanCode, int Action, int Mods) {
+        if (Key == AX_KEY_ESCAPE) {
+            TheApp->IsRequestingExit = true;
+        }
+    });
+}
+
+static void CreatePerspectiveCamera(AxVec3 Position, AxVec3 Target, AxVec3 Up)
+{
+    float FOVRadians = 45.0f * (AX_PI / 180.0f);
+    float AspectRatio = Viewport.Size.X / Viewport.Size.Y;
+
+    // Create projection matrix - note we're using the Forward matrix
+    AxMat4x4Inv PerspectiveProjection = CameraAPI->CalcPerspectiveProjection(
+        FOVRadians, AspectRatio, 0.1f, 100.0f);
+
+    PerspCamera.ViewMatrix = LookAt(Position, Target, Up);
+    PerspCamera.ProjectionMatrix = PerspectiveProjection;
+}
+
+static void CreateOrthographicCamera(AxVec3 Position, AxVec3 Target, AxVec3 Up, float ZoomFactor = 1.0f)
+{
+    // Calculate the aspect ratio of our viewport
+    float aspect = DiffuseViewport.Size.X / DiffuseViewport.Size.Y;
+
+    // Base size of the view volume (before zoom)
+    float baseHeight = 2.0f;  // This gives us a 2x2 unit view volume at zoom = 1
+    float baseWidth = baseHeight * aspect;
+
+    // Apply zoom factor - larger zoom factor means smaller view volume
+    float height = baseHeight / ZoomFactor;
+    float width = baseWidth / ZoomFactor;
+
+    // Set up the orthographic bounds
+    float Left   = -width * 0.5f;
+    float Right  =  width * 0.5f;
+    float Bottom = -height * 0.5f;
+    float Top    =  height * 0.5f;
+    float Near   =  0.1f;
+    float Far    =  10.0f;
+
+    AxMat4x4Inv OrthographicProjection = CameraAPI->CalcOrthographicProjection(Left, Right, Bottom, Top, Near, Far);
+
+    DiffuseCamera.ViewMatrix = LookAt(Position, Target, Up);
+    DiffuseCamera.ProjectionMatrix = OrthographicProjection;
 }
 
 static AxWindow *CreateWindow()
@@ -62,8 +107,8 @@ static AxWindow *CreateWindow()
         "AxonSDK OpenGL Example",
         100,
         100,
-        static_cast<int32_t>(DISPLAY_SIZE.Width),
-        static_cast<int32_t>(DISPLAY_SIZE.Height),
+        static_cast<int32_t>(WINDOW_SIZE.Width),
+        static_cast<int32_t>(WINDOW_SIZE.Height),
         (AxWindowStyle)StyleFlags
     );
 
@@ -73,44 +118,46 @@ static AxWindow *CreateWindow()
     return (Window);
 }
 
-static void ConstructShader()
+static AxShaderData *ConstructShader(const char *VertexShaderPath, const char *FragmentShaderPath)
 {
     // Load shaders
-    AxFile VertShader = FileAPI->OpenForRead("shaders/vert.glsl");
-    AXON_ASSERT(FileAPI->IsValid(VertShader) && "Vertex shader file size is invalid!");
-    AxFile FragShader = FileAPI->OpenForRead("shaders/frag.glsl");
-    AXON_ASSERT(FileAPI->IsValid(FragShader) && "Fragment shader file size is invalid!");
+    AxFile VertexShader = FileAPI->OpenForRead(VertexShaderPath);
+    AXON_ASSERT(FileAPI->IsValid(VertexShader) && "Vertex shader file size is invalid!");
+    AxFile FragmentShader = FileAPI->OpenForRead(FragmentShaderPath);
+    AXON_ASSERT(FileAPI->IsValid(FragmentShader) && "Fragment shader file size is invalid!");
 
-    uint64_t VertFileSize = FileAPI->Size(VertShader);
-    uint64_t FragFileSize = FileAPI->Size(FragShader);
+    uint64_t VertexShaderFileSize = FileAPI->Size(VertexShader);
+    uint64_t FragmentShaderFileSize = FileAPI->Size(FragmentShader);
 
     // Allocate text buffers
-    char *VertexShaderBuffer = (char *)malloc(VertFileSize + 1);
-    char *FragShaderBuffer = (char *)malloc(FragFileSize + 1);
+    char *VertexShaderBuffer = (char *)malloc(VertexShaderFileSize + 1);
+    char *FragmentShaderBuffer = (char *)malloc(FragmentShaderFileSize + 1);
 
     // Read shader text
-    FileAPI->Read(VertShader, VertexShaderBuffer, (uint32_t)VertFileSize);
-    FileAPI->Read(FragShader, FragShaderBuffer, (uint32_t)FragFileSize);
+    FileAPI->Read(VertexShader, VertexShaderBuffer, (uint32_t)VertexShaderFileSize);
+    FileAPI->Read(FragmentShader, FragmentShaderBuffer, (uint32_t)FragmentShaderFileSize);
 
     // Null-terminate
-    VertexShaderBuffer[VertFileSize] = '\0';
-    FragShaderBuffer[FragFileSize] = '\0';
+    VertexShaderBuffer[VertexShaderFileSize] = '\0';
+    FragmentShaderBuffer[FragmentShaderFileSize] = '\0';
 
     // Create shader program
-    ShaderProgramID = RenderAPI->CreateProgram("", (char *)VertexShaderBuffer, (char *)FragShaderBuffer);
+    uint32_t ShaderProgramID = RenderAPI->CreateProgram("", (char *)VertexShaderBuffer, (char *)FragmentShaderBuffer);
     AXON_ASSERT(ShaderProgramID && "ShaderProgram is NULL!");
 
     // Free text buffers
     free(VertexShaderBuffer);
-    free(FragShaderBuffer);
+    free(FragmentShaderBuffer);
 
     // Setup the shader data
-    ShaderData = (struct AxShaderData *)calloc(1, sizeof(AxShaderData));
+    AxShaderData *ShaderData = (struct AxShaderData *)calloc(1, sizeof(AxShaderData));
     ShaderData->ShaderHandle = ShaderProgramID;
 
     // This will go away after I make the changes found in the TODO in GetAttribLocations
     bool Result = RenderAPI->GetAttributeLocations(ShaderProgramID, ShaderData);
     AXON_ASSERT(Result && "Failed to get shader attribute locations!");
+
+    return ShaderData;
 }
 
 static bool LoadTexture(AxTexture *Texture, cgltf_texture_view TextureView, cgltf_data *ModelData, const char *BasePath)
@@ -160,21 +207,25 @@ static bool LoadTexture(AxTexture *Texture, cgltf_texture_view TextureView, cglt
     RenderAPI->InitTexture(Texture, Pixels);
     RenderAPI->BindTexture(Texture, Texture->ID);
 
-    if (Pixels) {
-        printf("Texture loaded successfully: %dx%d with %d channels\n", 
-               Width, Height, Channels);
-        printf("First few pixels (RGBA): ");
-        for (int i = 0; i < std::min(4, Width * Height * Channels); i += Channels) {
-            for (int c = 0; c < Channels; c++) {
-                printf("%d ", Pixels[i + c]);
-            }
-            printf(", ");
-        }
-        printf("\n");
-    } else {
-        printf("Failed to load texture pixels!\n");
-        return false;
+    free(Pixels);
+
+    return (true);
+}
+
+static bool LoadTexture2(AxTexture *Texture, const char *Path)
+{
+    int32_t Width, Height, Channels;
+    stbi_uc *Pixels = stbi_load(Path, &Width, &Height, &Channels, 0);
+    if (!Pixels) {
+        return (false);
     }
+
+    Texture->Width = Width;
+    Texture->Height = Height;
+    Texture->Channels = Channels;
+
+    RenderAPI->InitTexture(Texture, Pixels);
+    RenderAPI->BindTexture(Texture, Texture->ID);
 
     free(Pixels);
 
@@ -194,7 +245,7 @@ void LoadFloatAttribute(cgltf_accessor* Accessor, std::vector<float>& AttributeD
     }
 }
 
-bool LoadModel(std::string_view File, AxModel *Model)
+bool LoadModel(std::string_view File, AxModel *Model, AxMesh *Mesh)
 {
     cgltf_options Options = {};
     cgltf_data* ModelData = nullptr;
@@ -218,7 +269,7 @@ bool LoadModel(std::string_view File, AxModel *Model)
 
     for (cgltf_size i = 0; i < ModelData->materials_count; ++i)
     {
-        AxTexture Texture = {};  // Create temporary texture
+        AxTexture Texture = {.ID = 1};  // Create temporary texture
         const auto& Material = ModelData->materials[i];
         const cgltf_pbr_metallic_roughness* pbr = &Material.pbr_metallic_roughness;
 
@@ -226,6 +277,8 @@ bool LoadModel(std::string_view File, AxModel *Model)
         if (pbr->base_color_texture.texture) {
             if (LoadTexture(&Texture, pbr->base_color_texture, ModelData, BasePath)) {
                 ArrayPush(Model->Textures, Texture);  // Only push if load successful
+            } else {
+                return (false);
             }
         }
     }
@@ -307,6 +360,7 @@ bool LoadModel(std::string_view File, AxModel *Model)
             printf("Loaded mesh with %zu vertices and %zu indices\n", VertexData.size(), IndexData.size());
 
             // Create the mesh
+            AxMesh Mesh;
             RenderAPI->InitMesh(&Mesh, VertexData.data(), IndexData.data(),
                                 (uint32_t)VertexData.size(), (uint32_t)IndexData.size());
             ArrayPush(Model->Meshes, Mesh);
@@ -319,34 +373,75 @@ bool LoadModel(std::string_view File, AxModel *Model)
 
 static bool ConstructObject()
 {
-    return (LoadModel("models/suzanne.glb", &GlobalModel));
+    // Create a simple monkey model
+    AxMesh MonkeyMesh = {};
+    AxModel MonkeyModel = {};
+    if (!LoadModel("models/suzanne.glb", &MonkeyModel, &MonkeyMesh)) {
+        fprintf(stderr, "Failed to load monkey model!\n");
+        return (false);
+    }
+    // Create a simple rectangle mesh
+    AxMesh DiffuseMesh = {};
+    AxModel DiffuseModel = {};
+    AxTexture DiffuseTexture = { .ID = 2 };
+    if (!LoadTexture2(&DiffuseTexture, "textures/TCom_Rock_CliffVolcanic_1K_albedo.png")) {
+        fprintf(stderr, "Failed to load diffuse texture!\n");
+        return (false);
+    }
 
-    //ArrayPush(Model.Meshes, Mesh);
+    // Create a simple rectangle mesh
+    AxVertex RectVertices[] = {
+        // Position                     Normal                  TexCoord
+        {{-0.5f, 0.0f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}}, // Bottom left
+        {{ 0.5f, 0.0f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}}, // Bottom right
+        {{ 0.5f, 0.0f,  0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f}}, // Top right
+        {{-0.5f, 0.0f,  0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f}}  // Top left
+    };
+
+    AxDrawIndex RectIndices[] = {
+        0, 1, 2,  // First triangle
+        2, 3, 0   // Second triangle
+    };
+
+    RenderAPI->InitMesh(&DiffuseMesh, RectVertices, RectIndices, 4, 6);
+    ArrayPush(DiffuseModel.Textures, DiffuseTexture);
+    ArrayPush(DiffuseModel.Meshes, DiffuseMesh);
+
+    Meshes["Diffuse"] = DiffuseMesh;
+    Models["Diffuse"] = DiffuseModel;
+    Meshes["Monkey"] = MonkeyMesh;
+    Models["Monkey"] = MonkeyModel;
+
+    return (true);
+}
+
+static void ConstructViewport()
+{
+    Viewport.Position = { 0.0f, 0.0f };
+    Viewport.Size = { WINDOW_SIZE.Width, WINDOW_SIZE.Height};
+    Viewport.Scale = { 1.0f, 1.0f };
+    Viewport.Depth = { 0.0f, 1.0f };
+    Viewport.IsActive = true;
+    Viewport.ClearColor = { 0.42f, 0.51f, 0.54f, 0.0f };
+
+    float ViewportSize = std::min(WINDOW_SIZE.Width / 5.0f, WINDOW_SIZE.Height / 5.0f);
+    DiffuseViewport.Position = { 0.0f, WINDOW_SIZE.Height - ViewportSize };
+    DiffuseViewport.Size = { ViewportSize, ViewportSize };
+    DiffuseViewport.Scale = { 1.0f, 1.0f };
+    DiffuseViewport.Depth = { 0.0f, 1.0f };
+    DiffuseViewport.IsActive = true;
+    DiffuseViewport.ClearColor = { 0.2f, 0.2f, 0.2f, 1.0f };
 }
 
 static void ConstructScene()
 {
     // Create and initialize the draw data
-    AxVec2 DisplayPos = { 0.0f, 0.0f };
-    AxVec2 DisplaySize = DISPLAY_SIZE;
-    AxVec2 FramebufferScale = { 1.0f, 1.0f };
     DrawData = (struct AxDrawData *)calloc(1, sizeof(AxDrawData));
     DrawData->Valid = true;
-    DrawData->DisplayPos = DisplayPos;
-    DrawData->DisplaySize = DisplaySize;
-    DrawData->FramebufferScale = FramebufferScale;
 }
 
 static AxApplication *Create(int argc, char **argv)
 {
-    // bool ShouldPrintUsage = false;
-    // for (int32_t i = 1; i < argc; ++i)
-    // {
-    //     if (!strcmp(argv[i], "--help") || !strcmp(argv[i], "-h")) {
-    //         ShouldPrintUsage = true;
-    //     }
-    // }
-
     // Attempt to load plugins
     AxWallClock DLLLoadStartTime = PlatformAPI->TimeAPI->WallTime();
     if (!PluginAPI->Load("libAxWindow.dll", false)) {
@@ -369,16 +464,18 @@ static AxApplication *Create(int argc, char **argv)
     TheApp->WindowAPI = WindowAPI;
     TheApp->PluginAPI = PluginAPI;
 
-    ResetState();
-
     // Create default window
     WindowAPI->Init();
 
     TheApp->Window = CreateWindow();
     AXON_ASSERT(TheApp->Window && "Window is NULL!");
 
+    RegisterCallbacks();
+
     // Initialize the renderer and setup backend
     RenderAPI->CreateContext(TheApp->Window);
+
+    ConstructViewport();
 
     auto Info = RenderAPI->GetInfo(true);
     printf("Vendor: %s\n", Info.Vendor);
@@ -386,9 +483,21 @@ static AxApplication *Create(int argc, char **argv)
     printf("GL Version: %s\n", Info.GLVersion);
     printf("GLSL Version: %s\n", Info.GLSLVersion);
 
-    ConstructShader();
+    ModelShaderData = ConstructShader("shaders/vert.glsl", "shaders/frag.glsl");
+    DiffuseShaderData = ConstructShader("shaders/ortho.glsl", "shaders/frag.glsl");
 
     ConstructScene();
+
+    AxVec3 CameraPos = { 0.0f, 0.0f, 8.0f };
+    AxVec3 CameraTarget = { 0.0f, 0.0f, 0.0f };
+    AxVec3 Up = { 0.0f, 1.0f, 0.0f };
+    CreatePerspectiveCamera(CameraPos, CameraTarget, Up);
+
+    // Position the orthographic camera directly above looking straight down
+    AxVec3 OrthoCameraPos = { 0.0f, 1.0f, 0.0f };
+    AxVec3 OrthoCameraTarget = { 0.0f, 0.0f, 0.0f };
+    AxVec3 OrthoUp = { 0.0f, 0.0f, -1.0f };  // Up vector points towards negative Z for proper top-down orientation
+    CreateOrthographicCamera(OrthoCameraPos, OrthoCameraTarget, OrthoUp, 1.0f);  // Start with default 1.0 zoom
 
     // Create scene
     if (!ConstructObject()) {
@@ -401,49 +510,34 @@ static AxApplication *Create(int argc, char **argv)
     return (TheApp);
 }
 
-static void Update()
+static void RenderModel(AxModel* Model, AxMesh* Mesh, AxCamera* Camera, struct AxShaderData* ShaderData, struct AxViewport* Viewport) 
 {
-    // Create matrices
-    float FOVRadians = 45.0f * (AX_PI / 180.0f);
-    float AspectRatio = DrawData->DisplaySize.X / DrawData->DisplaySize.Y;
+    // Set shader uniforms for this specific model
+    RenderAPI->SetUniform(ShaderData, "view", &Camera->ViewMatrix);
+    RenderAPI->SetUniform(ShaderData, "projection", &Camera->ProjectionMatrix.Forward);
 
-    // Create projection matrix - note we're using the Forward matrix
-    AxMat4x4Inv PerspectiveProjection = CameraAPI->CalcPerspectiveProjection(
-        FOVRadians, AspectRatio, 0.1f, 100.0f);
-
-    // Create view matrix - move camera back to see object
-    AxVec3 CameraPos = { 0.0f, 0.0f, 8.0f };
-    AxVec3 CameraTarget = { 0.0f, 0.0f, 0.0f };
-    AxVec3 Up = { 0.0f, 1.0f, 0.0f };
-    AxMat4x4 ViewMatrix = LookAt(CameraPos, CameraTarget, Up);
-
-    // Create model matrix
-    AxMat4x4 ModelMatrix = Identity();
-    Translate(ModelMatrix, (AxVec3){ 0.0f, 0.0f, 0.0f });
-    //ModelMatrix = MatZRotation(ModelMatrix, 90.0f);
-    ModelMatrix = MatXRotation(ModelMatrix, -90.0f);
-
-    // Create color
-    AxVec3 Color = { 1.0f, 1.0f, 1.0f };
-
-    // Debug texture binding
-    if (GlobalModel.Textures && ArraySize(GlobalModel.Textures) > 0) {
-        RenderAPI->BindTexture(&GlobalModel.Textures[0], 0);
-        RenderAPI->SetUniform(ShaderData, "Texture", 0);
-    } else {
-        printf("No textures available to bind!\n");
-    }
-
+    // Use the model's transform if available, otherwise use identity
+    AxMat4x4 ModelMatrix = Model->Transforms ? Model->Transforms[0] : Identity();
     RenderAPI->SetUniform(ShaderData, "model", &ModelMatrix);
-    RenderAPI->SetUniform(ShaderData, "view", &ViewMatrix);
-    RenderAPI->SetUniform(ShaderData, "projection", &PerspectiveProjection.Forward);
-    RenderAPI->SetUniform(ShaderData, "color", &Color);
 
-    // Set light properties
+    // Set lighting uniforms (these could also be moved to a global lighting state)
     AxVec3 LightPos = { 5.0f, 5.0f, 5.0f };
     AxVec3 LightColor = { 1.0f, 1.0f, 1.0f };
     RenderAPI->SetUniform(ShaderData, "LightPos", &LightPos);
     RenderAPI->SetUniform(ShaderData, "LightColor", &LightColor);
+
+    // Set material properties
+    AxVec3 Color = { 1.0f, 1.0f, 1.0f };
+    RenderAPI->SetUniform(ShaderData, "color", &Color);
+
+    // Bind texture if available
+    if (Model->Textures) {
+        RenderAPI->BindTexture(&Model->Textures[0], 0);
+        RenderAPI->SetUniform(ShaderData, "Texture", 0);
+    }
+
+    // Render the mesh
+    RenderAPI->Render(Viewport, Mesh, ShaderData);
 }
 
 static bool Tick(struct AxApplication *App)
@@ -462,24 +556,31 @@ static bool Tick(struct AxApplication *App)
     WindowAPI->PollEvents(TheApp->Window);
 
     // Check for close
-    if (WindowAPI->HasRequestedClose(TheApp->Window)) {
-        return (false);
+    if (WindowAPI->HasRequestedClose(TheApp->Window) || App->IsRequestingExit) {
+        return(true);
     }
 
     // Start the frame
     RenderAPI->NewFrame();
-    Update();
 
-    RenderAPI->Render(DrawData, &Mesh, ShaderData);
+    // We're not rending the other viewport here yet, questions about ordering -- textures then render?
+    // What to do with update()?
+    auto MonkeyModel = Models["Monkey"];
+    auto DiffuseModel = Models["Diffuse"];
+
+    RenderModel(&MonkeyModel, &MonkeyModel.Meshes[0], &PerspCamera, ModelShaderData, &Viewport);
+    RenderModel(&DiffuseModel, &DiffuseModel.Meshes[0], &DiffuseCamera, DiffuseShaderData, &DiffuseViewport);
+
     RenderAPI->SwapBuffers();
 
-    return(true);
+    return(App->IsRequestingExit);
 }
 
 static bool Destroy(struct AxApplication *App)
 {
     // Clean up resources
-    RenderAPI->DestroyProgram(ShaderProgramID);
+    RenderAPI->DestroyProgram(ModelShaderData->ShaderHandle);
+    RenderAPI->DestroyProgram(DiffuseShaderData->ShaderHandle);
 
     // Shutdown renderer
     RenderAPI->DestroyContext();
@@ -508,11 +609,6 @@ extern "C" AXON_DLL_EXPORT void LoadPlugin(struct AxAPIRegistry *APIRegistry, bo
         PlatformAPI = (struct AxPlatformAPI *)APIRegistry->Get(AXON_PLATFORM_API_NAME);
         FileAPI = PlatformAPI->FileAPI;
         RegistryAPI = APIRegistry;
-
-        // TODO(mdeforge): Can we do this elsewhere? Because if not, we may need a list of plugins to load
-        // prior to getting here so we can do this here. I think we may just need to cache the APIRegistry
-        // and then we should be good to maintain a list of EnginePlugins *
-        //DialogEditorAPI = (struct EditorPlugin *)APIRegistry->Get("AxDialogEditorAPI");
 
         APIRegistry->Set(AXON_APPLICATION_API_NAME, AxApplicationAPI, sizeof(struct AxApplicationAPI));
     }
