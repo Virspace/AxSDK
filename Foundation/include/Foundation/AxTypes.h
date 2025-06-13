@@ -78,6 +78,11 @@ typedef union AxVec2
         float Width, Height;
     };
 
+    struct
+    {
+        float Min, Max;
+    };
+
     float XY[2];
 } AxVec2;
 
@@ -115,6 +120,16 @@ typedef union AxVec4
     };
 
     float W;
+  };
+
+  struct
+  {
+    union
+    {
+        float R, G, B, A;
+    };
+
+    float RGBA[4];
   };
 
   float E[4];

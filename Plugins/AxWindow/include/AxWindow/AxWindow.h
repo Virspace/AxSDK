@@ -155,6 +155,17 @@
 
 #define AX_KEY_UNKNOWN        -1
 
+// Window initialization error codes
+enum AxWindowError
+{
+    AX_WINDOW_ERROR_NONE = 0,
+    AX_WINDOW_ERROR_WINDOW_REGISTRATION_FAILED,
+    AX_WINDOW_ERROR_WINDOW_CREATION_FAILED,
+    AX_WINDOW_ERROR_RAW_INPUT_REGISTRATION_FAILED,
+    AX_WINDOW_ERROR_INVALID_PARAMETERS,
+    AX_WINDOW_ERROR_UNKNOWN
+};
+
 // Window style flags
 enum AxWindowStyle
 {
@@ -295,7 +306,7 @@ typedef void (*AxCharCallback)(struct AxWindow *Window, unsigned int Char);
 
 struct AxWindowAPI
 {
-    void (*Init)(void);
+    enum AxWindowError (*Init)(void);
 
     /**
      * @brief Creates a new window.

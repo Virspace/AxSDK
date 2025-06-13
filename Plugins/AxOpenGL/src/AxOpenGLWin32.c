@@ -8,7 +8,7 @@
 #include "Foundation/AxAPIRegistry.h"
 #include "Foundation/AxMath.h"
 #include "Foundation/AxPlatform.h"
-#include "Foundation/AxCamera.h"
+#include "GL/glcorearb.h"
 
 #define AXARRAY_IMPLEMENTATION
 #include "Foundation/AxArray.h"
@@ -411,124 +411,122 @@ static struct AxOpenGLInfo AxGetInfo(bool ModernContext)
     return (Result);
 }
 
+static struct AxViewport *AxCreateViewport(AxVec2 Position, AxVec2 Size)
+{
+    struct AxViewport *Result = calloc(1, sizeof(struct AxViewport));
+    Result->Position = Position;
+    Result->Size = Size;
+    Result->Depth = (AxVec2) { 0.0f, 1.0f };
+    Result->Scale = (AxVec2) { 1.0f, 1.0f };
+    Result->IsActive = true;
+
+    return(Result);
+}
+
+static void AxDestroyViewport(struct AxViewport *Viewport)
+{
+    SAFE_FREE(Viewport);
+}
+
 static void AxNewFrame(void)
 {
     AXON_ASSERT(ContextInitialized && "Context not initialized in NewFrame()!");
 
-    // Enable depth testing if your mesh needs it
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LESS);
+    // Reset to default OpenGL state at start of frame
+    glDisable(GL_SCISSOR_TEST);
+    glDisable(GL_DEPTH_TEST);
 
-    // Clear both color and depth buffer
-    glClearColor(0.42f, 0.51f, 0.54f, 0.0f);
+    // Reset viewport to full window size
+    GLint viewport[4];
+    glGetIntegerv(GL_VIEWPORT, viewport);
+    glViewport(0, 0, viewport[2], viewport[3]);
+
+    // Clear the entire window with the default background color
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 
-void RenderDrawData(AxDrawData *DrawData)
+static void AxSetActiveViewport(struct AxViewport *Viewport)
 {
-    AXON_ASSERT(ContextInitialized && "Context not initialized in RenderDrawData()!");
+    AXON_ASSERT(ContextInitialized && "Context not initialized in SetActiveViewport()!");
+    AXON_ASSERT(Viewport && "Viewport is NULL in SetActiveViewport()!");
 
-    // TODO(mdeforge): Avoid rendering when minimized
+    if (Viewport->IsActive) {
+        // Get current window height for Y-flip
+        GLint viewport[4];
+        glGetIntegerv(GL_VIEWPORT, viewport);
+        int32_t WindowHeight = viewport[3];
 
-    //SetupRenderState(DrawData, FramebufferWidth, FramebufferHeight);
-    glDisable(GL_FRAMEBUFFER_SRGB);
+        // Calculate flipped Y coordinate
+        int32_t FlippedY = WindowHeight - (Viewport->Position.Y + Viewport->Size.Y);
 
-    // Will project scissor/clipping rectangles into framebuffer space
-    // AxVec2 ClipOff = DrawData->DisplayPos;
-    // AxVec2 ClipScale = DrawData->FramebufferScale;
+        // Set viewport transform
+        glViewport(
+            (GLint)Viewport->Position.X,
+            (GLint)FlippedY,
+            (GLsizei)(Viewport->Size.X * Viewport->Scale.X),
+            (GLsizei)(Viewport->Size.Y * Viewport->Scale.Y)
+        );
 
-    // Render command lists
-    // for (int i = 0; i < ArraySize(DrawData->DrawLists); i++)
-    // {
-    //     struct AxDrawList *DrawList = DrawData->DrawLists[i];
-    //     glBindVertexArray(DrawList->VAO);
+        // Enable and set scissor to match viewport exactly
+        glEnable(GL_SCISSOR_TEST);
+        glScissor(
+            (GLint)Viewport->Position.X,
+            (GLint)FlippedY,
+            (GLsizei)(Viewport->Size.X * Viewport->Scale.X),
+            (GLsizei)(Viewport->Size.Y * Viewport->Scale.Y)
+        );
 
-    //     // If the draw list dirty, buffer data
-    //     // if (DrawList->IsDirty)
-    //     // {
-    //     //     const struct AxVertex *VertexBuffer = DrawList->VertexBuffer;
-    //     //     const AxDrawIndex *IndexBuffer = DrawList->IndexBuffer;
-    //     //     fprintf(stdout, "GL Error: %d\n", glGetError());
+        // Set up depth testing for this viewport
+        glEnable(GL_DEPTH_TEST);
+        glDepthFunc(GL_LESS);
+        glDepthRange(Viewport->Depth.Min, Viewport->Depth.Max);
+        glClearDepth(Viewport->Depth.Max);
 
-    //     //     // Upload vertex and index buffers
-    //     //     glBufferData(GL_ARRAY_BUFFER, ArraySizeInBytes(VertexBuffer), VertexBuffer, GL_STATIC_DRAW);
-    //     //     glBufferData(GL_ELEMENT_ARRAY_BUFFER, ArraySizeInBytes(IndexBuffer), IndexBuffer, GL_STATIC_DRAW);
-    //     //     fprintf(stdout, "GL Error: %d\n", glGetError());
-    //     //     DrawList->IsDirty = false;
-    //     // }
-
-    //     size_t CommandBufferSize = ArraySize(DrawList->CommandBuffer);
-    //     for (int j = 0; j < CommandBufferSize; j++)
-    //     {
-    //         const struct AxDrawCommand *Command = &DrawList->CommandBuffer[j];
-    //         if (Command)
-    //         {
-    //             struct AxDrawable *Drawable = Command->Drawable;
-    //             AXON_ASSERT(Drawable && "Drawable is NULL in RenderDrawData()!");
-
-    //             struct AxShaderData *ShaderData = Drawable->Material->ShaderData;
-    //             AXON_ASSERT(ShaderData && "ShaderData is NULL in RenderDrawData()!");
-
-    //             glUseProgram(ShaderData->ShaderHandle);
-
-    //             // Update projection matrix
-    //             float L = (float)DrawData->DisplayPos.X;
-    //             float R = (float)DrawData->DisplayPos.X + (float)DrawData->DisplaySize.X;
-    //             float B = (float)DrawData->DisplayPos.Y;
-    //             float T = (float)DrawData->DisplayPos.Y + (float)DrawData->DisplaySize.Y;
-    //             AxMat4x4f OrthoProjection = CameraAPI->CalcOrthographicProjection(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f);
-    //             OrthoProjection = Transpose(OrthoProjection);
-    //             SetUniform(ShaderData, "ProjMtx", &OrthoProjection);
-
-    //             // Project scissor/clipping rectangles into framebuffer space
-    //             // AxVec2 ClipMin = {
-    //             //     (Command->ClipRect.X - ClipOff.X) * ClipScale.X,
-    //             //     (Command->ClipRect.Y - ClipOff.Y) * ClipScale.Y
-    //             // };
-
-    //             // AxVec2 ClipMax = {
-    //             //     (Command->ClipRect.Z - ClipOff.X) * ClipScale.X,
-    //             //     (Command->ClipRect.W - ClipOff.Y) * ClipScale.Y
-    //             // };
-
-    //             // if (ClipMax.X < ClipMin.X || ClipMax.Y < ClipMin.Y) {
-    //             //     continue;
-    //             // }
-
-    //             // Apply scissor/clipping rectangle (Y is inverted in OpenGL)
-    //             //glScissor((int)ClipMin.X, (int)(FramebufferHeight - ClipMax.Y), (int)(ClipMax.X - ClipMin.X), (int)(ClipMax.Y - ClipMin.Y));
-
-    //             // Bind texture and draw
-    //             //glBindTexture(GL_TEXTURE_2D, (GLuint)Command->TextureID);
-    //             //fprintf(stdout, "GL Error: %d\n", glGetError());
-    //             glDrawElementsBaseVertex(
-    //                 GL_TRIANGLES,
-    //                 (GLsizei)Command->ElementCount,
-    //                 GL_UNSIGNED_INT,
-    //                 0,
-    //                 0
-    //             );
-    //         }
-    //     }
-    // }
+        // Clear just this viewport with its color
+        glClearColor(
+            Viewport->ClearColor.X,
+            Viewport->ClearColor.Y,
+            Viewport->ClearColor.Z,
+            Viewport->ClearColor.W
+        );
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    }
 }
 
-void AxRender(AxDrawData *DrawData, struct AxMesh *Mesh, struct AxShaderData *ShaderData)
+static void AxRender(struct AxViewport *Viewport, struct AxMesh *Mesh, struct AxShaderData *ShaderData)
 {
     AXON_ASSERT(ContextInitialized && "Context not initialized in Render()!");
+    AXON_ASSERT(Viewport && "Viewport is NULL in Render()!");
+    AXON_ASSERT(Mesh && "Mesh is NULL in Render()!");
+    AXON_ASSERT(ShaderData && "ShaderData is NULL in Render()!");
 
+    // Save current OpenGL state
+    GLint lastViewport[4];
+    glGetIntegerv(GL_VIEWPORT, lastViewport);
+    GLboolean lastScissorTest = glIsEnabled(GL_SCISSOR_TEST);
+    GLboolean lastDepthTest = glIsEnabled(GL_DEPTH_TEST);
+
+    // Set up viewport and render
+    AxSetActiveViewport(Viewport);
     glUseProgram(ShaderData->ShaderHandle);
+    glBindVertexArray(Mesh->VAO);
 
-    // Bind the actual VAO from the mesh
-    glBindVertexArray(Mesh->VAO);  // Use the stored VAO handle
-
-    // Draw the mesh
     glDrawElements(
         GL_TRIANGLES,
         Mesh->IndexCount,
         GL_UNSIGNED_INT,
         0
     );
+
+    // Restore previous OpenGL state
+    glViewport(lastViewport[0], lastViewport[1], lastViewport[2], lastViewport[3]);
+    if (!lastScissorTest) {
+        glDisable(GL_SCISSOR_TEST);
+    }
+    if (!lastDepthTest) {
+        glDisable(GL_DEPTH_TEST);
+    }
 
     // Check for errors
     GLenum err;
@@ -678,9 +676,6 @@ static bool AxGetAttributeLocations(const uint32_t ProgramID, struct AxShaderDat
         // Don't return false here as this is now an expected uniform
     }
 
-    Result = glGetError();
-    AXON_ASSERT(!Result && "OpenGL Error in CreateProgram()!");
-
     // ShaderData->AttribLocationVertexColor = glGetAttribLocation(ShaderData->ShaderHandle, "Color");
     // if (ShaderData->AttribLocationVertexColor < 0) {
     //     return (false);
@@ -814,19 +809,12 @@ static void AxBindTexture(AxTexture *Texture, uint32_t Slot)
 
 static void AxInitMesh(AxMesh *Mesh, struct AxVertex *Vertices, uint32_t *Indices, uint32_t VertexCount, uint32_t IndexCount)
 {
-    printf("InitMesh: VertexCount=%u, IndexCount=%u\n", VertexCount, IndexCount);
-
     // Print first few vertices and indices for debugging
     for (uint32_t i = 0; i < min(VertexCount, 8); i++) {
         printf("V%u: (%f, %f, %f)\n", i,
                Vertices[i].Position.X,
                Vertices[i].Position.Y,
                Vertices[i].Position.Z);
-    }
-
-    for (uint32_t i = 0; i < min(IndexCount, 24); i += 3) {
-        printf("Triangle %u: %u, %u, %u\n", i/3,
-               Indices[i], Indices[i+1], Indices[i+2]);
     }
 
     // Create and bind VAO first
@@ -870,6 +858,9 @@ struct AxOpenGLAPI *AxOpenGLAPI = &(struct AxOpenGLAPI) {
     .CreateContext = AxCreateContext,
     .DestroyContext = AxDestroyContext,
     .GetInfo = AxGetInfo,
+    .CreateViewport = AxCreateViewport,
+    .DestroyViewport = AxDestroyViewport,
+    .SetActiveViewport = AxSetActiveViewport,
     .NewFrame = AxNewFrame,
     .Render = AxRender,
     .SwapBuffers = AxSwapBuffers,
