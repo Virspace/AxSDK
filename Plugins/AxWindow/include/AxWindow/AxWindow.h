@@ -155,6 +155,86 @@
 
 #define AX_KEY_UNKNOWN        -1
 
+// Window state enum (moved here to avoid forward declaration issues)
+enum AxWindowState
+{
+    AX_WINDOW_STATE_NORMAL,        ///< Window is in normal state (not minimized, maximized, or fullscreen)
+    AX_WINDOW_STATE_MINIMIZED,     ///< Window is minimized
+    AX_WINDOW_STATE_MAXIMIZED,     ///< Window is maximized
+    AX_WINDOW_STATE_FULLSCREEN     ///< Window is in fullscreen mode
+};
+
+// Input event types
+enum AxInputEventType
+{
+    AX_INPUT_EVENT_KEY,           ///< Keyboard key event
+    AX_INPUT_EVENT_CHAR,          ///< Unicode character input event
+    AX_INPUT_EVENT_MOUSE_MOVE,    ///< Mouse movement event
+    AX_INPUT_EVENT_MOUSE_BUTTON,  ///< Mouse button event
+    AX_INPUT_EVENT_MOUSE_SCROLL,  ///< Mouse scroll event
+    AX_INPUT_EVENT_WINDOW_FOCUS,  ///< Window focus event
+    AX_INPUT_EVENT_WINDOW_STATE   ///< Window state change event
+};
+
+// Input event structure
+typedef struct AxInputEvent
+{
+    enum AxInputEventType Type;   ///< Type of input event
+    uint64_t Timestamp;           ///< Event timestamp in milliseconds
+    
+    union {
+        struct {
+            int Key;              ///< Key code
+            int ScanCode;         ///< Platform-specific scan code
+            int Action;           ///< AX_PRESS, AX_RELEASE, or AX_REPEAT
+            int Mods;             ///< Modifier keys
+        } Key;
+        
+        struct {
+            uint32_t Char;        ///< Unicode character
+            int Mods;             ///< Modifier keys
+        } Char;
+        
+        struct {
+            double X;             ///< Mouse X position
+            double Y;             ///< Mouse Y position
+            double DeltaX;        ///< X movement delta
+            double DeltaY;        ///< Y movement delta
+        } MouseMove;
+        
+        struct {
+            int Button;           ///< Mouse button
+            int Action;           ///< AX_PRESS or AX_RELEASE
+            int Mods;             ///< Modifier keys
+        } MouseButton;
+        
+        struct {
+            double OffsetX;       ///< Horizontal scroll offset
+            double OffsetY;       ///< Vertical scroll offset
+        } MouseScroll;
+        
+        struct {
+            bool Focused;         ///< True if window gained focus, false if lost
+        } WindowFocus;
+        
+        struct {
+            enum AxWindowState OldState;  ///< Previous window state
+            enum AxWindowState NewState;  ///< New window state
+        } WindowState;
+    } Data;
+} AxInputEvent;
+
+// Input state structure for querying current input state
+typedef struct AxInputState
+{
+    bool Keys[AX_KEY_LAST + 1];           ///< Current key states
+    bool MouseButtons[AX_MOUSE_BUTTON_LAST + 1]; ///< Current mouse button states
+    AxVec2 MousePosition;                 ///< Current mouse position
+    AxVec2 MouseDelta;                    ///< Mouse movement since last frame
+    int Modifiers;                        ///< Current modifier key state
+    bool WindowFocused;                   ///< Window focus state
+} AxInputState;
+
 // Window initialization error codes
 enum AxWindowError
 {
@@ -163,6 +243,12 @@ enum AxWindowError
     AX_WINDOW_ERROR_WINDOW_CREATION_FAILED,
     AX_WINDOW_ERROR_RAW_INPUT_REGISTRATION_FAILED,
     AX_WINDOW_ERROR_INVALID_PARAMETERS,
+    AX_WINDOW_ERROR_INVALID_WINDOW,           // Window handle is NULL or invalid
+    AX_WINDOW_ERROR_OPERATION_FAILED,         // Generic operation failure
+    AX_WINDOW_ERROR_NOT_SUPPORTED,            // Operation not supported on this platform
+    AX_WINDOW_ERROR_ALREADY_EXISTS,           // Resource already exists
+    AX_WINDOW_ERROR_OUT_OF_MEMORY,            // Memory allocation failed
+    AX_WINDOW_ERROR_INVALID_STATE,            // Window is in wrong state for operation
     AX_WINDOW_ERROR_UNKNOWN
 };
 
@@ -297,6 +383,131 @@ typedef void (*AxMousePosCallback)(struct AxWindow *Window, double X, double Y);
 typedef void (*AxMouseButtonCallback)(struct AxWindow *Window, int Button, int Action, int Mods);
 typedef void (*AxMouseScrollCallback)(struct AxWindow *Window, AxVec2 Offset);
 typedef void (*AxCharCallback)(struct AxWindow *Window, unsigned int Char);
+typedef void (*AxWindowStateCallback)(struct AxWindow *Window, enum AxWindowState OldState, enum AxWindowState NewState);
+
+/**
+ * @brief Structure containing all window callbacks.
+ * @details Use this to set multiple callbacks at once or to get the current callback state.
+ */
+typedef struct AxWindowCallbacks
+{
+    AxKeyCallback Key;                    ///< Called when a key is pressed, released, or repeated
+    AxMousePosCallback MousePos;          ///< Called when the mouse cursor moves
+    AxMouseButtonCallback MouseButton;    ///< Called when a mouse button is pressed or released
+    AxMouseScrollCallback Scroll;         ///< Called when the mouse wheel is scrolled
+    AxCharCallback Char;                  ///< Called when a Unicode character is input
+    AxWindowStateCallback StateChanged;   ///< Called when the window state changes
+} AxWindowCallbacks;
+
+/**
+ * @brief Configuration structure for window creation.
+ * @details Use this to set all window properties at creation time. All fields are required.
+ */
+typedef struct AxWindowConfig
+{
+    const char *Title;                    ///< Window title
+    int32_t X;                           ///< Initial X position
+    int32_t Y;                           ///< Initial Y position
+    int32_t Width;                       ///< Window width
+    int32_t Height;                      ///< Window height
+    enum AxWindowStyle Style;            ///< Window style flags
+} AxWindowConfig;
+
+/**
+ * @brief Structure containing complete window state.
+ * @details Use this to get or set all window properties at once.
+ */
+typedef struct AxWindowStateInfo
+{
+    enum AxWindowState State;      ///< Current window state (normal, minimized, maximized, fullscreen)
+    int32_t X;                     ///< Window X position
+    int32_t Y;                     ///< Window Y position
+    int32_t Width;                 ///< Window width
+    int32_t Height;                ///< Window height
+    bool IsVisible;                ///< Window visibility
+    enum AxWindowStyle Style;      ///< Window style flags
+} AxWindowStateInfo;
+
+// MessageBox result struct
+typedef struct AxMessageBoxResult {
+    enum AxMessageBoxResponse Response; ///< Which button was pressed
+    bool Success;                      ///< True if the dialog was shown successfully
+    enum AxWindowError Error;          ///< Error code if dialog failed
+} AxMessageBoxResult;
+
+// File dialog result struct
+typedef struct AxFileDialogResult {
+    bool Success;                      ///< True if the user selected a file/folder
+    char FilePath[1024];               ///< Selected file/folder path (empty if canceled)
+    enum AxWindowError Error;          ///< Error code if dialog failed
+} AxFileDialogResult;
+
+// Platform detection and information
+enum AxPlatformType
+{
+    AX_PLATFORM_WINDOWS,
+    AX_PLATFORM_LINUX,
+    AX_PLATFORM_MACOS,
+    AX_PLATFORM_UNKNOWN
+};
+
+// Platform feature flags
+enum AxPlatformFeatures
+{
+    AX_PLATFORM_FEATURE_DPI_AWARENESS     = 1 << 0,  ///< Per-monitor DPI awareness
+    AX_PLATFORM_FEATURE_RAW_INPUT         = 1 << 1,  ///< Raw input support
+    AX_PLATFORM_FEATURE_HIGH_DPI          = 1 << 2,  ///< High DPI display support
+    AX_PLATFORM_FEATURE_MULTI_MONITOR     = 1 << 3,  ///< Multi-monitor support
+    AX_PLATFORM_FEATURE_OPENGL            = 1 << 4,  ///< OpenGL support
+    AX_PLATFORM_FEATURE_VULKAN            = 1 << 5,  ///< Vulkan support
+    AX_PLATFORM_FEATURE_DIRECTX           = 1 << 6,  ///< DirectX support
+    AX_PLATFORM_FEATURE_METAL             = 1 << 7,  ///< Metal support (macOS)
+    AX_PLATFORM_FEATURE_TOUCH             = 1 << 8,  ///< Touch input support
+    AX_PLATFORM_FEATURE_GAMEPAD           = 1 << 9,  ///< Gamepad input support
+    AX_PLATFORM_FEATURE_CLIPBOARD         = 1 << 10, ///< Clipboard support
+    AX_PLATFORM_FEATURE_DRAG_DROP         = 1 << 11, ///< Drag and drop support
+};
+
+// Platform information structure
+typedef struct AxPlatformInfo
+{
+    enum AxPlatformType Type;             ///< Current platform type
+    uint32_t Features;                    ///< Available platform features
+    uint32_t MajorVersion;                ///< Platform major version
+    uint32_t MinorVersion;                ///< Platform minor version
+    uint32_t BuildNumber;                 ///< Platform build number
+    char Name[64];                        ///< Platform name string
+    char Version[64];                     ///< Platform version string
+    bool IsInitialized;                   ///< Whether platform is properly initialized
+} AxPlatformInfo;
+
+// Platform-specific window hints
+typedef struct AxPlatformHints
+{
+    // Windows-specific hints
+    struct {
+        bool EnableCompositor;            ///< Enable DWM compositor integration
+        bool EnableAcrylic;               ///< Enable acrylic blur effect (Windows 10+)
+        bool EnableMica;                  ///< Enable mica material (Windows 11+)
+        bool DisableWindowShadows;        ///< Disable window shadows
+        bool UseImmersiveDarkMode;        ///< Use immersive dark mode
+    } Windows;
+    
+    // Linux-specific hints
+    struct {
+        const char *Display;              ///< X11 display name
+        const char *WindowManager;        ///< Preferred window manager
+        bool UseWayland;                  ///< Force Wayland backend
+        bool UseX11;                      ///< Force X11 backend
+    } Linux;
+    
+    // macOS-specific hints
+    struct {
+        bool EnableMetalLayer;            ///< Enable Metal layer for rendering
+        bool UseRetinaDisplay;            ///< Enable Retina display support
+        bool EnableVibrantWindow;         ///< Enable vibrant window effects
+    } MacOS;
+} AxPlatformHints;
 
 #ifndef AXON_WNDCLASSNAME
     #define AXON_WNDCLASSNAME "AXONENGINE"
@@ -316,9 +527,28 @@ struct AxWindowAPI
      * @param Width The width of the window.
      * @param Height The height of the window.
      * @param StyleFlags A bitmask of AxWindowStyle.
-     * @return An opaque pointer to a window.
+     * @param Error Optional pointer to receive error code. Can be NULL if error checking is not needed.
+     * @return An opaque pointer to a window, or NULL if creation failed.
      */
-    AxWindow *(*CreateWindow)(const char *Title, int32_t X, int32_t Y, int32_t Width, int32_t Height, enum AxWindowStyle StyleFlags);
+    AxWindow *(*CreateWindow)(const char *Title, int32_t X, int32_t Y, int32_t Width, int32_t Height, enum AxWindowStyle StyleFlags, enum AxWindowError *Error);
+
+    /**
+     * @brief Creates a new window using a configuration structure.
+     * @param Config Pointer to window configuration. Must be valid and complete.
+     * @param Error Optional pointer to receive error code. Can be NULL if error checking is not needed.
+     * @return An opaque pointer to a window, or NULL if creation failed.
+     * @details This function requires a complete configuration. Use CreateWindowDefault for simple cases.
+     */
+    AxWindow *(*CreateWindowWithConfig)(const AxWindowConfig *Config, enum AxWindowError *Error);
+
+    /**
+     * @brief Creates a new window with sensible defaults.
+     * @param Title The window title. If NULL, uses "Axon Window".
+     * @param Error Optional pointer to receive error code. Can be NULL if error checking is not needed.
+     * @return An opaque pointer to a window, or NULL if creation failed.
+     * @details Creates a centered, decorated, visible window with 800x600 resolution.
+     */
+    AxWindow *(*CreateWindowDefault)(const char *Title, enum AxWindowError *Error);
 
     /**
      * @brief Destroys the target window.
@@ -352,8 +582,10 @@ struct AxWindowAPI
      * @param Window The target window.
      * @param X The desired X position of the target window.
      * @param Y The desired Y position of the target window.
+     * @param Error Optional pointer to receive error code. Can be NULL if error checking is not needed.
+     * @return True if the operation succeeded, false otherwise.
      */
-    void (*SetWindowPosition)(AxWindow *Window, int32_t X, int32_t Y);
+    bool (*SetWindowPosition)(AxWindow *Window, int32_t X, int32_t Y, enum AxWindowError *Error);
 
     /**
      * @brief Gets the size of the target window.
@@ -368,15 +600,53 @@ struct AxWindowAPI
      * @param Window The target window.
      * @param Width The desired width of the target window.
      * @param Height The desired height of the target window.
+     * @param Error Optional pointer to receive error code. Can be NULL if error checking is not needed.
+     * @return True if the operation succeeded, false otherwise.
      */
-    void (*SetWindowSize)(AxWindow *Window, int32_t Width, int32_t Height);
+    bool (*SetWindowSize)(AxWindow *Window, int32_t Width, int32_t Height, enum AxWindowError *Error);
 
     /**
      * @brief Sets the visibility of the target window.
      * @param Window The target window.
      * @param IsVisible The desired visibility of the target window.
+     * @param Error Optional pointer to receive error code. Can be NULL if error checking is not needed.
+     * @return True if the operation succeeded, false otherwise.
      */
-    void (*SetWindowVisible)(AxWindow *Window, bool IsVisible);
+    bool (*SetWindowVisible)(AxWindow *Window, bool IsVisible, enum AxWindowError *Error);
+
+    /**
+     * @brief Gets the complete state of the target window.
+     * @param Window The target window.
+     * @param StateInfo Pointer to structure to be filled with window state.
+     * @param Error Optional pointer to receive error code. Can be NULL if error checking is not needed.
+     * @return True if the operation succeeded, false otherwise.
+     */
+    bool (*GetWindowStateInfo)(const AxWindow *Window, AxWindowStateInfo *StateInfo, enum AxWindowError *Error);
+
+    /**
+     * @brief Sets the complete state of the target window.
+     * @param Window The target window.
+     * @param StateInfo Pointer to structure containing desired window state.
+     * @param Error Optional pointer to receive error code. Can be NULL if error checking is not needed.
+     * @return True if the operation succeeded, false otherwise.
+     */
+    bool (*SetWindowState)(AxWindow *Window, const AxWindowStateInfo *StateInfo, enum AxWindowError *Error);
+
+    /**
+     * @brief Gets the current window state (normal, minimized, maximized, fullscreen).
+     * @param Window The target window.
+     * @return The current window state.
+     */
+    enum AxWindowState (*GetWindowState)(const AxWindow *Window);
+
+    /**
+     * @brief Sets the window state (normal, minimized, maximized, fullscreen).
+     * @param Window The target window.
+     * @param State The desired window state.
+     * @param Error Optional pointer to receive error code. Can be NULL if error checking is not needed.
+     * @return True if the operation succeeded, false otherwise.
+     */
+    bool (*SetWindowStateEnum)(AxWindow *Window, enum AxWindowState State, enum AxWindowError *Error);
 
     /**
      * @brief Returns platform window data
@@ -404,8 +674,10 @@ struct AxWindowAPI
      * @brief Sets the cursor mode of the target window.
      * @param Window The target window.
      * @param CursorMode The desired AxCursorMode.
+     * @param Error Optional pointer to receive error code. Can be NULL if error checking is not needed.
+     * @return True if the operation succeeded, false otherwise.
      */
-    void (*SetCursorMode)(AxWindow *Window, enum AxCursorMode CursorMode);
+    bool (*SetCursorMode)(AxWindow *Window, enum AxCursorMode CursorMode, enum AxWindowError *Error);
 
     /**
      * @brief Gets the cursor mode of the target window.
@@ -417,8 +689,10 @@ struct AxWindowAPI
      * @brief Sets the keyboard mode of the target window.
      * @param Window The target window.
      * @param KeyboardMode The desired KeyboardMode of the target window.
+     * @param Error Optional pointer to receive error code. Can be NULL if error checking is not needed.
+     * @return True if the operation succeeded, false otherwise.
      */
-    void (*SetKeyboardMode)(AxWindow *Window, enum AxKeyboardMode KeyboardMode);
+    bool (*SetKeyboardMode)(AxWindow *Window, enum AxKeyboardMode KeyboardMode, enum AxWindowError *Error);
 
     // /**
     //  * @brief Enables the cursor on the target window.
@@ -434,6 +708,52 @@ struct AxWindowAPI
 
     int32_t (*GetKey)(AxWindow *Window, int32_t Key);
 
+    /**
+     * @brief Opens a File Open dialog.
+     * @param Window A handle to the owner window of the dialog to be created. If this parameter is NULL, the dialog will have no owner window.
+     * @param Title The title of the dialog box, NULL sets default.
+     * @param Filter The file types to filter on, e.g. "Supported Files(*.ms, *.txt, *.cpp, *.h)\0*.ms;*.txt;*.cpp;*.h\0";
+     * @param InitialDirectory Sets the initial directory to open the file open dialog in, can be NULL.
+     * @return AxFileDialogResult struct with result and error info.
+     */
+    AxFileDialogResult (*OpenFileDialog)(const AxWindow *Window, const char *Title, const char *Filter, const char *InitialDirectory);
+
+    /**
+     * @brief Opens a File Save dialog.
+     * @param Window A handle to the owner window of the dialog to be created. If this parameter is NULL, the dialog will have no owner window.
+     * @param Title The title of the dialog box, NULL sets default.
+     * @param Filter The file types to filter on, e.g. "Supported Files(*.ms, *.txt, *.cpp, *.h)\0*.ms;*.txt;*.cpp;*.h\0";
+     * @param InitialDirectory Sets the initial directory to open the file save dialog in, can be NULL.
+     * @return AxFileDialogResult struct with result and error info.
+     */
+    AxFileDialogResult (*SaveFileDialog)(const AxWindow *Window, const char *Title, const char *Filter, const char *InitialDirectory);
+
+    /**
+     * @brief Opens a basic File Open dialog for folders.
+     * @param Window A handle to the owner window of the dialog to be created. If this parameter is NULL, the dialog will have no owner window.
+     * @param Message The message above the file tree, can be NULL.
+     * @param InitialDirectory Sets the initial directory for the open folder dialog, can be NULL.
+     * @return AxFileDialogResult struct with result and error info.
+     */
+    AxFileDialogResult (*OpenFolderDialog)(const AxWindow *Window, const char *Message, const char *InitialDirectory);
+
+    /**
+     * @brief Opens a Message Box.
+     * @param Window A handle to the owner window of the message box to be created. If this parameter is NULL, the message box has no owner window.
+     * @param Title The title of the dialog box, NULL sets default.
+     * @param Message The message to display, can be NULL.
+     * @param Type The contents and behavior of the dialog box set by a combination of AxMessageBoxFlags flags.
+     * @return AxMessageBoxResult struct with result and error info.
+     */
+    AxMessageBoxResult (*CreateMessageBox)(const AxWindow *Window, const char *Title, const char *Message, enum AxMessageBoxFlags Type);
+
+    /**
+     * @brief Gets a human-readable string for an error code.
+     * @param Error The error code to get the string for.
+     * @return A pointer to a static string describing the error.
+     */
+    const char* (*GetErrorString)(enum AxWindowError Error);
+
     AxKeyCallback (*SetKeyCallback)(AxWindow *Window, AxKeyCallback Callback);
 
     AxMousePosCallback (*SetMousePosCallback)(AxWindow *Window, AxMousePosCallback Callback);
@@ -445,43 +765,129 @@ struct AxWindowAPI
     AxCharCallback (*SetCharCallback)(AxWindow *Window, AxCharCallback Callback);
 
     /**
-     * @brief Opens a File Open dialog.
-     * @param Window A handle to the owner window of the dialog to be created. If this parameter is NULL, the dialog will no owner window.
-     * @param Title The title of the dialog box, NULL sets default.
-     * @param Filter The file types to filter on, e.g. "Supported Files(*.ms, *.txt, *.cpp, *.h)\0*.ms;*.txt;*.cpp;*.h\0";
-     * @param IntialDirectory Sets the initial directory to open the file open dialog in, can be NULL.
-     * @param FileName Pointer to character array that returns filename. Setting it sets default filename, otherwise should be zero-initialized.
-     * @param FileNameSize Size of zero-initialized character array for filename.
+     * @brief Sets the window state change callback.
+     * @param Window The target window.
+     * @param Callback The callback function to set, or NULL to clear.
+     * @return The previous callback function.
      */
-    bool (*OpenFileDialog)(const AxWindow *Window, const char *Title, const char *Filter, const char *InitialDirectory, char *FileName, uint32_t FileNameSize);
+    AxWindowStateCallback (*SetWindowStateCallback)(AxWindow *Window, AxWindowStateCallback Callback);
 
     /**
-     * @brief Opens a File Save dialog.
-     * @param Window A handle to the owner window of the dialog to be created. If this parameter is NULL, the dialog will no owner window.
-     * @param Title The title of the dialog box, NULL sets default.
-     * @param Filter The file types to filter on, e.g. "Supported Files(*.ms, *.txt, *.cpp, *.h)\0*.ms;*.txt;*.cpp;*.h\0";
-     * @param IntialDirectory Sets the initial directory to open the file save dialog in, can be NULL.
-     * @param FileName Pointer to character array that returns filename. Setting it sets default filename, otherwise should be zero-initialized.
-     * @param FileNameSize Size of zero-initialized character array for filename.
+     * @brief Sets all callbacks for the window at once.
+     * @param Window The target window.
+     * @param Callbacks Pointer to callback structure. Can be NULL to clear all callbacks.
+     * @param Error Optional pointer to receive error code. Can be NULL if error checking is not needed.
+     * @return True if the operation succeeded, false otherwise.
+     * @details This function sets all callbacks atomically. If Callbacks is NULL, all callbacks are cleared.
      */
-    bool (*SaveFileDialog)(const AxWindow *Window, const char *Title, const char *Filter, const char *InitialDirectory, char *FileName, uint32_t FileNameSize);
+    bool (*SetCallbacks)(AxWindow *Window, const AxWindowCallbacks *Callbacks, enum AxWindowError *Error);
 
     /**
-     * @brief Opens a basic File Open dialog.
-     * @param Window A handle to the owner window of the dialog to be created. If this parameter is NULL, the dialog will no owner window.
-     * @param Message The message above the file tree, can be NULL.
-     * @param InitialDirectory Sets the initial directory for the open folder dialog, can be NULL.
-     * @param FolderName Pointer to character array that returns folder name.
-     * @param FolderNameSize Size of zero-initialized character array for folder name.
+     * @brief Gets all current callbacks for the window.
+     * @param Window The target window.
+     * @param Callbacks Pointer to callback structure to be filled.
+     * @param Error Optional pointer to receive error code. Can be NULL if error checking is not needed.
+     * @return True if the operation succeeded, false otherwise.
      */
-    bool (*OpenFolderDialog)(const AxWindow *Window, const char *Message, const char *InitialDirectory, char *FolderName, uint32_t FolderNameSize);
+    bool (*GetCallbacks)(const AxWindow *Window, AxWindowCallbacks *Callbacks, enum AxWindowError *Error);
 
     /**
-     * @brief Opens a Message Box.
-     * @param Window A handle to the owner window of the message box to be created. If this parameter is NULL, the message box has no owner window.
-     * @param Message The message above the file tree, can be NULL.
-     * @param Title The title of the dialog box, NULL sets default.
-     * @param Type The contents and behavior of the dialog box set by a combination of AxMessageBoxFlags flags.
+     * @brief Gets the complete current input state.
+     * @param Window The target window.
+     * @param State Pointer to input state structure to be filled.
+     * @param Error Optional pointer to receive error code. Can be NULL if error checking is not needed.
+     * @return True if the operation succeeded, false otherwise.
      */
-    enum AxMessageBoxResponse (*CreateMessageBox)(const AxWindow *Window, const char *Message, const char *Title, enum AxMessageBoxFlags Type);
+    bool (*GetWindowInputState)(const AxWindow *Window, AxInputState *State, enum AxWindowError *Error);
+
+    /**
+     * @brief Checks if a specific key is currently pressed.
+     * @param Window The target window.
+     * @param Key The key to check.
+     * @return True if the key is pressed, false otherwise.
+     */
+    bool (*IsKeyPressed)(const AxWindow *Window, int Key);
+
+    /**
+     * @brief Checks if a specific mouse button is currently pressed.
+     * @param Window The target window.
+     * @param Button The mouse button to check.
+     * @return True if the button is pressed, false otherwise.
+     */
+    bool (*IsMouseButtonPressed)(const AxWindow *Window, int Button);
+
+    /**
+     * @brief Gets the current modifier key state.
+     * @param Window The target window.
+     * @return Bitmask of currently pressed modifier keys.
+     */
+    int (*GetModifiers)(const AxWindow *Window);
+
+    /**
+     * @brief Checks if the window currently has focus.
+     * @param Window The target window.
+     * @return True if the window has focus, false otherwise.
+     */
+    bool (*HasFocus)(const AxWindow *Window);
+
+    /**
+     * @brief Sets whether input events should be filtered when window loses focus.
+     * @param Window The target window.
+     * @param FilterEvents True to filter events when unfocused, false to process all events.
+     * @param Error Optional pointer to receive error code. Can be NULL if error checking is not needed.
+     * @return True if the operation succeeded, false otherwise.
+     */
+    bool (*SetInputEventFiltering)(AxWindow *Window, bool FilterEvents, enum AxWindowError *Error);
+
+    /**
+     * @brief Gets whether input event filtering is enabled.
+     * @param Window The target window.
+     * @return True if event filtering is enabled, false otherwise.
+     */
+    bool (*GetInputEventFiltering)(const AxWindow *Window);
+
+    /**
+     * @brief Gets information about the current platform.
+     * @param Info Pointer to platform info structure to be filled.
+     * @param Error Optional pointer to receive error code. Can be NULL if error checking is not needed.
+     * @return True if the operation succeeded, false otherwise.
+     */
+    bool (*GetPlatformInfo)(AxPlatformInfo *Info, enum AxWindowError *Error);
+
+    /**
+     * @brief Checks if a specific platform feature is available.
+     * @param Feature The platform feature to check.
+     * @param Error Optional pointer to receive error code. Can be NULL if error checking is not needed.
+     * @return True if the feature is available, false otherwise.
+     */
+    bool (*HasPlatformFeature)(enum AxPlatformFeatures Feature, enum AxWindowError *Error);
+
+    /**
+     * @brief Gets the current platform type.
+     * @return The current platform type.
+     */
+    enum AxPlatformType (*GetPlatformType)(void);
+
+    /**
+     * @brief Sets platform-specific hints for window creation.
+     * @param Hints Pointer to platform hints structure.
+     * @param Error Optional pointer to receive error code. Can be NULL if error checking is not needed.
+     * @return True if the operation succeeded, false otherwise.
+     */
+    bool (*SetPlatformHints)(const AxPlatformHints *Hints, enum AxWindowError *Error);
+
+    /**
+     * @brief Gets current platform-specific hints.
+     * @param Hints Pointer to platform hints structure to be filled.
+     * @param Error Optional pointer to receive error code. Can be NULL if error checking is not needed.
+     * @return True if the operation succeeded, false otherwise.
+     */
+    bool (*GetPlatformHints)(AxPlatformHints *Hints, enum AxWindowError *Error);
+
+    /**
+     * @brief Validates that the platform is properly initialized and ready.
+     * @param Error Optional pointer to receive error code. Can be NULL if error checking is not needed.
+     * @return True if the platform is ready, false otherwise.
+     */
+    bool (*ValidatePlatform)(enum AxWindowError *Error);
 };

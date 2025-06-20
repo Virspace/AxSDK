@@ -53,11 +53,87 @@ static AxApplication *TheApp;
 
 static void RegisterCallbacks()
 {
-    WindowAPI->SetKeyCallback(TheApp->Window, [](AxWindow *Window, int Key, int ScanCode, int Action, int Mods) {
-        if (Key == AX_KEY_ESCAPE) {
+    // Use the new callback system with error handling
+    AxWindowCallbacks Callbacks = {0};
+    enum AxWindowError Error = AX_WINDOW_ERROR_NONE;
+
+    // Set up all callbacks at once
+    Callbacks.Key = [](AxWindow *Window, int Key, int ScanCode, int Action, int Mods) {
+        if (Key == AX_KEY_ESCAPE && Action == AX_PRESS) {
             TheApp->IsRequestingExit = true;
         }
-    });
+
+        // Add some debug info for key events
+        if (Action == AX_PRESS) {
+            printf("Key pressed: %d (mods: %d)\n", Key, Mods);
+
+            // Demonstrate new features
+            if (Key == AX_KEY_F1) {
+                // Show a message box
+                AxMessageBoxResult Result = WindowAPI->CreateMessageBox(
+                    Window, "Help", "This is a demo of the new message box feature!",
+                    (enum AxMessageBoxFlags)(AX_MESSAGEBOX_TYPE_OK | AX_MESSAGEBOX_ICON_INFORMATION)
+                );
+                if (Result.Success) {
+                    printf("Message box shown successfully\n");
+                }
+            }
+
+            if (Key == AX_KEY_F2) {
+                // Open a file dialog
+                AxFileDialogResult Result = WindowAPI->OpenFileDialog(
+                    Window, "Open Model", "GLTF Files (*.gltf;*.glb)\0*.gltf;*.glb\0All Files (*.*)\0*.*\0",
+                    nullptr
+                );
+                if (Result.Success) {
+                    printf("Selected file: %s\n", Result.FilePath);
+                } else {
+                    printf("File dialog canceled or failed\n");
+                }
+            }
+        }
+    };
+
+    Callbacks.MousePos = [](AxWindow *Window, double X, double Y) {
+        // Handle mouse movement
+        printf("Mouse moved to: %.2f, %.2f\n", X, Y);
+    };
+
+    Callbacks.MouseButton = [](AxWindow *Window, int Button, int Action, int Mods) {
+        if (Action == AX_PRESS) {
+            printf("Mouse button pressed: %d\n", Button);
+        }
+    };
+
+    Callbacks.Scroll = [](AxWindow *Window, AxVec2 Offset) {
+        printf("Scroll: %.2f, %.2f\n", Offset.X, Offset.Y);
+    };
+
+    Callbacks.StateChanged = [](AxWindow *Window, enum AxWindowState OldState, enum AxWindowState NewState) {
+        const char* OldStateStr = "Unknown";
+        const char* NewStateStr = "Unknown";
+
+        switch (OldState) {
+            case AX_WINDOW_STATE_NORMAL: OldStateStr = "Normal"; break;
+            case AX_WINDOW_STATE_MINIMIZED: OldStateStr = "Minimized"; break;
+            case AX_WINDOW_STATE_MAXIMIZED: OldStateStr = "Maximized"; break;
+            case AX_WINDOW_STATE_FULLSCREEN: OldStateStr = "Fullscreen"; break;
+        }
+
+        switch (NewState) {
+            case AX_WINDOW_STATE_NORMAL: NewStateStr = "Normal"; break;
+            case AX_WINDOW_STATE_MINIMIZED: NewStateStr = "Minimized"; break;
+            case AX_WINDOW_STATE_MAXIMIZED: NewStateStr = "Maximized"; break;
+            case AX_WINDOW_STATE_FULLSCREEN: NewStateStr = "Fullscreen"; break;
+        }
+
+        printf("Window state changed from %s to %s\n", OldStateStr, NewStateStr);
+    };
+
+    // Set all callbacks at once
+    if (!WindowAPI->SetCallbacks(TheApp->Window, &Callbacks, &Error)) {
+        fprintf(stderr, "Failed to set callbacks: %s\n", WindowAPI->GetErrorString(Error));
+    }
 }
 
 static void CreatePerspectiveCamera(AxVec3 Position, AxVec3 Target, AxVec3 Up)
@@ -102,18 +178,30 @@ static void CreateOrthographicCamera(AxVec3 Position, AxVec3 Target, AxVec3 Up, 
 
 static AxWindow *CreateWindow()
 {
-    int32_t StyleFlags = AX_WINDOW_STYLE_VISIBLE | AX_WINDOW_STYLE_DECORATED | AX_WINDOW_STYLE_RESIZABLE;
-    AxWindow *Window = WindowAPI->CreateWindow(
-        "AxonSDK OpenGL Example",
-        100,
-        100,
-        static_cast<int32_t>(WINDOW_SIZE.Width),
-        static_cast<int32_t>(WINDOW_SIZE.Height),
-        (AxWindowStyle)StyleFlags
-    );
+    // Use the new window config system
+    AxWindowConfig Config = {
+        .Title = "AxonSDK OpenGL Example",
+        .X = 100,
+        .Y = 100,
+        .Width = static_cast<int32_t>(WINDOW_SIZE.Width),
+        .Height = static_cast<int32_t>(WINDOW_SIZE.Height),
+        .Style = (AxWindowStyle)(AX_WINDOW_STYLE_VISIBLE | AX_WINDOW_STYLE_DECORATED | AX_WINDOW_STYLE_RESIZABLE)
+    };
 
+    enum AxWindowError Error = AX_WINDOW_ERROR_NONE;
+    AxWindow *Window = WindowAPI->CreateWindowWithConfig(&Config, &Error);
+
+    if (Error != AX_WINDOW_ERROR_NONE) {
+        fprintf(stderr, "Failed to create window: %s\n", WindowAPI->GetErrorString(Error));
+        return (nullptr);
+    }
+
+    // Set cursor mode with error handling
     enum AxCursorMode CursorMode = AX_CURSOR_NORMAL;
-    WindowAPI->SetCursorMode(Window, CursorMode);
+    if (!WindowAPI->SetCursorMode(Window, CursorMode, &Error)) {
+        fprintf(stderr, "Failed to set cursor mode: %s\n", WindowAPI->GetErrorString(Error));
+        // Continue anyway, this is not critical
+    }
 
     return (Window);
 }
@@ -467,6 +555,31 @@ static AxApplication *Create(int argc, char **argv)
     // Create default window
     WindowAPI->Init();
 
+        // Validate platform before proceeding
+    enum AxWindowError Error = AX_WINDOW_ERROR_NONE;
+    if (!WindowAPI->ValidatePlatform(&Error)) {
+        fprintf(stderr, "Platform validation failed: %s\n", WindowAPI->GetErrorString(Error));
+        return (nullptr);
+    }
+
+    // Get platform info
+    AxPlatformInfo PlatformInfo;
+    memset(&PlatformInfo, 0, sizeof(PlatformInfo));
+    if (WindowAPI->GetPlatformInfo(&PlatformInfo, &Error)) {
+        printf("Platform: %s %s\n", PlatformInfo.Name, PlatformInfo.Version);
+        printf("Features: 0x%08X\n", PlatformInfo.Features);
+    }
+
+    // Set platform hints for better performance
+    AxPlatformHints Hints = {0};
+    Hints.Windows.EnableCompositor = true;
+    Hints.Windows.UseImmersiveDarkMode = false;
+
+    if (!WindowAPI->SetPlatformHints(&Hints, &Error)) {
+        fprintf(stderr, "Failed to set platform hints: %s\n", WindowAPI->GetErrorString(Error));
+        // Continue anyway, this is not critical
+    }
+
     TheApp->Window = CreateWindow();
     AXON_ASSERT(TheApp->Window && "Window is NULL!");
 
@@ -505,7 +618,12 @@ static AxApplication *Create(int argc, char **argv)
         return (nullptr);
     }
 
-    WindowAPI->SetWindowVisible(TheApp->Window, true);
+    enum AxWindowError Error2 = AX_WINDOW_ERROR_NONE;
+    WindowAPI->SetWindowVisible(TheApp->Window, true, &Error2);
+    if (Error2 != AX_WINDOW_ERROR_NONE) {
+        fprintf(stderr, "Failed to set window visible: %s\n", WindowAPI->GetErrorString(Error2));
+        return (nullptr);
+    }
 
     return (TheApp);
 }
@@ -558,6 +676,31 @@ static bool Tick(struct AxApplication *App)
     // Check for close
     if (WindowAPI->HasRequestedClose(TheApp->Window) || App->IsRequestingExit) {
         return(true);
+    }
+
+    // Demonstrate new input state querying features
+    enum AxWindowError Error = AX_WINDOW_ERROR_NONE;
+    AxInputState InputState = {0};
+    if (WindowAPI->GetWindowInputState(TheApp->Window, &InputState, &Error)) {
+        // Check for specific key combinations
+        if (InputState.Keys[AX_KEY_S] && InputState.Modifiers & AX_MOD_CONTROL) {
+            printf("Ctrl+S pressed - could trigger save\n");
+        }
+
+        if (InputState.Keys[AX_KEY_F11]) {
+            printf("F11 pressed - could toggle fullscreen\n");
+        }
+
+        // Check mouse state
+        if (InputState.MouseButtons[AX_MOUSE_BUTTON_LEFT]) {
+            printf("Left mouse button is pressed at (%.2f, %.2f)\n", 
+                   InputState.MousePosition.X, InputState.MousePosition.Y);
+        }
+
+        // Check window focus
+        if (!InputState.WindowFocused) {
+            printf("Window lost focus - could pause game\n");
+        }
     }
 
     // Start the frame
