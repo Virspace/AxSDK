@@ -3,19 +3,6 @@ cmake_minimum_required(VERSION 3.15)
 project(AxSDK VERSION 1.0.0)
 include(CTest)
 
-# Specify Clang compiler version requirement
-set(CMAKE_C_COMPILER_ID "Clang")
-set(CMAKE_CXX_COMPILER_ID "Clang")
-set(CMAKE_C_COMPILER_VERSION "18.1.8")
-set(CMAKE_CXX_COMPILER_VERSION "18.1.8")
-
-if(NOT (CMAKE_C_COMPILER_ID STREQUAL "Clang" AND
-        CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND
-        CMAKE_C_COMPILER_VERSION VERSION_GREATER_EQUAL "18.1.0" AND
-        CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "18.1.0"))
-    message(FATAL_ERROR "This project requires Clang 18.1.0 or greater")
-endif()
-
 # Set compiler flags for x64 architecture
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64|x86_64")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -m64")
@@ -36,7 +23,10 @@ if (WIN32)
     add_definitions(-DAX_OS_WINDOWS)
     add_definitions(-DWINVER=0x0A00)
 
-    #set(CMAKE_SHARED_LIBRARY_SUFFIX ".dll")
+    if (CMAKE_C_COMPILER_ID STREQUAL "Clang")
+        set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS}   --target=x86_64-w64-mingw32")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --target=x86_64-w64-mingw32")
+    endif()
 endif()
 
 # TODO(mdeforge): Maybe the Modern CMake approach is to do this per target in their CMakeList files.
