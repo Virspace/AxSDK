@@ -11,6 +11,13 @@
 //#include <stdlib.h>
 //#include <crtdbg.h>
 
+// Macro to safely assign error codes
+#define SET_ERROR(ErrorPtr, ErrorCode) do { \
+    if (ErrorPtr) { \
+        *(ErrorPtr) = (ErrorCode); \
+    } \
+} while(0)
+
 // From hidusage.h
 #define HID_USAGE_PAGE_GENERIC                          ((unsigned short) 0x01) // Generic Desktop Controls Usage Pages
 #define HID_USAGE_GENERIC_MOUSE                         ((unsigned short) 0x02) // Generic Mouse
@@ -39,6 +46,7 @@ typedef HRESULT (WINAPI *GetDpiForMonitorPtr)(HMONITOR Monitor, int DPIType, UIN
 
 // Forward declarations
 static GetDpiForMonitorPtr GetDpiForMonitor;
+static enum AxWindowState GetWindowState(const AxWindow *Window);
 
 struct AxWindowContext
 {
@@ -97,6 +105,10 @@ struct AxWindow
     // Mouse button state
     char MouseButtons[AX_MOUSE_BUTTON_LAST + 1];
     char Keys[AX_KEY_LAST + 1];
+    // Input handling
+    bool HasFocus;                    ///< Current window focus state
+    bool FilterEventsWhenUnfocused;   ///< Whether to filter input events when window loses focus
+    AxVec2 LastMousePos;              ///< Previous mouse position for delta calculation
 
     struct {
         AxKeyCallback Key;
@@ -104,6 +116,7 @@ struct AxWindow
         AxMouseButtonCallback MouseButton;
         AxMouseScrollCallback Scroll;
         AxCharCallback Char;
+        AxWindowStateCallback StateChanged;
     } Callbacks;
 };
 
@@ -329,6 +342,11 @@ void InputMouseClick(AxWindow *Window, int Button, int Action, int Mods)
     AXON_ASSERT(Action == AX_PRESS || Action == AX_RELEASE);
     AXON_ASSERT(Mods == (Mods & AX_MOD_MASK))
 
+    // Update internal button state
+    if (Button >= 0 && Button <= AX_MOUSE_BUTTON_LAST) {
+        Window->MouseButtons[Button] = Action;
+    }
+
     if (Window->Callbacks.MouseButton) {
         Window->Callbacks.MouseButton(Window, Button, Action, Mods);
     }
@@ -351,9 +369,15 @@ void InputMousePos(AxWindow *Window, AxVec2 Pos)
     AXON_ASSERT(Pos.Y > -FLT_MAX);
     AXON_ASSERT(Pos.Y < FLT_MAX);
 
+    // Check if the mouse actually moved
+    bool MouseMoved = (Pos.X != Window->VirtualCursorPos.X || Pos.Y != Window->VirtualCursorPos.Y);
+
+    // Store previous position for delta calculation
+    Window->LastMousePos = Window->VirtualCursorPos;
     Window->VirtualCursorPos = Pos;
 
-    if (Window->Callbacks.MousePos) {
+    // Only call the callback if the mouse actually moved
+    if (MouseMoved && Window->Callbacks.MousePos) {
         Window->Callbacks.MousePos(Window, Pos.X, Pos.Y);
     }
 }
@@ -362,31 +386,40 @@ static int GetKeyModifiers(void)
 {
     int Mods = 0;
 
-    if (GetKeyState(VK_CONTROL) & 0x8000) {
+    // Get all modifier states in one pass to minimize system calls
+    SHORT CtrlState = GetKeyState(VK_CONTROL);
+    SHORT AltState = GetKeyState(VK_MENU);
+    SHORT ShiftState = GetKeyState(VK_SHIFT);
+    SHORT LWinState = GetKeyState(VK_LWIN);
+    SHORT RWinState = GetKeyState(VK_RWIN);
+    SHORT CapsState = GetKeyState(VK_CAPITAL);
+    SHORT NumState = GetKeyState(VK_NUMLOCK);
+
+    if (CtrlState & 0x8000) {
         Mods |= AX_MOD_CONTROL;
     }
 
-    if (GetKeyState(VK_MENU) & 0x8000) {
+    if (AltState & 0x8000) {
         Mods |= AX_MOD_ALT;
     }
 
-    if (GetKeyState(VK_SHIFT) & 0x8000) {
+    if (ShiftState & 0x8000) {
         Mods |= AX_MOD_SHIFT;
     }
 
-    if ((GetKeyState(VK_LWIN) | GetKeyState(VK_RWIN)) & 0x8000) {
+    if ((LWinState | RWinState) & 0x8000) {
         Mods |= AX_MOD_SUPER;
     }
 
-    if (GetKeyState(VK_CAPITAL) & 1) {
+    if (CapsState & 1) {
         Mods |= AX_MOD_CAPS_LOCK;
     }
 
-    if (GetKeyState(VK_NUMLOCK) & 1) {
+    if (NumState & 1) {
         Mods |= AX_MOD_NUM_LOCK;
     }
 
-    return (Mods);
+    return Mods;
 }
 
 static DWORD GetWindowStyle(const AxWindow *Window)
@@ -477,11 +510,46 @@ static LRESULT CALLBACK Win32MainWindowCallback(HWND Hwnd, UINT Message, WPARAM 
             Result = DefWindowProc(Hwnd, Message, WParam, LParam);
         } break;
 
+        case WM_SIZE:
+        {
+            // Detect window state changes
+            enum AxWindowState OldState = GetWindowState(Window);
+            enum AxWindowState NewState = AX_WINDOW_STATE_NORMAL;
+            
+            switch (WParam) {
+                case SIZE_MINIMIZED:
+                    NewState = AX_WINDOW_STATE_MINIMIZED;
+                    break;
+                case SIZE_MAXIMIZED:
+                    NewState = AX_WINDOW_STATE_MAXIMIZED;
+                    break;
+                case SIZE_RESTORED:
+                    if (Window->Style & AX_WINDOW_STYLE_FULLSCREEN) {
+                        NewState = AX_WINDOW_STATE_FULLSCREEN;
+                    } else {
+                        NewState = AX_WINDOW_STATE_NORMAL;
+                    }
+                    break;
+            }
+            
+            // Call state change callback if state actually changed
+            if (OldState != NewState && Window->Callbacks.StateChanged) {
+                Window->Callbacks.StateChanged(Window, OldState, NewState);
+            }
+            
+            Result = DefWindowProc(Hwnd, Message, WParam, LParam);
+        } break;
+
         case WM_SYSKEYDOWN:
         case WM_SYSKEYUP:
         case WM_KEYDOWN:
         case WM_KEYUP:
         {
+            // Filter events if window doesn't have focus and filtering is enabled
+            if (Window->FilterEventsWhenUnfocused && !Window->HasFocus) {
+                break;
+            }
+
             int Key, ScanCode;
             const int Action = (HIWORD(LParam) & KF_UP) ? AX_RELEASE : AX_PRESS;
             const int Mods = GetKeyModifiers();
@@ -578,6 +646,11 @@ static LRESULT CALLBACK Win32MainWindowCallback(HWND Hwnd, UINT Message, WPARAM 
         case WM_MBUTTONUP:
         case WM_XBUTTONUP:
         {
+            // Filter events if window doesn't have focus and filtering is enabled
+            if (Window->FilterEventsWhenUnfocused && !Window->HasFocus) {
+                break;
+            }
+
             int Button, Action;
 
             // XBUTTON1 and XBUTTON2 are often located on the sides of the mouse, near the base.
@@ -641,6 +714,11 @@ static LRESULT CALLBACK Win32MainWindowCallback(HWND Hwnd, UINT Message, WPARAM 
         // https://docs.microsoft.com/en-us/windows/win32/dxtecharts/taking-advantage-of-high-dpi-mouse-movement
         case WM_MOUSEMOVE:
         {
+            // Filter events if window doesn't have focus and filtering is enabled
+            if (Window->FilterEventsWhenUnfocused && !Window->HasFocus) {
+                break;
+            }
+
             const int32_t X = LOWORD(LParam);
             const int32_t Y = HIWORD(LParam);
 
@@ -670,8 +748,27 @@ static LRESULT CALLBACK Win32MainWindowCallback(HWND Hwnd, UINT Message, WPARAM 
 
         case WM_MOUSEWHEEL:
         {
+            // Filter events if window doesn't have focus and filtering is enabled
+            if (Window->FilterEventsWhenUnfocused && !Window->HasFocus) {
+                break;
+            }
+
             // We += here because it's possible to accrue a few messages before the value actually gets used
             AxVec2 Offset = { 0.0f, (float)GET_WHEEL_DELTA_WPARAM(WParam) / (float)WHEEL_DELTA };
+            InputMouseScroll(Window, Offset);
+
+            return (0);
+        }
+
+        case WM_MOUSEHWHEEL:
+        {
+            // Filter events if window doesn't have focus and filtering is enabled
+            if (Window->FilterEventsWhenUnfocused && !Window->HasFocus) {
+                break;
+            }
+
+            // Handle horizontal scroll
+            AxVec2 Offset = { (float)GET_WHEEL_DELTA_WPARAM(WParam) / (float)WHEEL_DELTA, 0.0f };
             InputMouseScroll(Window, Offset);
 
             return (0);
@@ -859,9 +956,58 @@ static LRESULT CALLBACK Win32MainWindowCallback(HWND Hwnd, UINT Message, WPARAM 
             return (0);
         }
 
+        case WM_SETFOCUS:
+        {
+            Window->HasFocus = true;
+            return (0);
+        }
+
+        case WM_KILLFOCUS:
+        {
+            Window->HasFocus = false;
+            return (0);
+        }
+
+        case WM_SYSCOMMAND:
+        {
+            // Handle system commands that change window state
+            switch (WParam & 0xFFF0) {
+                case SC_MINIMIZE:
+                case SC_MAXIMIZE:
+                case SC_RESTORE:
+                {
+                    // Get current state before the command is processed
+                    enum AxWindowState OldState = GetWindowState(Window);
+
+                    // Let the default handler process the command
+                    Result = DefWindowProc(Hwnd, Message, WParam, LParam);
+
+                    // Get the new state after processing
+                    enum AxWindowState NewState = GetWindowState(Window);
+
+                    // Call state change callback if state actually changed
+                    if (OldState != NewState && Window->Callbacks.StateChanged) {
+                        Window->Callbacks.StateChanged(Window, OldState, NewState);
+                    }
+
+                    return Result;
+                }
+                break;
+
+                default:
+                    Result = DefWindowProc(Hwnd, Message, WParam, LParam);
+                    break;
+            }
+        } break;
+
         case WM_CHAR:
         case WM_SYSCHAR:
         {
+            // Filter events if window doesn't have focus and filtering is enabled
+            if (Window->FilterEventsWhenUnfocused && !Window->HasFocus) {
+                break;
+            }
+
             if (WParam >= 0xd800 && WParam <= 0xdbff)
                 Window->Platform.Win32.HighSurrogate = (WCHAR)WParam;
             else
@@ -1111,12 +1257,15 @@ static void DestroyWindow_(AxWindow *Window)
     }
 }
 
-static AxWindow *CreateWindow_(const char *Title, int32_t X, int32_t Y, int32_t Width, int32_t Height, enum AxWindowStyle Style)
+static AxWindow *CreateWindow_(const char *Title, int32_t X, int32_t Y, int32_t Width, int32_t Height, enum AxWindowStyle Style, enum AxWindowError *Error)
 {
     AXON_ASSERT(Title != NULL);
 
+    SET_ERROR(Error, AX_WINDOW_ERROR_NONE);
+
     if (Width <= 0 || Height <= 0) {
-        return (false);
+        SET_ERROR(Error, AX_WINDOW_ERROR_INVALID_PARAMETERS);
+        return NULL;
     }
 
     RECT Rect = {
@@ -1127,31 +1276,71 @@ static AxWindow *CreateWindow_(const char *Title, int32_t X, int32_t Y, int32_t 
     };
 
     AxWindow *Window = calloc(1, sizeof(AxWindow));
-    if (Window)
-    {
-        Window->Platform.Win32.Instance = (uint64_t)GetModuleHandle(0);
-        Window->IsRequestingClose = false;
-        Window->Title = Title;
-        Window->Rect = Rect;
-        Window->Style = Style;
-
-        if (!CreateNativeWindow(Window))
-        {
-            DestroyWindow_(Window);
-
-            return (NULL);
-        }
-
-        if (Style & AX_WINDOW_STYLE_FULLSCREEN ||
-            Style & AX_WINDOW_STYLE_VISIBLE)
-        {
-            ShowWindow((HWND)Window->Platform.Win32.Handle, SW_SHOW);
-            SetFocus((HWND)Window->Platform.Win32.Handle);
-            UpdateWindow((HWND)Window->Platform.Win32.Handle);
-        }
+    if (!Window) {
+        SET_ERROR(Error, AX_WINDOW_ERROR_OUT_OF_MEMORY);
+        return NULL;
     }
 
-    return(Window);
+    Window->Platform.Win32.Instance = (uint64_t)GetModuleHandle(0);
+    Window->IsRequestingClose = false;
+    Window->Title = Title;
+    Window->Rect = Rect;
+    Window->Style = Style;
+    Window->HasFocus = false;
+    Window->FilterEventsWhenUnfocused = true;  // Default to filtering events when unfocused
+    Window->LastMousePos = (AxVec2){0, 0};
+
+    if (!CreateNativeWindow(Window)) {
+        SET_ERROR(Error, AX_WINDOW_ERROR_WINDOW_CREATION_FAILED);
+        DestroyWindow_(Window);
+        return NULL;
+    }
+
+    if (Style & AX_WINDOW_STYLE_FULLSCREEN ||
+        Style & AX_WINDOW_STYLE_VISIBLE)
+    {
+        ShowWindow((HWND)Window->Platform.Win32.Handle, SW_SHOW);
+        SetFocus((HWND)Window->Platform.Win32.Handle);
+        UpdateWindow((HWND)Window->Platform.Win32.Handle);
+    }
+
+    return Window;
+}
+
+static AxWindow *CreateWindowWithConfig(const AxWindowConfig *Config, enum AxWindowError *Error)
+{
+    SET_ERROR(Error, AX_WINDOW_ERROR_NONE);
+
+    if (!Config) {
+        SET_ERROR(Error, AX_WINDOW_ERROR_INVALID_PARAMETERS);
+        return NULL;
+    }
+
+    // Validate required fields
+    if (!Config->Title) {
+        SET_ERROR(Error, AX_WINDOW_ERROR_INVALID_PARAMETERS);
+        return NULL;
+    }
+
+    if (Config->Width <= 0 || Config->Height <= 0) {
+        SET_ERROR(Error, AX_WINDOW_ERROR_INVALID_PARAMETERS);
+        return NULL;
+    }
+
+    // Create the window with the provided config
+    return CreateWindow_(Config->Title, Config->X, Config->Y, Config->Width, Config->Height, Config->Style, Error);
+}
+
+static AxWindow *CreateWindowDefault(const char *Title, enum AxWindowError *Error)
+{
+    SET_ERROR(Error, AX_WINDOW_ERROR_NONE);
+
+    // Use default title if none provided
+    const char *FinalTitle = Title ? Title : "Axon Window";
+
+    // Default configuration: centered, 800x600, decorated, visible
+    return CreateWindow_(FinalTitle, -1, -1, 800, 600, 
+                        AX_WINDOW_STYLE_VISIBLE | AX_WINDOW_STYLE_DECORATED, Error);
 }
 
 static void PollEvents(AxWindow *Window)
@@ -1160,56 +1349,62 @@ static void PollEvents(AxWindow *Window)
 
     MSG Msg = {0};
 
-    for (;;)
+    // Process messages with Windows 10 compatibility fix
+    // Skip problematic message 0x738 that can cause system hangs
+    while (PeekMessage(&Msg, NULL, 0, 0, PM_REMOVE))
     {
-        bool GotMessage = false;
-        DWORD SkipMessages[] = { 0x738, 0xFFFFFFFF };
-
-        DWORD LastMessage = 0;
-        for (uint32_t SkipIndex = 0; SkipIndex < ArrayCount(SkipMessages); ++SkipIndex)
-        {
-            DWORD Skip = SkipMessages[SkipIndex];
-            GotMessage = PeekMessage(&Msg, 0, LastMessage, Skip - 1, PM_REMOVE);
-            if (GotMessage) {
-                break;
-            }
-
-            LastMessage = Skip + 1;
+        // Skip problematic Windows 10 message 0x738 (1848)
+        // This message can cause system hangs and input lag on Windows 10
+        if (Msg.message == 0x738) {
+            continue;
         }
 
-        if (!GotMessage) {
+        if (Msg.message == WM_QUIT)
+        {
+            Window->IsRequestingClose = true;
             break;
         }
 
-        if(Msg.message == WM_QUIT)
-        {
-            Window->IsRequestingClose = true;
-        } else {
-            TranslateMessage(&Msg);
-            DispatchMessage(&Msg);
-        }
+        TranslateMessage(&Msg);
+        DispatchMessage(&Msg);
     }
 
-    const int Keys[4][2] =
-    {
+    // Handle modifier key state synchronization
+    // This ensures our internal state matches the actual Windows key state
+    const struct {
+        int VK;
+        int Key;
+    } ModifierKeys[] = {
         { VK_LSHIFT, AX_KEY_LEFT_SHIFT },
         { VK_RSHIFT, AX_KEY_RIGHT_SHIFT },
+        { VK_LCONTROL, AX_KEY_LEFT_CONTROL },
+        { VK_RCONTROL, AX_KEY_RIGHT_CONTROL },
+        { VK_LMENU, AX_KEY_LEFT_ALT },
+        { VK_RMENU, AX_KEY_RIGHT_ALT },
         { VK_LWIN, AX_KEY_LEFT_SUPER },
         { VK_RWIN, AX_KEY_RIGHT_SUPER }
     };
 
-    for (int32_t i = 0; i < 4;  i++)
+    // Check each modifier key for state changes
+    for (int32_t i = 0; i < 8; i++)
     {
-        const int VK = Keys[i][0];
-        const int Key = Keys[i][1];
-        const int ScanCode = Window->Platform.Win32.ScanCodes[Key];
+        const int vk = ModifierKeys[i].VK;
+        const int key = ModifierKeys[i].Key;
+        const int scanCode = Window->Platform.Win32.ScanCodes[key];
+        const bool isPressed = (GetKeyState(vk) & 0x8000) != 0;
+        const bool wasPressed = (Window->Keys[key] == AX_PRESS);
 
-        if ((GetKeyState(VK) & 0x8000))
-            continue;
-        if (Window->Keys[Key] != AX_PRESS)
-            continue;
-
-        InputKey(Window, Key, ScanCode, AX_RELEASE, GetKeyModifiers());
+        // Generate events only when state actually changes
+        if (isPressed && !wasPressed)
+        {
+            // Key was just pressed
+            InputKey(Window, key, scanCode, AX_PRESS, GetKeyModifiers());
+        }
+        else if (!isPressed && wasPressed)
+        {
+            // Key was just released
+            InputKey(Window, key, scanCode, AX_RELEASE, GetKeyModifiers());
+        }
     }
 }
 
@@ -1242,12 +1437,20 @@ static void GetWindowPosition(AxWindow *Window, int32_t *X, int32_t *Y)
     }
 }
 
-static void SetWindowPosition(AxWindow *Window, int32_t X, int32_t Y)
+static bool SetWindowPosition(AxWindow *Window, int32_t X, int32_t Y, enum AxWindowError *Error)
 {
     AXON_ASSERT(Window);
 
+    SET_ERROR(Error, AX_WINDOW_ERROR_NONE);
+
+    if (!Window) {
+        SET_ERROR(Error, AX_WINDOW_ERROR_INVALID_WINDOW);
+        return false;
+    }
+
     if (Window->Style & AX_WINDOW_STYLE_FULLSCREEN) {
-        return;
+        SET_ERROR(Error, AX_WINDOW_ERROR_INVALID_STATE);
+        return false;
     }
 
     RECT Rect = { X, Y, 0, 0 };
@@ -1256,11 +1459,16 @@ static void SetWindowPosition(AxWindow *Window, int32_t X, int32_t Y)
     // Adjust size to account for non-client area
     DWORD Style = GetWindowStyle(Window);
     AdjustWindowRectExForDpi((LPRECT)&Rect, Style, FALSE, 0, DPI);
-    SetWindowPos((HWND)Window->Platform.Win32.Handle, NULL,
+    
+    if (!SetWindowPos((HWND)Window->Platform.Win32.Handle, NULL,
         Rect.left, Rect.top, 0, 0,
-        SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOSIZE);
+        SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOSIZE)) {
+        SET_ERROR(Error, AX_WINDOW_ERROR_OPERATION_FAILED);
+        return false;
+    }
 
     Window->Rect = Rect;
+    return true;
 }
 
 static void GetWindowSize(AxWindow *Window, int32_t *Width, int32_t *Height)
@@ -1280,12 +1488,20 @@ static void GetWindowSize(AxWindow *Window, int32_t *Width, int32_t *Height)
     }
 }
 
-static void SetWindowSize(AxWindow *Window, int32_t Width, int32_t Height)
+static bool SetWindowSize(AxWindow *Window, int32_t Width, int32_t Height, enum AxWindowError *Error)
 {
     AXON_ASSERT(Window);
 
+    SET_ERROR(Error, AX_WINDOW_ERROR_NONE);
+
+    if (!Window) {
+        SET_ERROR(Error, AX_WINDOW_ERROR_INVALID_WINDOW);
+        return false;
+    }
+
     if (Window->Style & AX_WINDOW_STYLE_FULLSCREEN) {
-        return;
+        SET_ERROR(Error, AX_WINDOW_ERROR_INVALID_STATE);
+        return false;
     }
 
     RECT Rect = { 0, 0, Width, Height };
@@ -1293,22 +1509,255 @@ static void SetWindowSize(AxWindow *Window, int32_t Width, int32_t Height)
     DWORD Style = GetWindowStyle(Window);
 
     AdjustWindowRectExForDpi((LPRECT)&Rect, Style, FALSE, 0, DPI);
-    SetWindowPos((HWND)Window->Platform.Win32.Handle, NULL,
+    
+    if (!SetWindowPos((HWND)Window->Platform.Win32.Handle, NULL,
         0, 0, Rect.right - Rect.left, Rect.bottom - Rect.top,
-        SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOMOVE | SWP_NOZORDER);
+        SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOMOVE | SWP_NOZORDER)) {
+        SET_ERROR(Error, AX_WINDOW_ERROR_OPERATION_FAILED);
+        return false;
+    }
 
     Window->Rect = Rect;
+    return true;
 }
 
-static void SetWindowVisible(AxWindow *Window, bool IsVisible)
+static bool SetWindowVisible(AxWindow *Window, bool IsVisible, enum AxWindowError *Error)
 {
     AXON_ASSERT(Window);
 
-    if (IsVisible) {
-        ShowWindow((HWND)Window->Platform.Win32.Handle, SW_SHOW);
-    } else {
-        ShowWindow((HWND)Window->Platform.Win32.Handle, SW_HIDE);
+    SET_ERROR(Error, AX_WINDOW_ERROR_NONE);
+
+    if (!Window) {
+        SET_ERROR(Error, AX_WINDOW_ERROR_INVALID_WINDOW);
+        return false;
     }
+
+    int ShowCommand = IsVisible ? SW_SHOW : SW_HIDE;
+    if (!ShowWindow((HWND)Window->Platform.Win32.Handle, ShowCommand)) {
+        SET_ERROR(Error, AX_WINDOW_ERROR_OPERATION_FAILED);
+        return false;
+    }
+
+    return true;
+}
+
+static enum AxWindowState GetWindowState(const AxWindow *Window)
+{
+    AXON_ASSERT(Window);
+
+    if (!Window) {
+        return AX_WINDOW_STATE_NORMAL;
+    }
+
+    WINDOWPLACEMENT Placement = {0};
+    Placement.length = sizeof(WINDOWPLACEMENT);
+    
+    if (!GetWindowPlacement((HWND)Window->Platform.Win32.Handle, &Placement)) {
+        return AX_WINDOW_STATE_NORMAL;
+    }
+
+    if (Placement.showCmd == SW_SHOWMINIMIZED) {
+        return AX_WINDOW_STATE_MINIMIZED;
+    } else if (Placement.showCmd == SW_SHOWMAXIMIZED) {
+        return AX_WINDOW_STATE_MAXIMIZED;
+    } else if (Window->Style & AX_WINDOW_STYLE_FULLSCREEN) {
+        return AX_WINDOW_STATE_FULLSCREEN;
+    }
+
+    return AX_WINDOW_STATE_NORMAL;
+}
+
+static bool SetWindowStateEnum(AxWindow *Window, enum AxWindowState State, enum AxWindowError *Error)
+{
+    AXON_ASSERT(Window);
+
+    SET_ERROR(Error, AX_WINDOW_ERROR_NONE);
+
+    if (!Window) {
+        SET_ERROR(Error, AX_WINDOW_ERROR_INVALID_WINDOW);
+        return false;
+    }
+
+    // Get current state for callback
+    enum AxWindowState OldState = GetWindowState(Window);
+
+    int ShowCommand = SW_SHOW;
+    bool StyleChanged = false;
+
+    switch (State) {
+        case AX_WINDOW_STATE_NORMAL:
+            ShowCommand = SW_SHOWNORMAL;
+            // Remove fullscreen style if present
+            if (Window->Style & AX_WINDOW_STYLE_FULLSCREEN) {
+                Window->Style &= ~AX_WINDOW_STYLE_FULLSCREEN;
+                StyleChanged = true;
+            }
+            break;
+
+        case AX_WINDOW_STATE_MINIMIZED:
+            ShowCommand = SW_SHOWMINIMIZED;
+            break;
+
+        case AX_WINDOW_STATE_MAXIMIZED:
+            ShowCommand = SW_SHOWMAXIMIZED;
+            // Remove fullscreen style if present
+            if (Window->Style & AX_WINDOW_STYLE_FULLSCREEN) {
+                Window->Style &= ~AX_WINDOW_STYLE_FULLSCREEN;
+                StyleChanged = true;
+            }
+            break;
+
+        case AX_WINDOW_STATE_FULLSCREEN:
+            ShowCommand = SW_SHOW;
+            // Add fullscreen style
+            if (!(Window->Style & AX_WINDOW_STYLE_FULLSCREEN)) {
+                Window->Style |= AX_WINDOW_STYLE_FULLSCREEN;
+                StyleChanged = true;
+            }
+            break;
+
+        default:
+            SET_ERROR(Error, AX_WINDOW_ERROR_INVALID_PARAMETERS);
+            return false;
+    }
+
+    // Apply the state change
+    if (!ShowWindow((HWND)Window->Platform.Win32.Handle, ShowCommand)) {
+        SET_ERROR(Error, AX_WINDOW_ERROR_OPERATION_FAILED);
+        return false;
+    }
+
+    // Call state change callback if state actually changed
+    if (OldState != State && Window->Callbacks.StateChanged) {
+        Window->Callbacks.StateChanged(Window, OldState, State);
+    }
+
+    return true;
+}
+
+static bool GetWindowStateInfo(const AxWindow *Window, AxWindowStateInfo *StateInfo, enum AxWindowError *Error)
+{
+    AXON_ASSERT(Window);
+    AXON_ASSERT(StateInfo);
+
+    SET_ERROR(Error, AX_WINDOW_ERROR_NONE);
+
+    if (!Window) {
+        SET_ERROR(Error, AX_WINDOW_ERROR_INVALID_WINDOW);
+        return false;
+    }
+
+    if (!StateInfo) {
+        SET_ERROR(Error, AX_WINDOW_ERROR_INVALID_PARAMETERS);
+        return false;
+    }
+
+    // Get current window state
+    WINDOWPLACEMENT Placement = {0};
+    Placement.length = sizeof(WINDOWPLACEMENT);
+    
+    if (!GetWindowPlacement((HWND)Window->Platform.Win32.Handle, &Placement)) {
+        SET_ERROR(Error, AX_WINDOW_ERROR_OPERATION_FAILED);
+        return false;
+    }
+
+    // Determine window state from placement
+    enum AxWindowState State = AX_WINDOW_STATE_NORMAL;
+    if (Placement.showCmd == SW_SHOWMINIMIZED) {
+        State = AX_WINDOW_STATE_MINIMIZED;
+    } else if (Placement.showCmd == SW_SHOWMAXIMIZED) {
+        State = AX_WINDOW_STATE_MAXIMIZED;
+    } else if (Window->Style & AX_WINDOW_STYLE_FULLSCREEN) {
+        State = AX_WINDOW_STATE_FULLSCREEN;
+    }
+
+    // Get position and size
+    RECT ClientRect = {0};
+    GetClientRect((HWND)Window->Platform.Win32.Handle, &ClientRect);
+
+    // Get visibility
+    bool IsVisible = (IsWindowVisible((HWND)Window->Platform.Win32.Handle) != 0);
+
+    // Fill the state info structure
+    StateInfo->State = State;
+    StateInfo->X = ClientRect.left;
+    StateInfo->Y = ClientRect.top;
+    StateInfo->Width = ClientRect.right - ClientRect.left;
+    StateInfo->Height = ClientRect.bottom - ClientRect.top;
+    StateInfo->IsVisible = IsVisible;
+    StateInfo->Style = Window->Style;
+
+    return true;
+}
+
+static bool SetWindowState(AxWindow *Window, const AxWindowStateInfo *StateInfo, enum AxWindowError *Error)
+{
+    AXON_ASSERT(Window);
+    AXON_ASSERT(StateInfo);
+
+    SET_ERROR(Error, AX_WINDOW_ERROR_NONE);
+
+    if (!Window) {
+        SET_ERROR(Error, AX_WINDOW_ERROR_INVALID_WINDOW);
+        return false;
+    }
+
+    if (!StateInfo) {
+        SET_ERROR(Error, AX_WINDOW_ERROR_INVALID_PARAMETERS);
+        return false;
+    }
+
+    // Validate parameters
+    if (StateInfo->Width <= 0 || StateInfo->Height <= 0) {
+        SET_ERROR(Error, AX_WINDOW_ERROR_INVALID_PARAMETERS);
+        return false;
+    }
+
+    // Store old state for callback
+    enum AxWindowState OldState = GetWindowState(Window);
+    WINDOWPLACEMENT Placement = {0};
+    Placement.length = sizeof(WINDOWPLACEMENT);
+    if (GetWindowPlacement((HWND)Window->Platform.Win32.Handle, &Placement)) {
+        if (Placement.showCmd == SW_SHOWMINIMIZED) {
+            OldState = AX_WINDOW_STATE_MINIMIZED;
+        } else if (Placement.showCmd == SW_SHOWMAXIMIZED) {
+            OldState = AX_WINDOW_STATE_MAXIMIZED;
+        } else if (Window->Style & AX_WINDOW_STYLE_FULLSCREEN) {
+            OldState = AX_WINDOW_STATE_FULLSCREEN;
+        }
+    }
+
+    // Update window style if needed
+    if (StateInfo->Style != Window->Style) {
+        Window->Style = StateInfo->Style;
+        // TODO: Recreate window with new style if needed
+    }
+
+    // Set position and size
+    if (!SetWindowPosition(Window, StateInfo->X, StateInfo->Y, Error)) {
+        return false;
+    }
+
+    if (!SetWindowSize(Window, StateInfo->Width, StateInfo->Height, Error)) {
+        return false;
+    }
+
+    // Set visibility
+    if (!SetWindowVisible(Window, StateInfo->IsVisible, Error)) {
+        return false;
+    }
+
+    // Set window state
+    if (!SetWindowStateEnum(Window, StateInfo->State, Error)) {
+        return false;
+    }
+
+    // Call state change callback if state actually changed
+    if (OldState != StateInfo->State && Window->Callbacks.StateChanged) {
+        Window->Callbacks.StateChanged(Window, OldState, StateInfo->State);
+    }
+
+    return true;
 }
 
 static AxWindowPlatformData GetPlatformData(const AxWindow *Window)
@@ -1352,13 +1801,22 @@ static int32_t GetMouseButton(const AxWindow *Window, int32_t Button)
 }
 
 // TODO(mdeforge): Update cursor image using enable/disable cursor functions
-static void SetCursorMode(AxWindow *Window, enum AxCursorMode CursorMode)
+static bool SetCursorMode(AxWindow *Window, enum AxCursorMode CursorMode, enum AxWindowError *Error)
 {
     AXON_ASSERT(Window && "Window is NULL in SetCursorMode()!");
+
+    SET_ERROR(Error, AX_WINDOW_ERROR_NONE);
+
+    if (!Window) {
+        SET_ERROR(Error, AX_WINDOW_ERROR_INVALID_WINDOW);
+        return false;
+    }
 
     // TODO(mdeforge): Validate CursorMode?
     Window->CursorMode = CursorMode;
     UpdateCursorImage(Window);
+    
+    return true;
 }
 
 static enum AxCursorMode GetCursorMode(AxWindow *Window)
@@ -1368,12 +1826,21 @@ static enum AxCursorMode GetCursorMode(AxWindow *Window)
   return (Window->CursorMode);
 }
 
-static void SetKeyboardMode(AxWindow *Window, enum AxKeyboardMode KeyboardMode)
+static bool SetKeyboardMode(AxWindow *Window, enum AxKeyboardMode KeyboardMode, enum AxWindowError *Error)
 {
     AXON_ASSERT(Window);
 
+    SET_ERROR(Error, AX_WINDOW_ERROR_NONE);
+
+    if (!Window) {
+        SET_ERROR(Error, AX_WINDOW_ERROR_INVALID_WINDOW);
+        return false;
+    }
+
     // TODO(mdeforge): Validate KeyboardMode?
     Window->KeyboardMode = KeyboardMode;
+    
+    return true;
 }
 
 static int32_t GetKey(AxWindow *Window, int32_t Key)
@@ -1389,14 +1856,20 @@ static int32_t GetKey(AxWindow *Window, int32_t Key)
     return (Window->Keys[Key]);
 }
 
-static bool OpenFileDialog(const AxWindow *Window, const char *Title, const char *Filter, const char *InitialDirectory, char *FileName, uint32_t FileNameSize)
+static AxFileDialogResult OpenFileDialog(const AxWindow *Window, const char *Title, const char *Filter, const char *InitialDirectory)
 {
+    AxFileDialogResult result = {0};
+    result.Success = false;
+    result.Error = AX_WINDOW_ERROR_NONE;
+    result.FilePath[0] = '\0';
+
     OPENFILENAME OpenFileName;
+    char FileName[1024] = {0};
     ZeroMemory(&OpenFileName, sizeof(OPENFILENAME));
     OpenFileName.lStructSize = sizeof(OPENFILENAME);
     OpenFileName.hwndOwner = (HWND)Window->Platform.Win32.Handle;
     OpenFileName.lpstrFile = FileName;
-    OpenFileName.nMaxFile = (DWORD)FileNameSize;
+    OpenFileName.nMaxFile = (DWORD)sizeof(FileName);
     OpenFileName.lpstrFilter = (Filter) ? Filter : TEXT("All files\0*.*\0\0");
     OpenFileName.nFilterIndex = 1;
     OpenFileName.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
@@ -1405,69 +1878,85 @@ static bool OpenFileDialog(const AxWindow *Window, const char *Title, const char
 
     if (GetOpenFileName(&OpenFileName) == TRUE)
     {
-        FileName = OpenFileName.lpstrFile;
-        return (true);
+        strncpy(result.FilePath, FileName, sizeof(result.FilePath) - 1);
+        result.Success = true;
     }
-
-    return (false);
+    else
+    {
+        DWORD err = CommDlgExtendedError();
+        result.Error = (err != 0) ? AX_WINDOW_ERROR_OPERATION_FAILED : AX_WINDOW_ERROR_NONE;
+    }
+    return result;
 }
 
-static bool SaveFileDialog(const AxWindow *Window, const char *Title, const char *Filter, const char *InitialDirectory, char *FileName, uint32_t FileNameSize)
+static AxFileDialogResult SaveFileDialog(const AxWindow *Window, const char *Title, const char *Filter, const char *InitialDirectory)
 {
+    AxFileDialogResult result = {0};
+    result.Success = false;
+    result.Error = AX_WINDOW_ERROR_NONE;
+    result.FilePath[0] = '\0';
+
     OPENFILENAME OpenFileName;
+    char FileName[1024] = {0};
     ZeroMemory(&OpenFileName, sizeof(OPENFILENAME));
     OpenFileName.lStructSize = sizeof(OPENFILENAME);
     OpenFileName.hwndOwner = (HWND)Window->Platform.Win32.Handle;
     OpenFileName.lpstrFile = FileName;
-    OpenFileName.nMaxFile = (DWORD)FileNameSize;
+    OpenFileName.nMaxFile = (DWORD)sizeof(FileName);
     OpenFileName.lpstrFilter = (Filter) ? Filter : TEXT("All files\0*.*\0\0");
     OpenFileName.nFilterIndex = 1;
-    OpenFileName.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+    OpenFileName.Flags = OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT | OFN_NOCHANGEDIR;
     OpenFileName.lpstrInitialDir = InitialDirectory;
     OpenFileName.lpstrTitle = (Title) ? Title : TEXT("Save File");
 
     if (GetSaveFileName(&OpenFileName) == TRUE)
     {
-        FileName = OpenFileName.lpstrFile;
-        return (true);
+        strncpy(result.FilePath, FileName, sizeof(result.FilePath) - 1);
+        result.Success = true;
     }
-
-    return (false);
-}
-
-INT CALLBACK BrowseCallbackProc(HWND hwnd, UINT uMsg, LPARAM lp, LPARAM pData)
-{
-    if (uMsg == BFFM_INITIALIZED) {
-        SendMessage(hwnd, BFFM_SETSELECTION, TRUE, pData);
-    }
-
-    return 0;
-}
-
-static bool OpenFolderDialog(const AxWindow *Window, const char *Message, const char *InitialDirectory, char *FolderName, uint32_t FolderNameSize)
-{
-    BROWSEINFO BrowseInfo;
-    ZeroMemory(&BrowseInfo, sizeof(BROWSEINFO));
-    BrowseInfo.hwndOwner = (HWND)Window->Platform.Win32.Handle;
-    BrowseInfo.pszDisplayName = FolderName;
-    BrowseInfo.pidlRoot = NULL;
-    BrowseInfo.lpszTitle = (Message) ? Message : TEXT("Open Folder");
-    BrowseInfo.ulFlags = BIF_NEWDIALOGSTYLE;
-    BrowseInfo.lParam = (LPARAM)InitialDirectory;
-    BrowseInfo.lpfn = BrowseCallbackProc;
-
-    LPITEMIDLIST IDL = SHBrowseForFolder(&BrowseInfo);
-    if (IDL != NULL)
+    else
     {
-        SHGetPathFromIDList(IDL, FolderName);
-        return (true);
+        DWORD err = CommDlgExtendedError();
+        result.Error = (err != 0) ? AX_WINDOW_ERROR_OPERATION_FAILED : AX_WINDOW_ERROR_NONE;
     }
-
-    return (false);
+    return result;
 }
 
-static enum AxMessageBoxResponse CreateMessageBox(const AxWindow *Window, const char *Message, const char *Title, enum AxMessageBoxFlags Type)
+static AxFileDialogResult OpenFolderDialog(const AxWindow *Window, const char *Message, const char *InitialDirectory)
 {
+    AxFileDialogResult result = {0};
+    result.Success = false;
+    result.Error = AX_WINDOW_ERROR_NONE;
+    result.FilePath[0] = '\0';
+
+    BROWSEINFO bi = {0};
+    char FolderName[1024] = {0};
+    bi.hwndOwner = (HWND)Window->Platform.Win32.Handle;
+    bi.lpszTitle = Message;
+    bi.ulFlags = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE;
+    bi.lpfn = NULL;
+    bi.lParam = 0;
+
+    LPITEMIDLIST pidl = SHBrowseForFolder(&bi);
+    if (pidl && SHGetPathFromIDList(pidl, FolderName))
+    {
+        strncpy(result.FilePath, FolderName, sizeof(result.FilePath) - 1);
+        result.Success = true;
+    }
+    else
+    {
+        result.Error = AX_WINDOW_ERROR_OPERATION_FAILED;
+    }
+    return result;
+}
+
+static AxMessageBoxResult CreateMessageBox(const AxWindow *Window, const char *Title, const char *Message, enum AxMessageBoxFlags Type)
+{
+    AxMessageBoxResult result = {0};
+    result.Success = false;
+    result.Error = AX_WINDOW_ERROR_NONE;
+    result.Response = AX_MESSAGEBOX_RESPONSE_CANCEL;
+
     uint32_t Flags = 0;
     if (Type & AX_MESSAGEBOX_TYPE_ABORTRETRYIGNORE) { Flags |= MB_ABORTRETRYIGNORE; }
     if (Type & AX_MESSAGEBOX_TYPE_CANCELTRYCONTINUE) { Flags |= MB_CANCELTRYCONTINUE; }
@@ -1491,48 +1980,109 @@ static enum AxMessageBoxResponse CreateMessageBox(const AxWindow *Window, const 
     if (Type & AX_MESSAGEBOX_SYSTEMMODAL) { Flags |= MB_SYSTEMMODAL; }
     if (Type & AX_MESSAGEBOX_TASKMODAL) { Flags |= MB_TASKMODAL; }
 
-    enum AxMessageBoxResponse Result = (enum AxMessageBoxResponse)MessageBox((HWND)Window->Platform.Win32.Handle, Message, Title, Flags);
-    return (Result);
+    int response = MessageBox((HWND)Window->Platform.Win32.Handle, Message, Title, Flags);
+    if (response != 0)
+    {
+        result.Response = (enum AxMessageBoxResponse)response;
+        result.Success = true;
+    }
+    else
+    {
+        result.Error = AX_WINDOW_ERROR_OPERATION_FAILED;
+    }
+    return result;
 }
 
-// We forward declare these functions because these functions need the WindowAPI declared below
-static AxKeyCallback SetKeyCallback(AxWindow *Window, AxKeyCallback Callback);
-static AxMousePosCallback SetMousePosCallback(AxWindow *Window, AxMousePosCallback Callback);
-static AxMouseButtonCallback SetMouseButtonCallback(AxWindow *Window, AxMouseButtonCallback Callback);
-static AxMouseScrollCallback SetMouseScrollCallback(AxWindow *Window, AxMouseScrollCallback Callback);
-static AxCharCallback SetCharCallback(AxWindow *Window, AxCharCallback Callback);
+static const char* GetErrorString(enum AxWindowError Error)
+{
+    switch (Error) {
+        case AX_WINDOW_ERROR_NONE:
+            return "No error";
+        case AX_WINDOW_ERROR_WINDOW_REGISTRATION_FAILED:
+            return "Window registration failed";
+        case AX_WINDOW_ERROR_WINDOW_CREATION_FAILED:
+            return "Window creation failed";
+        case AX_WINDOW_ERROR_RAW_INPUT_REGISTRATION_FAILED:
+            return "Raw input registration failed";
+        case AX_WINDOW_ERROR_INVALID_PARAMETERS:
+            return "Invalid parameters";
+        case AX_WINDOW_ERROR_INVALID_WINDOW:
+            return "Invalid window handle";
+        case AX_WINDOW_ERROR_OPERATION_FAILED:
+            return "Operation failed";
+        case AX_WINDOW_ERROR_NOT_SUPPORTED:
+            return "Operation not supported";
+        case AX_WINDOW_ERROR_ALREADY_EXISTS:
+            return "Resource already exists";
+        case AX_WINDOW_ERROR_OUT_OF_MEMORY:
+            return "Out of memory";
+        case AX_WINDOW_ERROR_INVALID_STATE:
+            return "Invalid state";
+        case AX_WINDOW_ERROR_UNKNOWN:
+        default:
+            return "Unknown error";
+    }
+}
 
-// Use a compound literal to construct an unnamed object of API type in-place
-struct AxWindowAPI *WindowAPI = &(struct AxWindowAPI) {
-    .Init = Init,
-    .CreateWindow = CreateWindow_,
-    .DestroyWindow = DestroyWindow_,
-    .PollEvents = PollEvents,
-    .HasRequestedClose = HasRequestedClose,
-    .GetWindowPosition = GetWindowPosition,
-    .SetWindowPosition = SetWindowPosition,
-    .GetWindowSize = GetWindowSize,
-    .SetWindowSize = SetWindowSize,
-    .SetWindowVisible = SetWindowVisible,
-    .GetPlatformData = GetPlatformData,
-    .GetMouseCoords = GetMouseCoords,
-    .GetMouseButton = GetMouseButton,
-    .SetCursorMode = SetCursorMode,
-    .GetCursorMode = GetCursorMode,
-    .SetKeyboardMode = SetKeyboardMode,
-    .GetKey = GetKey,
-    .SetKeyCallback = SetKeyCallback,
-    .SetMousePosCallback = SetMousePosCallback,
-    .SetMouseButtonCallback = SetMouseButtonCallback,
-    .SetMouseScrollCallback = SetMouseScrollCallback,
-    .SetCharCallback = SetCharCallback,
-    .OpenFileDialog = OpenFileDialog,
-    .SaveFileDialog = SaveFileDialog,
-    .OpenFolderDialog = OpenFolderDialog,
-    .CreateMessageBox = CreateMessageBox
-    // .EnableCursor = EnableCursor,
-    // .DisableCursor = DisableCursor
-};
+static bool SetCallbacks(AxWindow *Window, const AxWindowCallbacks *Callbacks, enum AxWindowError *Error)
+{
+    AXON_ASSERT(Window);
+
+    SET_ERROR(Error, AX_WINDOW_ERROR_NONE);
+
+    if (!Window) {
+        SET_ERROR(Error, AX_WINDOW_ERROR_INVALID_WINDOW);
+        return false;
+    }
+
+    if (Callbacks) {
+        // Set all callbacks from the structure
+        Window->Callbacks.Key = Callbacks->Key;
+        Window->Callbacks.MousePos = Callbacks->MousePos;
+        Window->Callbacks.MouseButton = Callbacks->MouseButton;
+        Window->Callbacks.Scroll = Callbacks->Scroll;
+        Window->Callbacks.Char = Callbacks->Char;
+        Window->Callbacks.StateChanged = Callbacks->StateChanged;
+    } else {
+        // Clear all callbacks
+        Window->Callbacks.Key = NULL;
+        Window->Callbacks.MousePos = NULL;
+        Window->Callbacks.MouseButton = NULL;
+        Window->Callbacks.Scroll = NULL;
+        Window->Callbacks.Char = NULL;
+        Window->Callbacks.StateChanged = NULL;
+    }
+
+    return true;
+}
+
+static bool GetCallbacks(const AxWindow *Window, AxWindowCallbacks *Callbacks, enum AxWindowError *Error)
+{
+    AXON_ASSERT(Window);
+    AXON_ASSERT(Callbacks);
+
+    SET_ERROR(Error, AX_WINDOW_ERROR_NONE);
+
+    if (!Window) {
+        SET_ERROR(Error, AX_WINDOW_ERROR_INVALID_WINDOW);
+        return false;
+    }
+
+    if (!Callbacks) {
+        SET_ERROR(Error, AX_WINDOW_ERROR_INVALID_PARAMETERS);
+        return false;
+    }
+
+    // Copy all callbacks to the structure
+    Callbacks->Key = Window->Callbacks.Key;
+    Callbacks->MousePos = Window->Callbacks.MousePos;
+    Callbacks->MouseButton = Window->Callbacks.MouseButton;
+    Callbacks->Scroll = Window->Callbacks.Scroll;
+    Callbacks->Char = Window->Callbacks.Char;
+    Callbacks->StateChanged = Window->Callbacks.StateChanged;
+
+    return true;
+}
 
 static AxKeyCallback SetKeyCallback(AxWindow *Window, AxKeyCallback Callback)
 {
@@ -1596,6 +2146,325 @@ static AxCharCallback SetCharCallback(AxWindow *Window, AxCharCallback Callback)
 
     return (Callback);
 }
+
+static AxWindowStateCallback SetWindowStateCallback(AxWindow *Window, AxWindowStateCallback Callback)
+{
+    AXON_ASSERT(Window);
+
+    AxWindowStateCallback type;
+    type = Window->Callbacks.StateChanged;
+    Window->Callbacks.StateChanged = Callback;
+    Callback = type;
+
+    return (Callback);
+}
+
+static bool GetWindowInputState(const AxWindow *Window, AxInputState *State, enum AxWindowError *Error)
+{
+    AXON_ASSERT(Window);
+    AXON_ASSERT(State);
+
+    SET_ERROR(Error, AX_WINDOW_ERROR_NONE);
+
+    if (!Window) {
+        SET_ERROR(Error, AX_WINDOW_ERROR_INVALID_WINDOW);
+        return false;
+    }
+
+    if (!State) {
+        SET_ERROR(Error, AX_WINDOW_ERROR_INVALID_PARAMETERS);
+        return false;
+    }
+
+    // Copy key states
+    for (int i = 0; i <= AX_KEY_LAST; i++) {
+        State->Keys[i] = (Window->Keys[i] == AX_PRESS);
+    }
+
+    // Copy mouse button states
+    for (int i = 0; i <= AX_MOUSE_BUTTON_LAST; i++) {
+        State->MouseButtons[i] = (Window->MouseButtons[i] == AX_PRESS);
+    }
+
+    // Copy mouse position and delta
+    State->MousePosition = Window->VirtualCursorPos;
+    State->MouseDelta.X = Window->VirtualCursorPos.X - Window->LastMousePos.X;
+    State->MouseDelta.Y = Window->VirtualCursorPos.Y - Window->LastMousePos.Y;
+
+    // Get current modifiers
+    State->Modifiers = GetKeyModifiers();
+    State->WindowFocused = Window->HasFocus;
+
+    return true;
+}
+
+static bool IsKeyPressed(const AxWindow *Window, int Key)
+{
+    AXON_ASSERT(Window);
+
+    if (!Window || Key < 0 || Key > AX_KEY_LAST) {
+        return false;
+    }
+
+    return (Window->Keys[Key] == AX_PRESS);
+}
+
+static bool IsMouseButtonPressed(const AxWindow *Window, int Button)
+{
+    AXON_ASSERT(Window);
+
+    if (!Window || Button < 0 || Button > AX_MOUSE_BUTTON_LAST) {
+        return false;
+    }
+
+    return (Window->MouseButtons[Button] == AX_PRESS);
+}
+
+static int GetModifiers(const AxWindow *Window)
+{
+    AXON_ASSERT(Window);
+
+    if (!Window) {
+        return 0;
+    }
+
+    return GetKeyModifiers();
+}
+
+static bool HasFocus(const AxWindow *Window)
+{
+    AXON_ASSERT(Window);
+
+    if (!Window) {
+        return false;
+    }
+
+    return Window->HasFocus;
+}
+
+static bool SetInputEventFiltering(AxWindow *Window, bool FilterEvents, enum AxWindowError *Error)
+{
+    AXON_ASSERT(Window);
+
+    SET_ERROR(Error, AX_WINDOW_ERROR_NONE);
+
+    if (!Window) {
+        SET_ERROR(Error, AX_WINDOW_ERROR_INVALID_WINDOW);
+        return false;
+    }
+
+    Window->FilterEventsWhenUnfocused = FilterEvents;
+    return true;
+}
+
+static bool GetInputEventFiltering(const AxWindow *Window)
+{
+    AXON_ASSERT(Window);
+
+    if (!Window) {
+        return false;
+    }
+
+    return Window->FilterEventsWhenUnfocused;
+}
+
+// Global platform hints storage
+static AxPlatformHints GlobalPlatformHints = {0};
+
+static bool GetPlatformInfo(AxPlatformInfo *Info, enum AxWindowError *Error)
+{
+    AXON_ASSERT(Info);
+
+    SET_ERROR(Error, AX_WINDOW_ERROR_NONE);
+
+    if (!Info) {
+        SET_ERROR(Error, AX_WINDOW_ERROR_INVALID_PARAMETERS);
+        return false;
+    }
+
+    // Fill platform information
+    Info->Type = AX_PLATFORM_WINDOWS;
+    Info->Features = 0;
+    Info->IsInitialized = true;
+
+    // Get Windows version information
+    OSVERSIONINFOEX osvi = {0};
+    osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEX);
+    
+    if (GetVersionEx((OSVERSIONINFO*)&osvi)) {
+        Info->MajorVersion = osvi.dwMajorVersion;
+        Info->MinorVersion = osvi.dwMinorVersion;
+        Info->BuildNumber = osvi.dwBuildNumber;
+        
+        // Set platform name and version
+        snprintf(Info->Name, sizeof(Info->Name), "Windows");
+        snprintf(Info->Version, sizeof(Info->Version), "%d.%d.%d", 
+                Info->MajorVersion, Info->MinorVersion, Info->BuildNumber);
+    } else {
+        Info->MajorVersion = 0;
+        Info->MinorVersion = 0;
+        Info->BuildNumber = 0;
+        snprintf(Info->Name, sizeof(Info->Name), "Windows");
+        snprintf(Info->Version, sizeof(Info->Version), "Unknown");
+    }
+
+    // Detect available features
+    if (Info->MajorVersion >= 10) {
+        Info->Features |= AX_PLATFORM_FEATURE_DPI_AWARENESS;
+        Info->Features |= AX_PLATFORM_FEATURE_HIGH_DPI;
+        Info->Features |= AX_PLATFORM_FEATURE_MULTI_MONITOR;
+        Info->Features |= AX_PLATFORM_FEATURE_RAW_INPUT;
+        Info->Features |= AX_PLATFORM_FEATURE_DIRECTX;
+        Info->Features |= AX_PLATFORM_FEATURE_CLIPBOARD;
+        Info->Features |= AX_PLATFORM_FEATURE_DRAG_DROP;
+    } else if (Info->MajorVersion >= 6) {
+        Info->Features |= AX_PLATFORM_FEATURE_DPI_AWARENESS;
+        Info->Features |= AX_PLATFORM_FEATURE_MULTI_MONITOR;
+        Info->Features |= AX_PLATFORM_FEATURE_RAW_INPUT;
+        Info->Features |= AX_PLATFORM_FEATURE_DIRECTX;
+        Info->Features |= AX_PLATFORM_FEATURE_CLIPBOARD;
+        Info->Features |= AX_PLATFORM_FEATURE_DRAG_DROP;
+    }
+
+    // Check for OpenGL support (simplified check)
+    Info->Features |= AX_PLATFORM_FEATURE_OPENGL;
+
+    return true;
+}
+
+static bool HasPlatformFeature(enum AxPlatformFeatures Feature, enum AxWindowError *Error)
+{
+    SET_ERROR(Error, AX_WINDOW_ERROR_NONE);
+
+    AxPlatformInfo Info = {0};
+    if (!GetPlatformInfo(&Info, Error)) {
+        return false;
+    }
+
+    return (Info.Features & Feature) != 0;
+}
+
+static enum AxPlatformType GetPlatformType(void)
+{
+    return AX_PLATFORM_WINDOWS;
+}
+
+static bool SetPlatformHints(const AxPlatformHints *Hints, enum AxWindowError *Error)
+{
+    SET_ERROR(Error, AX_WINDOW_ERROR_NONE);
+
+    if (!Hints) {
+        SET_ERROR(Error, AX_WINDOW_ERROR_INVALID_PARAMETERS);
+        return false;
+    }
+
+    // Copy hints to global storage
+    GlobalPlatformHints = *Hints;
+    return true;
+}
+
+static bool GetPlatformHints(AxPlatformHints *Hints, enum AxWindowError *Error)
+{
+    SET_ERROR(Error, AX_WINDOW_ERROR_NONE);
+
+    if (!Hints) {
+        SET_ERROR(Error, AX_WINDOW_ERROR_INVALID_PARAMETERS);
+        return false;
+    }
+
+    // Copy current hints
+    *Hints = GlobalPlatformHints;
+    return true;
+}
+
+static bool ValidatePlatform(enum AxWindowError *Error)
+{
+    SET_ERROR(Error, AX_WINDOW_ERROR_NONE);
+
+    // Check if Windows API is available
+    HMODULE kernel32 = GetModuleHandleA("kernel32.dll");
+    if (!kernel32) {
+        SET_ERROR(Error, AX_WINDOW_ERROR_NOT_SUPPORTED);
+        return false;
+    }
+
+    // Check if user32 is available
+    HMODULE user32 = GetModuleHandleA("user32.dll");
+    if (!user32) {
+        SET_ERROR(Error, AX_WINDOW_ERROR_NOT_SUPPORTED);
+        return false;
+    }
+
+    // Check if we can create a window class (basic functionality test)
+    WNDCLASSEX wc = {0};
+    wc.cbSize = sizeof(WNDCLASSEX);
+    wc.lpfnWndProc = DefWindowProc;
+    wc.hInstance = GetModuleHandle(NULL);
+    wc.lpszClassName = "AxonTestClass";
+    
+    ATOM result = RegisterClassEx(&wc);
+    if (result == 0) {
+        SET_ERROR(Error, AX_WINDOW_ERROR_WINDOW_REGISTRATION_FAILED);
+        return false;
+    }
+    
+    // Clean up test class
+    UnregisterClass("AxonTestClass", GetModuleHandle(NULL));
+    
+    return true;
+}
+// Use a compound literal to construct an unnamed object of API type in-place
+struct AxWindowAPI *WindowAPI = &(struct AxWindowAPI) {
+    .Init = Init,
+    .CreateWindow = CreateWindow_,
+    .CreateWindowWithConfig = CreateWindowWithConfig,
+    .CreateWindowDefault = CreateWindowDefault,
+    .DestroyWindow = DestroyWindow_,
+    .PollEvents = PollEvents,
+    .HasRequestedClose = HasRequestedClose,
+    .GetWindowPosition = GetWindowPosition,
+    .SetWindowPosition = SetWindowPosition,
+    .GetWindowSize = GetWindowSize,
+    .SetWindowSize = SetWindowSize,
+    .SetWindowVisible = SetWindowVisible,
+    .GetWindowStateInfo = GetWindowStateInfo,
+    .SetWindowState = SetWindowState,
+    .GetWindowState = GetWindowState,
+    .SetWindowStateEnum = SetWindowStateEnum,
+    .GetPlatformData = GetPlatformData,
+    .GetMouseCoords = GetMouseCoords,
+    .GetMouseButton = GetMouseButton,
+    .SetCursorMode = SetCursorMode,
+    .GetCursorMode = GetCursorMode,
+    .SetKeyboardMode = SetKeyboardMode,
+    .GetKey = GetKey,
+    .OpenFileDialog = OpenFileDialog,
+    .SaveFileDialog = SaveFileDialog,
+    .OpenFolderDialog = OpenFolderDialog,
+    .CreateMessageBox = CreateMessageBox,
+    .GetErrorString = GetErrorString,
+    .SetKeyCallback = SetKeyCallback,
+    .SetMousePosCallback = SetMousePosCallback,
+    .SetMouseButtonCallback = SetMouseButtonCallback,
+    .SetMouseScrollCallback = SetMouseScrollCallback,
+    .SetCharCallback = SetCharCallback,
+    .SetWindowStateCallback = SetWindowStateCallback,
+    .SetCallbacks = SetCallbacks,
+    .GetCallbacks = GetCallbacks,
+    .GetWindowInputState = GetWindowInputState,
+    .IsKeyPressed = IsKeyPressed,
+    .IsMouseButtonPressed = IsMouseButtonPressed,
+    .GetModifiers = GetModifiers,
+    .HasFocus = HasFocus,
+    .SetInputEventFiltering = SetInputEventFiltering,
+    .GetInputEventFiltering = GetInputEventFiltering,
+    .GetPlatformInfo = GetPlatformInfo,
+    .HasPlatformFeature = HasPlatformFeature,
+    .GetPlatformType = GetPlatformType,
+    .SetPlatformHints = SetPlatformHints,
+    .GetPlatformHints = GetPlatformHints,
+    .ValidatePlatform = ValidatePlatform
+};
 
 AXON_DLL_EXPORT void LoadPlugin(struct AxAPIRegistry *APIRegistry, bool Load)
 {

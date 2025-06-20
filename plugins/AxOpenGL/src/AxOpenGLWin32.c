@@ -368,7 +368,7 @@ void AxCreateContext(struct AxWindow *Window)
     }
 
     if (wglMakeCurrent((HDC)DeviceContext, RenderContext)) {
-        wglSwapIntervalEXT(0); // Disable vsync
+        wglSwapIntervalEXT(1); // Disable vsync
     }
 
     // Load OpenGL Extensions
