@@ -17,18 +17,6 @@ enable_testing()
 if (WIN32)
     add_definitions(-DAX_OS_WINDOWS)
     add_definitions(-DWINVER=0x0A00)
-
-    # Clang configuration for Windows
-    if (CMAKE_C_COMPILER_ID STREQUAL "Clang")
-        # Use MinGW-w64 target with MinGW linker
-        set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS}   --target=x86_64-w64-mingw32")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --target=x86_64-w64-mingw32")
-
-        # Use MinGW linker to avoid lld-link issues
-        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=ld")
-        set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=ld")
-        set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -fuse-ld=ld")
-    endif()
 endif()
 
 # Generate debug symbols on all non-MSVC toolchains

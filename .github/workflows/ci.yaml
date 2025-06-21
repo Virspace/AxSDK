@@ -18,11 +18,7 @@ jobs:
     - name: Install LLVM and Clang
       run: |
         choco install llvm --version=18.1.8 --allow-downgrade
-        choco install mingw --version=12.2.0
         echo "C:\Program Files\LLVM\bin" >> $GITHUB_PATH
-        echo "C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin" >> $GITHUB_PATH
-        # Verify lld is available
-        lld --version
       shell: bash
 
     - name: Configure CMake with Clang
