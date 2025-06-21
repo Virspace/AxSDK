@@ -17,12 +17,18 @@ jobs:
 
     - name: Install LLVM and Clang
       run: |
-        # Try to install the latest available LLVM version
-        choco install llvm --version=19.0.0 --force
+        # Download and install LLVM 19.0.0 from GitHub releases
+        $llvmVersion = "19.0.0"
+        $downloadUrl = "https://github.com/llvm/llvm-project/releases/download/llvmorg-$llvmVersion/LLVM-$llvmVersion-win64.exe"
+        $installerPath = "LLVM-$llvmVersion-win64.exe"
+
+        Invoke-WebRequest -Uri $downloadUrl -OutFile $installerPath
+        Start-Process -FilePath $installerPath -ArgumentList "/S" -Wait
+
         echo "C:\Program Files\LLVM\bin" >> $GITHUB_PATH
         # Check what version was installed
         clang --version
-      shell: bash
+      shell: pwsh
 
     - name: Configure CMake with Clang
       run: |
