@@ -19,6 +19,8 @@ jobs:
       run: |
         choco install llvm --version=18.1.8 --allow-downgrade
         echo "C:\Program Files\LLVM\bin" >> $GITHUB_PATH
+        # Verify lld is available
+        lld --version
       shell: bash
 
     - name: Configure CMake with Clang

@@ -18,11 +18,16 @@ if (WIN32)
     add_definitions(-DAX_OS_WINDOWS)
     add_definitions(-DWINVER=0x0A00)
 
-    # Simple Clang configuration for Windows
+    # Clang configuration for Windows
     if (CMAKE_C_COMPILER_ID STREQUAL "Clang")
-        # Use basic target without forcing specific linker
+        # Use MinGW-w64 target with lld linker
         set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS}   --target=x86_64-w64-mingw32")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --target=x86_64-w64-mingw32")
+        
+        # Explicitly use lld linker to avoid lld-link issues
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=lld")
+        set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=lld")
+        set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -fuse-ld=lld")
     endif()
 endif()
 
