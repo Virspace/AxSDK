@@ -18,9 +18,9 @@ if (WIN32)
     add_definitions(-DAX_OS_WINDOWS)
     add_definitions(-DWINVER=0x0A00)
 
-    # If using plain clang/clang++, ensure we target MinGW-w64;
-    # but *do not* force '-fuse-ld', let clang pick its default linker
+    # Simple Clang configuration for Windows
     if (CMAKE_C_COMPILER_ID STREQUAL "Clang")
+        # Use basic target without forcing specific linker
         set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS}   --target=x86_64-w64-mingw32")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --target=x86_64-w64-mingw32")
     endif()

@@ -8,7 +8,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Set up CMake
       uses: lukka/get-cmake@latest
@@ -26,11 +26,14 @@ jobs:
         cmake -S . -B build -G "Ninja" `
         -DCMAKE_C_COMPILER=clang `
         -DCMAKE_CXX_COMPILER=clang++ `
-        -DCMAKE_BUILD_TYPE=Release
+        -DCMAKE_BUILD_TYPE=Release `
+        -DCMAKE_VERBOSE_MAKEFILE=ON
       shell: pwsh
 
     - name: Build
       run: cmake --build build
+      shell: pwsh
 
     - name: Run tests
-      run: ctest --test-dir build
+      run: ctest --test-dir build --output-on-failure
+      shell: pwsh
