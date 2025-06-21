@@ -18,9 +18,9 @@ jobs:
     - name: Install LLVM and Clang
       run: |
         # Download and install LLVM 19.0.0 from GitHub releases
-        $llvmVersion = "19.0.0"
+        $llvmVersion = "20.1.7"
         $downloadUrl = "https://github.com/llvm/llvm-project/releases/download/llvmorg-$llvmVersion/LLVM-$llvmVersion-win64.exe"
-        $installerPath = "LLVM-$llvmVersion-win64.exe"
+        $installerPath = "LLVM-$llvmVersion-windows-x64.exe"
 
         Invoke-WebRequest -Uri $downloadUrl -OutFile $installerPath
         Start-Process -FilePath $installerPath -ArgumentList "/S" -Wait
