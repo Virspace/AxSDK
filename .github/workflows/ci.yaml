@@ -8,7 +8,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Set up CMake
       uses: lukka/get-cmake@latest
@@ -17,20 +17,32 @@ jobs:
 
     - name: Install LLVM and Clang
       run: |
-        choco install llvm --version=18.1.8 --allow-downgrade
+        # Download and install LLVM 19.0.0 from GitHub releases
+        $llvmVersion = "20.1.7"
+        $downloadUrl = "https://github.com/llvm/llvm-project/releases/download/llvmorg-$llvmVersion/LLVM-$llvmVersion-win64.exe"
+        $installerPath = "LLVM-$llvmVersion-windows-x64.exe"
+
+        Invoke-WebRequest -Uri $downloadUrl -OutFile $installerPath
+        Start-Process -FilePath $installerPath -ArgumentList "/S" -Wait
+
         echo "C:\Program Files\LLVM\bin" >> $GITHUB_PATH
-      shell: bash
+        # Check what version was installed
+        clang --version
+      shell: pwsh
 
     - name: Configure CMake with Clang
       run: |
         cmake -S . -B build -G "Ninja" `
         -DCMAKE_C_COMPILER=clang `
         -DCMAKE_CXX_COMPILER=clang++ `
-        -DCMAKE_BUILD_TYPE=Release
+        -DCMAKE_BUILD_TYPE=Release `
+        -DCMAKE_VERBOSE_MAKEFILE=ON
       shell: pwsh
 
     - name: Build
       run: cmake --build build
+      shell: pwsh
 
     - name: Run tests
-      run: ctest --test-dir build
+      run: ctest --test-dir build --output-on-failure
+      shell: pwsh
