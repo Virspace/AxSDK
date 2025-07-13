@@ -27,20 +27,20 @@ endif()
 
 # Get stb
 FetchContent_Declare(
-    stb
+    axsdk_stb
     GIT_REPOSITORY https://github.com/nothings/stb.git
     GIT_TAG master
     GIT_SHALLOW     TRUE
     GIT_PROGRESS    TRUE
 )
 
-FetchContent_GetProperties(stb)
-if(NOT stb_POPULATED)
-    FetchContent_Populate(stb)
+FetchContent_GetProperties(axsdk_stb)
+if(NOT axsdk_stb_POPULATED)
+    FetchContent_Populate(axsdk_stb)
     message("Fetching stb")
 
-    add_library(stb INTERFACE)
-    target_include_directories(stb INTERFACE ${stb_SOURCE_DIR})
+    add_library(axsdk_stb INTERFACE)
+    target_include_directories(axsdk_stb INTERFACE ${axsdk_stb_SOURCE_DIR})
 endif()
 
 #
@@ -142,7 +142,7 @@ target_link_libraries(OpenGLGame
     PRIVATE
         Virspace::Foundation
         cgltf
-        stb
+        axsdk_stb
 )
 
 target_link_libraries(OpenGLExample
