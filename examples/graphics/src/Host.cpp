@@ -2,9 +2,9 @@
 #include <stdlib.h>
 #include <crtdbg.h>
 
-#include "foundation/AxAPIRegistry.h"
-#include "foundation/AxPlugin.h"
-#include "foundation/AxApplication.h"
+#include "Foundation/AxAPIRegistry.h"
+#include "Foundation/AxPlugin.h"
+#include "Foundation/AxApplication.h"
 
 #ifdef AX_OS_WINDOWS
 #include <windows.h>
