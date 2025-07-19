@@ -2,6 +2,22 @@
 
 #include "Foundation/AxTypes.h"
 
+// Platform-agnostic error codes
+typedef enum AxPlatformError
+{
+    AX_PLATFORM_SUCCESS = 0,                     // Operation completed successfully
+    AX_PLATFORM_ERROR_INVALID_PARAMETER,         // Invalid parameter provided
+    AX_PLATFORM_ERROR_PATH_NOT_FOUND,            // Path does not exist
+    AX_PLATFORM_ERROR_FILE_NOT_FOUND,            // File does not exist
+    AX_PLATFORM_ERROR_ALREADY_EXISTS,            // Path already exists
+    AX_PLATFORM_ERROR_ACCESS_DENIED,             // Access denied
+    AX_PLATFORM_ERROR_BUSY,                      // Resource is in use
+    AX_PLATFORM_ERROR_READONLY,                  // Resource is read-only
+    AX_PLATFORM_ERROR_DISK_FULL,                 // Disk is full
+    AX_PLATFORM_ERROR_PATH_TOO_LONG,             // Path is too long
+    AX_PLATFORM_ERROR_UNKNOWN                    // Unknown error occurred
+} AxPlatformError;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -17,6 +33,20 @@ typedef struct AxDLL
 {
     uint64_t Opaque;
 } AxDLL;
+
+// Represents a directory handle for iteration
+typedef struct AxDirectoryHandle
+{
+    uint64_t Handle;
+} AxDirectoryHandle;
+
+// Represents a directory entry (file or folder)
+typedef struct AxDirectoryEntry
+{
+    char Name[260];  // MAX_PATH on Windows
+    bool IsDirectory;
+    uint64_t Size;
+} AxDirectoryEntry;
 
 #define AXON_PLATFORM_API_NAME "AxonPlatformAPI"
 
@@ -56,13 +86,26 @@ struct AxPlatformFileAPI
 
     // Closes the file.
     void (*Close)(AxFile File);
+
+    // Deletes a file from the filesystem.
+    bool (*DeleteFile)(const char *Path, AxPlatformError *ErrorCode);
 };
 
 // Interface for Directories
 struct AxPlatformDirectoryAPI
 {
-    bool (*CreateDir)(const char *Path);
-    bool (*RemoveDir)(const char *Path);
+    bool (*CreateDir)(const char *Path, AxPlatformError *ErrorCode);
+    bool (*RemoveDir)(const char *Path, bool Recursive, AxPlatformError *ErrorCode);
+    
+    // Directory navigation functions
+    bool (*ChangeDirectory)(const char *Path);
+    char *(*GetCurrentDirectory)(void);
+    
+    // Directory iteration functions
+    AxDirectoryHandle (*OpenDirectory)(const char *Path);
+    bool (*ReadDirectoryEntry)(AxDirectoryHandle Handle, AxDirectoryEntry *Entry);
+    bool (*CloseDirectory)(AxDirectoryHandle Handle);
+    bool (*IsDirectoryHandleValid)(AxDirectoryHandle Handle);
 };
 
 // Interface for loading libraries
