@@ -187,6 +187,16 @@ add_custom_command(
     COMMENT "Copying models folder to the build folder"
 )
 
+# Copy textures to build directory during build
+set(TEXTURES_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/textures")
+set(TEXTURES_DESTINATION_DIR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/textures")
+add_custom_command(
+    TARGET OpenGLGame  # Target executable to associate the copy command with
+    POST_BUILD  # Specify that this should happen after building the executable
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${TEXTURES_SOURCE_DIR} ${TEXTURES_DESTINATION_DIR}
+    COMMENT "Copying textures folder to the build folder"
+)
+
 # TODO(mdeforge): See if we can precompile the shaders
 function(add_shaders SHADER_DIR)
     #set(SHADER_SOURCE_FILES ${ARGN}) # the rest of arguments to this function will be assigned as shader source files
