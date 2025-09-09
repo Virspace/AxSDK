@@ -1,0 +1,71 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/foundation/include",
+                "${workspaceFolder}/foundation/include/Foundation",
+                "${workspaceFolder}/Plugins/AxWindow/include",
+                "${workspaceFolder}/Plugins/AxOpenGL/include",
+                "${workspaceFolder}/Plugins/AxAudio/include"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE",
+                "AXON_LINKS_FOUNDATION",
+                "AX_OS_WINDOWS",
+                "WINVER=0x0A00"
+            ],
+            "compilerPath": "${env:MINGW_PREFIX}/bin/clang.exe",
+            "cStandard": "c17",
+            "cppStandard": "c++20",
+            "intelliSenseMode": "clang-x64",
+            "compileCommands": "${workspaceFolder}/build/compile_commands.json"
+        },
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/foundation/include",
+                "${workspaceFolder}/foundation/include/Foundation",
+                "${workspaceFolder}/Plugins/AxWindow/include",
+                "${workspaceFolder}/Plugins/AxOpenGL/include",
+                "${workspaceFolder}/Plugins/AxAudio/include"
+            ],
+            "defines": [
+                "_DEBUG",
+                "AXON_LINKS_FOUNDATION",
+                "AX_OS_LINUX"
+            ],
+            "compilerPath": "/usr/bin/clang",
+            "cStandard": "c17",
+            "cppStandard": "c++20",
+            "intelliSenseMode": "clang-x64",
+            "compileCommands": "${workspaceFolder}/build/compile_commands.json"
+        },
+        {
+            "name": "Mac",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/foundation/include",
+                "${workspaceFolder}/foundation/include/Foundation",
+                "${workspaceFolder}/Plugins/AxWindow/include",
+                "${workspaceFolder}/Plugins/AxOpenGL/include",
+                "${workspaceFolder}/Plugins/AxAudio/include"
+            ],
+            "defines": [
+                "_DEBUG",
+                "AXON_LINKS_FOUNDATION",
+                "AX_OS_MACOS"
+            ],
+            "compilerPath": "/usr/bin/clang",
+            "cStandard": "c17",
+            "cppStandard": "c++20",
+            "intelliSenseMode": "clang-x64",
+            "compileCommands": "${workspaceFolder}/build/compile_commands.json"
+        }
+    ],
+    "version": 4
+}

@@ -42,6 +42,32 @@ Code Organization
 * C is easy to bind to because you don't have to fight with objects
 * I like the challenge, learning new things, and knowing the code I'm using rather than just depending on the STL
 
+## Development Setup
+
+### Prerequisites
+- CMake 3.15+
+- Clang compiler
+- **Windows**: MSYS2 with MinGW-w64
+- **Linux**: Standard development tools
+- **macOS**: Xcode command line tools
+
+### VS Code Setup
+This repository includes VS Code configuration for IntelliSense. If you're using a different setup than the defaults, you may need to adjust:
+
+**Windows MSYS2 users**: Set the `MINGW_PREFIX` environment variable:
+```bash
+export MINGW_PREFIX="/c/msys64/mingw64"  # Adjust path as needed
+```
+
+**Other configurations**: Edit `.vscode/c_cpp_properties.json` and update the `compilerPath` for your configuration.
+
+### Build Instructions
+```bash
+mkdir build && cd build
+cmake ..
+make -j$(nproc)
+```
+
 ## Inspirations
 * [Handmade Hero](https://handmadehero.org/)
 * [Our Machinery](https://ourmachinery.com/)

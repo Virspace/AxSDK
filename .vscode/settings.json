@@ -13,5 +13,9 @@
         "axwindow.h": "c",
         "axdrawlist.h": "c",
         "axarray.h": "c"
-    }
+    },
+    "C_Cpp.default.intelliSenseMode": "clang-x64",
+    "C_Cpp.default.cppStandard": "c++20",
+    "C_Cpp.default.cStandard": "c17",
+    "C_Cpp.intelliSenseEngine": "default"
 }

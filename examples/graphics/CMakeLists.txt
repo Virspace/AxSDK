@@ -121,7 +121,6 @@ target_compile_definitions(OpenGLExample
 target_compile_features(OpenGLGame PRIVATE cxx_std_20)
 target_compile_definitions(OpenGLGame
     PRIVATE
-        AXON_LINKS_FOUNDATION
         _CRT_SECURE_NO_WARNINGS
 )
 

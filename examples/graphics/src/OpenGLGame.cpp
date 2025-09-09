@@ -16,6 +16,7 @@
 #include "Foundation/AxPlatform.h"
 #include "Foundation/AxCamera.h"
 #include "Foundation/AxMath.h"
+#include "Foundation/AxHashTable.h"
 
 #include "AxWindow/AxWindow.h"
 #include "AxOpenGL/AxOpenGL.h"
@@ -35,6 +36,8 @@ struct AxWindowAPI *WindowAPI;
 struct AxOpenGLAPI *RenderAPI;
 struct AxPlatformAPI *PlatformAPI;
 struct AxPlatformFileAPI *FileAPI;
+struct AxCameraAPI *CameraAPI;
+struct AxHashTableAPI *HashTableAPI;
 
 static AxCamera PerspCamera;
 static AxCamera DiffuseCamera;
@@ -750,6 +753,8 @@ extern "C" AXON_DLL_EXPORT void LoadPlugin(struct AxAPIRegistry *APIRegistry, bo
         WindowAPI = (struct AxWindowAPI *)APIRegistry->Get(AXON_WINDOW_API_NAME);
         RenderAPI = (struct AxOpenGLAPI *)APIRegistry->Get(AXON_OPENGL_API_NAME);
         PlatformAPI = (struct AxPlatformAPI *)APIRegistry->Get(AXON_PLATFORM_API_NAME);
+        CameraAPI = (struct AxCameraAPI *)APIRegistry->Get(AXON_CAMERA_API_NAME);
+        HashTableAPI = (struct AxHashTableAPI *)APIRegistry->Get(AXON_HASH_TABLE_API_NAME);
         FileAPI = PlatformAPI->FileAPI;
         RegistryAPI = APIRegistry;
 
