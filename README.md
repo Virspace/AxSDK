@@ -71,7 +71,7 @@ make -j$(nproc)
 ```
 
 ### Assets
-You'll need to grab the Sponza Atrium CGTF and textures from [CGTrader]([url](https://www.cgtrader.com/free-3d-models/exterior/historic-exterior/sponza-atrium-2022)). Put them in _examples\graphics\models_. They should get copied into the _build\bin\models_, but if not, put them there until I figure out a better way to manage this demo scene.
+You'll need to grab the Sponza Atrium GLTF (.glb) and textures from [CGTrader]([url](https://www.cgtrader.com/free-3d-models/exterior/historic-exterior/sponza-atrium-2022)). Put them in _examples\graphics\models_. They should get copied into the _build\bin\models_, but if not, put them there until I figure out a better way to manage this demo scene.
 
 ## Inspirations
 * [Handmade Hero](https://handmadehero.org/)
