@@ -5,7 +5,6 @@
 #include "AxAllocatorRegistry.h"
 #include "AxLinearAllocator.h"
 #include "AxAllocatorInfo.h"
-#include "AxCamera.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -76,8 +75,6 @@ void AxonRegisterAllFoundationAPIs(struct AxAPIRegistry *APIRegistry)
         APIRegistry->Set(AXON_ALLOCATOR_DATA_API_NAME, AllocatorDataAPI, sizeof(struct AxAllocatorDataAPI));
         APIRegistry->Set(AXON_LINEAR_ALLOCATOR_API_NAME, LinearAllocatorAPI, sizeof(struct AxLinearAllocatorAPI));
         APIRegistry->Set(AXON_HASH_TABLE_API_NAME, HashTableAPI, sizeof(struct AxHashTableAPI));
-        APIRegistry->Set(AXON_CAMERA_API_NAME, CameraAPI, sizeof(struct AxCameraAPI));
-
     }
 }
 

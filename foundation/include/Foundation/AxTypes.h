@@ -135,17 +135,43 @@ typedef union AxVec4
   float E[4];
 } AxVec4;
 
+typedef union AxQuat
+{
+    struct
+    {
+        float X, Y, Z, W;
+    };
+
+    float XYZW[4];
+} AxQuat;
+
 // A column major 4x4 matrix
 typedef struct AxMat4x4
 {
     float E[4][4]; // E[column][row]
 } AxMat4x4;
 
-typedef struct AxMat4x4Inv
+
+// Transform representation using Translation, Rotation, Scale
+typedef struct AxTransform
 {
-    AxMat4x4 Forward;
-    AxMat4x4 Inverse;
-} AxMat4x4Inv;
+    // TRS Components
+    AxVec3 Translation;
+    AxQuat Rotation;
+    AxVec3 Scale;
+    AxVec3 Up;
+
+    // Hierarchy
+    struct AxTransform *Parent;  // Parent transform (NULL for root)
+
+    // Lazy computation cache
+    AxMat4x4 CachedForwardMatrix;
+    AxMat4x4 CachedInverseMatrix;
+    uint64_t LastComputedFrame;      // Frame number when matrices were computed
+    bool ForwardMatrixDirty;         // True if forward matrix needs recomputation
+    bool InverseMatrixDirty;         // True if inverse matrix needs recomputation
+    bool IsIdentity;                 // Optimization flag for identity transforms
+} AxTransform;
 
 // Total number of ticks that have occurred since the OS started
 typedef struct AxWallClock
@@ -158,13 +184,6 @@ typedef struct AxClock
 {
     int64_t TimeStamp;
 } AxClock;
-
-typedef struct AxTransform
-{
-    AxVec3 Position;
-    AxVec3 Rotation;
-    AxVec3 Scale;
-} AxTransform;
 
 typedef enum AxTupleType { AX_TUPLE_INT, AX_TUPLE_FLOAT, AX_TUPLE_STRING } AxTupleType;
 

@@ -25,7 +25,6 @@ target_sources(Foundation
         include/Foundation/AxAllocatorRegistry.h
         include/Foundation/AxApplication.h
         include/Foundation/AxArray.h
-        include/Foundation/AxCamera.h
         include/Foundation/AxHeap.h
         #include/Foundation/AxStackAllocator.h
         include/Foundation/AxEditorPlugin.h
@@ -43,7 +42,6 @@ target_sources(Foundation
         src/AxAllocatorInfo.c
         src/AxAllocatorRegistry.c
         src/AxAllocUtils.c
-        src/AxCamera.c
         src/AxLinearAllocatorWin32.c
         src/AxHeapWin32.c
         #src/AxImageLoader.c
@@ -65,7 +63,6 @@ else()
             include/Foundation/AxAllocatorRegistry.h
             include/Foundation/AxApplication.h
             include/Foundation/AxArray.h
-            include/Foundation/AxCamera.h
             #include/Foundation/AxHeap.h
             include/Foundation/AxLinearAllocator.h
             #include/Foundation/AxStackAllocator.h
@@ -84,7 +81,6 @@ else()
             src/AxAllocatorInfo.c
             src/AxAllocatorRegistry.c
             src/AxAllocUtils.c
-            src/AxCamera.c
             #src/AxHeapLinux.c
             src/AxIntrinsics.c
             src/AxLinearAllocatorLinux.c
@@ -120,7 +116,12 @@ target_include_directories(Foundation
         ${CMAKE_CURRENT_SOURCE_DIR}/include/Foundation
 )
 
-target_link_libraries(Foundation Shell32 User32)
+# Link Windows libraries (works with both MSVC and MinGW)
+if(WIN32)
+    target_link_libraries(Foundation shell32 user32)
+else()
+    # Linux libraries would go here if needed
+endif()
 
 #
 # Install and Export

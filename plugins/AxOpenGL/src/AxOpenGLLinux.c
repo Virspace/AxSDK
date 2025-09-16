@@ -229,9 +229,9 @@ static bool CreateDeviceObjects(/*struct OpenGLData* Data*/)
     Data->ShaderHandle = CreateProgram(Header, VertexCode, FragmentCode);
 
     // TODO(mdeforge): glGetUniformLocation for Texture
-    Data->AttribLocationTexture = glGetUniformLocation(Data->ShaderHandle, "Texture");
-    Data->AttribLocationProjectMatrix = glGetUniformLocation(Data->ShaderHandle, "ProjMtx");
-    Data->AttribLocationVertexPos = glGetAttribLocation(Data->ShaderHandle, "Position");
+    Data->AttribLocationTexture = glGetUniformLocation(Data->ShaderHandle, "texture");
+    Data->AttribLocationProjectMatrix = glGetUniformLocation(Data->ShaderHandle, "projMtx");
+    Data->AttribLocationVertexPos = glGetAttribLocation(Data->ShaderHandle, "position");
     Data->AttribLocationVertexUV = glGetAttribLocation(Data->ShaderHandle, "UV");
     Data->AttribLocationVertexColor = glGetAttribLocation(Data->ShaderHandle, "Color");
 
@@ -342,14 +342,14 @@ static void SetupRenderState(AxDrawData *DrawData, int FramebufferWidth, int Fra
     float T = (float)DrawData->DisplayPos.Y + (float)DrawData->DisplaySize.Y;
 
     AxMat4x4f OrthoProjection = CameraAPI->CalcOrthographicProjection(L, R, B, T, 0.1f, 100.0f);
-    OrthoProjection = Transpose(OrthoProjection);
+    // Matrix is already column-major, no transpose needed
 
     glUseProgram(Data->ShaderHandle);
     glUniform1i(Data->AttribLocationTexture, 0);
     glUniformMatrix4fv(Data->AttribLocationProjectMatrix, 1, GL_FALSE, &OrthoProjection.E[0][0]);
 
     // float AspectRatio = (float)WindowWidth / (float)WindowHeight;
-    // AxMat4x4Inv ProjectionMatrix = PerspectiveProjection(AspectRatio, 0.1f, 0.50f, 100.0f);
+    // AxMat4x4 ProjectionMatrix = CalcPerspectiveProjection(AspectRatio, 0.1f, 0.50f, 100.0f);
 
     // AxVec3 ViewDirection = { 0.0f, 0.0f, -1.0f };
     // AxVec3 Up = { 0.0f, 1.0f, 0.0f };
@@ -357,7 +357,7 @@ static void SetupRenderState(AxDrawData *DrawData, int FramebufferWidth, int Fra
     // AxMat4x4 Transform = Identity();
     // Transform = Translate(Transform, OpenGL->Mesh.Transform.Position);
 
-    // AxMat4x4 ViewMatrix = LookAt(Position, Vec3Add(Position, ViewDirection), Up);
+    // AxMat4x4 ViewMatrix = TransformLookAt(Position, Vec3Add(Position, ViewDirection), Up);
     // AxMat4x4 ModelMatrix = Transform;
     // AxMat4x4 ModelView = Mat4x4Mul(ViewMatrix, ModelMatrix);
     // AxMat4x4 MVP = Mat4x4Mul(ProjectionMatrix.Forward, ModelView);
