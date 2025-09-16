@@ -1,4 +1,6 @@
 # Axon SDK
+<img style="max-width: 100%; display: inline-block;" alt="gallery" src="https://github.com/user-attachments/assets/69d63972-6a5f-4d2e-87b4-58dd3dede921" />
+
 The Axon SDK (AxSDK) is a set of tools, libraries, documentation, and samples for creating games and simulations of all kinds. My hope is that, when complete, this SDK becomes a fantastic starting point for others to build off of to create new and interesting things with. At least, that's what I plan on using it for!
 
 The Axon SDK is my latest attempt at writing sane, well designed software. It is an opinionated departure from object-oriented programming based on my professional experiences writing fast, maintainable, easy to use code.
@@ -67,6 +69,9 @@ mkdir build && cd build
 cmake ..
 make -j$(nproc)
 ```
+
+### Assets
+You'll need to grab the Sponza Atrium CGTF and textures from [CGTrader]([url](https://www.cgtrader.com/free-3d-models/exterior/historic-exterior/sponza-atrium-2022)). Put them in _examples\graphics\models_. They should get copied into the _build\bin\models_, but if not, put them there until I figure out a better way to manage this demo scene.
 
 ## Inspirations
 * [Handmade Hero](https://handmadehero.org/)
