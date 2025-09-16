@@ -82,7 +82,7 @@ extern void *ArrayReserve(void* A, size_t BlockSize, size_t NewCapacity);
 // Returns the size of the array in bytes (not including the header data).
 #define ArraySizeInBytes(a)    (ArraySize(a) * sizeof(*(a)))
 
-#define ArrayNeedsGrowth(a, n) ((n) > ArrayCapacity(a))
+#define ArrayNeedsGrowth(a, n) ((ArraySize(a) + (n)) > ArrayCapacity(a))
 
 // [Element Access]
 

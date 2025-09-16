@@ -65,5 +65,7 @@ dkms.conf
 build/*
 vsbuild/*
 
+# Assets
+examples/graphics/models/
 
 .cache/*

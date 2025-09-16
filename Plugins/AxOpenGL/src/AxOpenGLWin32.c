@@ -10,6 +10,11 @@
 #include "Foundation/AxPlatform.h"
 #include "GL/glcorearb.h"
 
+// Define GL constants that may not be available in core contexts
+#ifndef GL_DEPTH_BITS
+#define GL_DEPTH_BITS 0x0D56
+#endif
+
 #define AXARRAY_IMPLEMENTATION
 #include "Foundation/AxArray.h"
 
@@ -246,25 +251,26 @@ static void SetupRenderState(struct AxDrawData *DrawData, int FramebufferWidth, 
 {
     AXON_ASSERT(ContextInitialized && "Context not initialized in SetupRenderState()!");
 
-    // Enable alpha blending and scissor test, disable face culling and depth test
-	// TODO(mdeforge): This is currently causing an issue but probably because I have to put back in textures
-    // glEnable(GL_BLEND);
-    // glBlendEquation(GL_FUNC_ADD);
-    // glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-    uint32_t Result = glGetError();
-    AXON_ASSERT(!Result && "OpenGL Error in CreateProgram()!");
+    // Enable alpha blending for transparent textures
+    glEnable(GL_BLEND);
+    glBlendEquation(GL_FUNC_ADD);
+    glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 
-    //glDisable(GL_CULL_FACE);
-    //glDisable(GL_DEPTH_TEST);
+    // Enable face culling to avoid rendering back faces
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
+    glFrontFace(GL_CCW);
+
+    // Enable depth testing but disable depth writing for transparent objects
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
     //glDisable(GL_STENCIL_TEST);
     //glEnable(GL_SCISSOR_TEST);
     //glDisable(GL_PRIMITIVE_RESTART);
     //glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
-    Result = glGetError();
-    AXON_ASSERT(!Result && "OpenGL Error in CreateProgram()!");
     // float AspectRatio = (float)WindowWidth / (float)WindowHeight;
-    // AxMat4x4Inv ProjectionMatrix = PerspectiveProjection(AspectRatio, 0.1f, 0.50f, 100.0f);
+    // AxMat4x4 ProjectionMatrix = CalcPerspectiveProjection(AspectRatio, 0.1f, 0.50f, 100.0f);
 
     // AxVec3 ViewDirection = { 0.0f, 0.0f, -1.0f };
     // AxVec3 Up = { 0.0f, 1.0f, 0.0f };
@@ -272,7 +278,7 @@ static void SetupRenderState(struct AxDrawData *DrawData, int FramebufferWidth, 
     // AxMat4x4 Transform = Identity();
     // Transform = Translate(Transform, OpenGL->Mesh.Transform.Position);
 
-    // AxMat4x4 ViewMatrix = LookAt(Position, Vec3Add(Position, ViewDirection), Up);
+    // AxMat4x4 ViewMatrix = TransformLookAt(Position, Vec3Add(Position, ViewDirection), Up);
     // AxMat4x4 ModelMatrix = Transform;
     // AxMat4x4 ModelView = Mat4x4Mul(ViewMatrix, ModelMatrix);
     // AxMat4x4 MVP = Mat4x4Mul(ProjectionMatrix.Forward, ModelView);
@@ -411,6 +417,156 @@ static struct AxOpenGLInfo AxGetInfo(bool ModernContext)
     return (Result);
 }
 
+// Camera helper functions
+static void RecomputeProjectionMatrix(struct AxCamera *Camera)
+{
+    if (!Camera) { return; }
+    
+    if (Camera->IsOrthographic) {
+        // Calculate orthographic bounds based on zoom level and aspect ratio
+        float HalfHeight = Camera->ZoomLevel * 0.5f;
+        float HalfWidth = HalfHeight * Camera->AspectRatio;
+        
+        Camera->ProjectionMatrix = CalcOrthographicProjection(
+            -HalfWidth, HalfWidth,    // Left, Right
+            -HalfHeight, HalfHeight,  // Bottom, Top
+            Camera->NearClipPlane,    // Near
+            Camera->FarClipPlane      // Far
+        );
+    } else {
+        // Perspective projection
+        Camera->ProjectionMatrix = CalcPerspectiveProjection(
+            Camera->FieldOfView,      // FOV in radians
+            Camera->AspectRatio,      // Aspect ratio
+            Camera->NearClipPlane,    // Near clip
+            Camera->FarClipPlane      // Far clip
+        );
+    }
+}
+
+// Camera functions
+static void CreateCamera(struct AxCamera *Camera)
+{
+    AXON_ASSERT(Camera);
+    if (!Camera) { return; }
+    memset(Camera, 0, sizeof(struct AxCamera));
+    
+    // Set default camera properties
+    Camera->IsOrthographic = false;
+    Camera->FieldOfView = AX_PI / 4.0f; // 45 degrees in radians
+    Camera->ZoomLevel = 10.0f;          // Default orthographic zoom
+    Camera->AspectRatio = 16.0f / 9.0f; // Default aspect ratio
+    Camera->NearClipPlane = 0.01f;
+    Camera->FarClipPlane = 1000.0f;
+    
+    // Initialize view matrix as identity (camera at origin looking down -Z)
+    Camera->ViewMatrix = Identity();
+    
+    // Compute initial projection matrix
+    RecomputeProjectionMatrix(Camera);
+}
+
+static bool CameraGetOrthographic(struct AxCamera *Camera)
+{
+    AXON_ASSERT(Camera);
+    if (!Camera) { return (false); }
+    return (Camera->IsOrthographic);
+}
+
+static void CameraSetOrthographic(struct AxCamera *Camera, bool IsOrthographic)
+{
+    AXON_ASSERT(Camera);
+    if (!Camera) { return; }
+    Camera->IsOrthographic = IsOrthographic;
+    RecomputeProjectionMatrix(Camera);
+}
+
+static float CameraGetFOV(struct AxCamera *Camera)
+{
+    AXON_ASSERT(Camera);
+    if (!Camera) { return (0.0f); }
+    return (Camera->FieldOfView);
+}
+
+static void CameraSetFOV(struct AxCamera *Camera, float FOV)
+{
+    AXON_ASSERT(Camera);
+    if (!Camera) { return; }
+    Camera->FieldOfView = FOV;
+    RecomputeProjectionMatrix(Camera);
+}
+
+static float CameraGetNearClipPlane(struct AxCamera *Camera)
+{
+    AXON_ASSERT(Camera);
+    if (!Camera) { return (0.0f); }
+    return (Camera->NearClipPlane);
+}
+
+static void CameraSetNearClipPlane(struct AxCamera *Camera, float NearClipPlane)
+{
+    AXON_ASSERT(Camera);
+    if (!Camera) { return; }
+    Camera->NearClipPlane = NearClipPlane;
+    RecomputeProjectionMatrix(Camera);
+}
+
+static float CameraGetFarClipPlane(struct AxCamera *Camera)
+{
+    AXON_ASSERT(Camera);
+    if (!Camera) { return (0.0f); }
+
+    return (Camera->FarClipPlane);
+}
+
+static void CameraSetFarClipPlane(struct AxCamera *Camera, float FarClipPlane)
+{
+    AXON_ASSERT(Camera);
+    if (!Camera) { return; }
+    Camera->FarClipPlane = FarClipPlane;
+    RecomputeProjectionMatrix(Camera);
+}
+
+static float CameraGetZoomLevel(struct AxCamera *Camera)
+{
+    AXON_ASSERT(Camera);
+    if (!Camera) { return (0.0f); }
+    return (Camera->ZoomLevel);
+}
+
+static void CameraSetZoomLevel(struct AxCamera *Camera, float ZoomLevel)
+{
+    AXON_ASSERT(Camera);
+    if (!Camera) { return; }
+
+    Camera->ZoomLevel = ZoomLevel;
+    RecomputeProjectionMatrix(Camera);
+}
+
+static float CameraGetAspectRatio(struct AxCamera *Camera)
+{
+    AXON_ASSERT(Camera);
+    if (!Camera) { return (0.0f); }
+
+    return (Camera->AspectRatio);
+}
+
+static void CameraSetAspectRatio(struct AxCamera *Camera, float AspectRatio)
+{
+    AXON_ASSERT(Camera);
+    if (!Camera) { return; }
+    Camera->AspectRatio = AspectRatio;
+    RecomputeProjectionMatrix(Camera);
+}
+
+static struct AxMat4x4 CameraGetProjectionMatrix(struct AxCamera *Camera)
+{
+    AXON_ASSERT(Camera);
+    if (!Camera) { return (struct AxMat4x4) { 0 }; }
+
+    return (Camera->ProjectionMatrix);
+}
+
 static struct AxViewport *AxCreateViewport(AxVec2 Position, AxVec2 Size)
 {
     struct AxViewport *Result = calloc(1, sizeof(struct AxViewport));
@@ -434,8 +590,7 @@ static void AxNewFrame(void)
 
     // Reset to default OpenGL state at start of frame
     glDisable(GL_SCISSOR_TEST);
-    glDisable(GL_DEPTH_TEST);
-
+    
     // Reset viewport to full window size
     GLint viewport[4];
     glGetIntegerv(GL_VIEWPORT, viewport);
@@ -501,14 +656,9 @@ static void AxRender(struct AxViewport *Viewport, struct AxMesh *Mesh, struct Ax
     AXON_ASSERT(Mesh && "Mesh is NULL in Render()!");
     AXON_ASSERT(ShaderData && "ShaderData is NULL in Render()!");
 
-    // Save current OpenGL state
-    GLint lastViewport[4];
-    glGetIntegerv(GL_VIEWPORT, lastViewport);
-    GLboolean lastScissorTest = glIsEnabled(GL_SCISSOR_TEST);
-    GLboolean lastDepthTest = glIsEnabled(GL_DEPTH_TEST);
+    // Set up render state for alpha blending
+    SetupRenderState(NULL, 0, 0);
 
-    // Set up viewport and render
-    AxSetActiveViewport(Viewport);
     glUseProgram(ShaderData->ShaderHandle);
     glBindVertexArray(Mesh->VAO);
 
@@ -518,15 +668,6 @@ static void AxRender(struct AxViewport *Viewport, struct AxMesh *Mesh, struct Ax
         GL_UNSIGNED_INT,
         0
     );
-
-    // Restore previous OpenGL state
-    glViewport(lastViewport[0], lastViewport[1], lastViewport[2], lastViewport[3]);
-    if (!lastScissorTest) {
-        glDisable(GL_SCISSOR_TEST);
-    }
-    if (!lastDepthTest) {
-        glDisable(GL_DEPTH_TEST);
-    }
 
     // Check for errors
     GLenum err;
@@ -640,17 +781,24 @@ static bool AxGetAttributeLocations(const uint32_t ProgramID, struct AxShaderDat
         return (false);
     }
 
-    ShaderData->AttribLocationLightPos = glGetUniformLocation(ShaderData->ShaderHandle, "LightPos");
+    ShaderData->AttribLocationLightPos = glGetUniformLocation(ShaderData->ShaderHandle, "lightPos");
     if (ShaderData->AttribLocationLightPos < 0) {
         printf("Warning: Could not find uniform 'LightPos'. Location: %d\n", 
                ShaderData->AttribLocationLightPos);
         // Don't return false here as this is now an expected uniform
     }
 
-    ShaderData->AttribLocationLightColor = glGetUniformLocation(ShaderData->ShaderHandle, "LightColor");
+    ShaderData->AttribLocationLightColor = glGetUniformLocation(ShaderData->ShaderHandle, "lightColor");
     if (ShaderData->AttribLocationLightColor < 0) {
         printf("Warning: Could not find uniform 'LightColor'. Location: %d\n",
                ShaderData->AttribLocationLightColor);
+        // Don't return false here as this is now an expected uniform
+    }
+
+    ShaderData->AttribLocationViewPos = glGetUniformLocation(ShaderData->ShaderHandle, "viewPos");
+    if (ShaderData->AttribLocationViewPos < 0) {
+        printf("Warning: Could not find uniform 'ViewPos'. Location: %d\n",
+               ShaderData->AttribLocationViewPos);
         // Don't return false here as this is now an expected uniform
     }
 
@@ -659,27 +807,43 @@ static bool AxGetAttributeLocations(const uint32_t ProgramID, struct AxShaderDat
         return (false);
     }
 
-    ShaderData->AttribLocationVertexPos = glGetAttribLocation(ShaderData->ShaderHandle, "Position");
+    ShaderData->AttribLocationMaterialAlpha = glGetUniformLocation(ShaderData->ShaderHandle, "materialAlpha");
+    if (ShaderData->AttribLocationMaterialAlpha < 0) {
+        printf("Warning: Could not find uniform 'materialAlpha'. Location: %d\n",
+               ShaderData->AttribLocationMaterialAlpha);
+        // Don't return false - this is optional for backward compatibility
+    }
+
+    ShaderData->AttribLocationVertexPos = glGetAttribLocation(ShaderData->ShaderHandle, "position");
     if (ShaderData->AttribLocationVertexPos < 0) {
         return (false);
     }
 
-    ShaderData->AttribLocationVertexUV = glGetAttribLocation(ShaderData->ShaderHandle, "TexCoord");
+    ShaderData->AttribLocationVertexUV = glGetAttribLocation(ShaderData->ShaderHandle, "texCoord");
     if (ShaderData->AttribLocationVertexUV < 0) {
         return (false);
     }
 
-    ShaderData->AttribLocationTexture = glGetUniformLocation(ShaderData->ShaderHandle, "Texture");
+    ShaderData->AttribLocationTexture = glGetUniformLocation(ShaderData->ShaderHandle, "diffuseTexture");
     if (ShaderData->AttribLocationTexture < 0) {
         printf("Warning: Could not find uniform 'Texture'. Location: %d\n",
                ShaderData->AttribLocationTexture);
         // Don't return false here as this is now an expected uniform
     }
 
-    // ShaderData->AttribLocationVertexColor = glGetAttribLocation(ShaderData->ShaderHandle, "Color");
-    // if (ShaderData->AttribLocationVertexColor < 0) {
-    //     return (false);
-    // }
+    ShaderData->AttribLocationNormalTexture = glGetUniformLocation(ShaderData->ShaderHandle, "normalTexture");
+    if (ShaderData->AttribLocationNormalTexture < 0) {
+        printf("Warning: Could not find uniform 'NormalTexture'. Location: %d\n",
+               ShaderData->AttribLocationNormalTexture);
+        // Don't return false here as this is optional for normal mapping
+    }
+
+    ShaderData->AttribLocationHasNormalMap = glGetUniformLocation(ShaderData->ShaderHandle, "hasNormalMap");
+    if (ShaderData->AttribLocationHasNormalMap < 0) {
+        printf("Warning: Could not find uniform 'hasNormalMap'. Location: %d\n",
+               ShaderData->AttribLocationHasNormalMap);
+        // Don't return false here as this is optional for normal mapping
+    }
 
     Result = glGetError();
     AXON_ASSERT(!Result && "OpenGL Error in CreateProgram()!");
@@ -708,26 +872,38 @@ static void AxSetUniform(struct AxShaderData *ShaderData, const char *UniformNam
         if (ShaderData->AttribLocationColor != -1) {
             glProgramUniform3fv(ShaderData->ShaderHandle, ShaderData->AttribLocationColor, 1, &((AxVec3*)Value)->X);
         }
-    } else if (strcmp(UniformName, "LightPos") == 0) {
+    } else if (strcmp(UniformName, "lightPos") == 0) {
         if (ShaderData->AttribLocationLightPos != -1) {
             glProgramUniform3fv(ShaderData->ShaderHandle, ShaderData->AttribLocationLightPos, 1, &((AxVec3*)Value)->X);
         }
-    } else if (strcmp(UniformName, "LightColor") == 0) {
+    } else if (strcmp(UniformName, "lightColor") == 0) {
         if (ShaderData->AttribLocationLightColor != -1) {
             glProgramUniform3fv(ShaderData->ShaderHandle, ShaderData->AttribLocationLightColor, 1, &((AxVec3*)Value)->X);
         }
-    } else if (strcmp(UniformName, "Texture") == 0) {
+    } else if (strcmp(UniformName, "texture") == 0) {
         if (ShaderData->AttribLocationTexture != -1) {
             glProgramUniform1i(ShaderData->ShaderHandle, ShaderData->AttribLocationTexture, 0);
         }
-    } else if (strcmp(UniformName, "TexCoord") == 0) {
+    } else if (strcmp(UniformName, "texCoord") == 0) {
         if (ShaderData->AttribLocationVertexUV != -1) {
             glProgramUniform2fv(ShaderData->ShaderHandle, ShaderData->AttribLocationVertexUV, 1, &((AxVec2*)Value)->X);
+        }
+    } else if (strcmp(UniformName, "materialAlpha") == 0) {
+        if (ShaderData->AttribLocationMaterialAlpha != -1) {
+            glProgramUniform1f(ShaderData->ShaderHandle, ShaderData->AttribLocationMaterialAlpha, *(const float*)Value);
+        }
+    } else if (strcmp(UniformName, "normalTexture") == 0) {
+        if (ShaderData->AttribLocationNormalTexture != -1) {
+            glProgramUniform1i(ShaderData->ShaderHandle, ShaderData->AttribLocationNormalTexture, *(const int*)Value);
+        }
+    } else if (strcmp(UniformName, "hasNormalMap") == 0) {
+        if (ShaderData->AttribLocationHasNormalMap != -1) {
+            glProgramUniform1i(ShaderData->ShaderHandle, ShaderData->AttribLocationHasNormalMap, *(const bool*)Value ? 1 : 0);
         }
     }
 
     uint32_t Result = glGetError();
-    AXON_ASSERT(!Result && "OpenGL Error in CreateProgram()!");
+    AXON_ASSERT(!Result && "OpenGL Error in SetUniform()!");
 }
 
 static void AxInitTexture(AxTexture *Texture, uint8_t *Pixels)
@@ -769,15 +945,13 @@ static void AxInitTexture(AxTexture *Texture, uint8_t *Pixels)
     glTextureStorage2D(Texture->ID, Levels, InternalFormat, Texture->Width, Texture->Height);
     glTextureSubImage2D(Texture->ID, 0, 0, 0, Texture->Width, Texture->Height, DataFormat, GL_UNSIGNED_BYTE, Pixels);
 
-    // Wrap
-    glTextureParameteri(Texture->ID, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTextureParameteri(Texture->ID, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    // Use sampler properties from texture struct
+    glTextureParameteri(Texture->ID, GL_TEXTURE_WRAP_S, Texture->WrapS);
+    glTextureParameteri(Texture->ID, GL_TEXTURE_WRAP_T, Texture->WrapT);
 
-    // Filter mag
-    glTextureParameteri(Texture->ID, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-    // Filter min
-    glTextureParameteri(Texture->ID, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    // Filter settings from texture struct
+    glTextureParameteri(Texture->ID, GL_TEXTURE_MAG_FILTER, Texture->MagFilter);
+    glTextureParameteri(Texture->ID, GL_TEXTURE_MIN_FILTER, Texture->MinFilter);
 
     // Mip
     glTextureParameteri(Texture->ID, GL_TEXTURE_BASE_LEVEL, 0);
@@ -799,7 +973,24 @@ static void AxSetTextureData(AxTexture *Texture, uint8_t *Pixels)
     AXON_ASSERT(Texture && "Texture is NULL in SetData()!");
     AXON_ASSERT(Pixels && "Pixels are NULL in SetData()!");
 
-    glTextureSubImage2D(Texture->ID, 0, 0, 0, Texture->Width, Texture->Height, Texture->Channels, GL_UNSIGNED_BYTE, Pixels);
+    // Determine the format based on the number of channels
+    GLenum DataFormat = 0;
+    switch(Texture->Channels) {
+        case 1:
+            DataFormat = GL_RED;
+            break;
+        case 3:
+            DataFormat = GL_RGB;
+            break;
+        case 4:
+            DataFormat = GL_RGBA;
+            break;
+        default:
+            AXON_ASSERT(false && "Unsupported number of channels in SetTextureData()!");
+            return;
+    }
+
+    glTextureSubImage2D(Texture->ID, 0, 0, 0, Texture->Width, Texture->Height, DataFormat, GL_UNSIGNED_BYTE, Pixels);
 }
 
 static void AxBindTexture(AxTexture *Texture, uint32_t Slot)
@@ -809,14 +1000,6 @@ static void AxBindTexture(AxTexture *Texture, uint32_t Slot)
 
 static void AxInitMesh(AxMesh *Mesh, struct AxVertex *Vertices, uint32_t *Indices, uint32_t VertexCount, uint32_t IndexCount)
 {
-    // Print first few vertices and indices for debugging
-    for (uint32_t i = 0; i < min(VertexCount, 8); i++) {
-        printf("V%u: (%f, %f, %f)\n", i,
-               Vertices[i].Position.X,
-               Vertices[i].Position.Y,
-               Vertices[i].Position.Z);
-    }
-
     // Create and bind VAO first
     GLuint VAO;
     glGenVertexArrays(1, &VAO);
@@ -846,6 +1029,10 @@ static void AxInitMesh(AxMesh *Mesh, struct AxVertex *Vertices, uint32_t *Indice
     glEnableVertexAttribArray(2);
     glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(struct AxVertex), (void*)offsetof(struct AxVertex, TexCoord));
 
+    // Tangent attribute (vec4: XYZ = tangent vector, W = handedness)
+    glEnableVertexAttribArray(3);
+    glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(struct AxVertex), (void*)offsetof(struct AxVertex, Tangent));
+
     // Store handles in Mesh struct
     Mesh->VAO = VAO;
     Mesh->VBO = VBO;
@@ -853,11 +1040,55 @@ static void AxInitMesh(AxMesh *Mesh, struct AxVertex *Vertices, uint32_t *Indice
     Mesh->IndexCount = IndexCount;
 }
 
+static void AxEnableAlphaBlending(bool Enable)
+{
+    AXON_ASSERT(ContextInitialized && "Context not initialized in EnableAlphaBlending()!");
+
+    if (Enable) {
+        glEnable(GL_BLEND);
+    } else {
+        glDisable(GL_BLEND);
+    }
+}
+
+static void AxSetAlphaBlendMode(uint32_t SourceFactor, uint32_t DestFactor)
+{
+    AXON_ASSERT(ContextInitialized && "Context not initialized in SetAlphaBlendMode()!");
+
+    glBlendFunc(SourceFactor, DestFactor);
+}
+
+static bool AxTextureHasAlpha(AxTexture *Texture)
+{
+    AXON_ASSERT(Texture && "Texture is NULL in TextureHasAlpha()!");
+    return (Texture->Channels == 4);
+}
+
+static void AxSetDepthWrite(bool Enable)
+{
+    AXON_ASSERT(ContextInitialized && "Context not initialized in SetDepthWrite()!");
+    glDepthMask(Enable ? GL_TRUE : GL_FALSE);
+}
+
 // Use a compound literal to construct an unnamed object of API type in-place
 struct AxOpenGLAPI *AxOpenGLAPI = &(struct AxOpenGLAPI) {
     .CreateContext = AxCreateContext,
     .DestroyContext = AxDestroyContext,
     .GetInfo = AxGetInfo,
+    .CreateCamera = CreateCamera,
+    .CameraGetOrthographic = CameraGetOrthographic,
+    .CameraSetOrthographic = CameraSetOrthographic,
+    .CameraGetFOV = CameraGetFOV,
+    .CameraSetFOV = CameraSetFOV,
+    .CameraGetNearClipPlane = CameraGetNearClipPlane,
+    .CameraSetNearClipPlane = CameraSetNearClipPlane,
+    .CameraGetFarClipPlane = CameraGetFarClipPlane,
+    .CameraSetFarClipPlane = CameraSetFarClipPlane,
+    .CameraGetZoomLevel = CameraGetZoomLevel,
+    .CameraSetZoomLevel = CameraSetZoomLevel,
+    .CameraGetAspectRatio = CameraGetAspectRatio,
+    .CameraSetAspectRatio = CameraSetAspectRatio,
+    .CameraGetProjectionMatrix = CameraGetProjectionMatrix,
     .CreateViewport = AxCreateViewport,
     .DestroyViewport = AxDestroyViewport,
     .SetActiveViewport = AxSetActiveViewport,
@@ -872,7 +1103,11 @@ struct AxOpenGLAPI *AxOpenGLAPI = &(struct AxOpenGLAPI) {
     .DestroyTexture = AxDestroyTexture,
     .SetTextureData = AxSetTextureData,
     .BindTexture = AxBindTexture,
-    .InitMesh = AxInitMesh
+    .InitMesh = AxInitMesh,
+    .EnableAlphaBlending = AxEnableAlphaBlending,
+    .SetAlphaBlendMode = AxSetAlphaBlendMode,
+    .TextureHasAlpha = AxTextureHasAlpha,
+    .SetDepthWrite = AxSetDepthWrite
 };
 
 AXON_DLL_EXPORT void LoadPlugin(struct AxAPIRegistry *APIRegistry, bool Load)

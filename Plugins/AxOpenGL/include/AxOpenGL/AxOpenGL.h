@@ -5,6 +5,7 @@
 typedef struct AxWindow AxWindow;
 typedef struct AxMesh AxMesh;
 typedef struct AxTexture AxTexture;
+typedef struct AxMaterial AxMaterial;
 typedef struct AxDrawData AxDrawData;
 
 struct AxRenderCommands
@@ -28,11 +29,26 @@ typedef struct AxOpenGLInfo
 
 typedef uint32_t AxDrawIndex;
 
+// Alpha blending constants
+#ifndef GL_SRC_ALPHA
+#define GL_SRC_ALPHA 0x0302
+#endif
+#ifndef GL_ONE_MINUS_SRC_ALPHA
+#define GL_ONE_MINUS_SRC_ALPHA 0x0303
+#endif
+#ifndef GL_ONE
+#define GL_ONE 1
+#endif
+#ifndef GL_ZERO
+#define GL_ZERO 0
+#endif
+
 struct AxVertex
 {
     AxVec3 Position;
     AxVec3 Normal;
     AxVec2 TexCoord;
+    AxVec4 Tangent; // XYZ = tangent vector, W = handedness (-1.0 or 1.0)
 };
 
 struct AxShaderData
@@ -40,28 +56,34 @@ struct AxShaderData
     uint32_t ShaderHandle;
     uint32_t IMGUIShaderHandle;
     int32_t AttribLocationTexture;
+    int32_t AttribLocationNormalTexture;
     int32_t AttribLocationVertexPos;
     int32_t AttribLocationVertexUV;
     int32_t AttribLocationVertexColor;
+    int32_t AttribLocationVertexTangent;
+    int32_t AttribLocationVertexBitangent;
     int32_t AttribLocationModelMatrix;
     int32_t AttribLocationViewMatrix;
     int32_t AttribLocationProjectionMatrix;
     int32_t AttribLocationColor;
+    int32_t AttribLocationMaterialAlpha;
     int32_t AttribLocationLightPos;
     int32_t AttribLocationLightColor;
+    int32_t AttribLocationViewPos;
+    int32_t AttribLocationHasNormalMap;
     bool SupportsSRGBFramebuffer;
 };
 
 struct AxCamera
 {
-    AxVec3 Position;          // Camera position in world space
-    AxVec3 Orientation;       // Camera orientation (e.g., direction it is facing)
-    float FieldOfView;       // Field of view for perspective projection
-    float AspectRatio;       // Aspect ratio for the camera
-    float NearPlane;         // Near clipping plane
-    float FarPlane;          // Far clipping plane
-    AxMat4x4 ViewMatrix;  // View matrix
-    AxMat4x4Inv ProjectionMatrix; // Projection matrix
+    bool IsOrthographic;        // Orthographic or projection
+    float FieldOfView;          // Field of view for perspective projection
+    float ZoomLevel;            // Zoom level for orthographic projection
+    float AspectRatio;          // Aspect ratio for the camera
+    float NearClipPlane;        // Near clipping plane
+    float FarClipPlane;         // Far clipping plane
+    AxMat4x4 ViewMatrix;        // View matrix
+    AxMat4x4 ProjectionMatrix;  // Projection matrix
 };
 
 // TODO(mdeforge): Add texture parameters such as format and filtering modes
@@ -71,6 +93,12 @@ struct AxTexture
     uint32_t Width;
     uint32_t Height;
     uint32_t Channels;
+
+    // Sampler properties
+    uint32_t WrapS;          // GL_REPEAT, GL_CLAMP_TO_EDGE, GL_MIRRORED_REPEAT
+    uint32_t WrapT;          // GL_REPEAT, GL_CLAMP_TO_EDGE, GL_MIRRORED_REPEAT
+    uint32_t MagFilter;      // GL_NEAREST, GL_LINEAR
+    uint32_t MinFilter;      // GL_NEAREST, GL_LINEAR, GL_NEAREST_MIPMAP_NEAREST, etc.
 };
 
 struct AxMeshCreateInfo
@@ -98,12 +126,24 @@ struct AxMesh
     uint32_t TransformIndex;
     uint32_t BaseColorTexture;
     uint32_t NormalTexture;
+    uint32_t MaterialIndex;
+    // Mesh name from GLTF (for debugging)
+    char Name[64];
+};
+
+struct AxMaterial
+{
+    float BaseColorFactor[4]; // RGBA
+    uint32_t BaseColorTexture;
+    uint32_t NormalTexture;
+    char Name[64];
 };
 
 struct AxModel
 {
     AxMesh *Meshes;
     AxTexture *Textures;
+    AxMaterial *Materials;
     AxMat4x4 *Transforms;
     uint32_t InputLayout;
     uint32_t VertexBuffer;
@@ -138,11 +178,25 @@ struct AxOpenGLAPI
     void (*CreateContext)(AxWindow *Window);
 
     // Destroys the OpenGL rendering backend
-
     void (*DestroyContext)(void);
 
     // Get information about the current OpenGL Context
     struct AxOpenGLInfo (*GetInfo)(bool ModernContext);
+
+    void (*CreateCamera)(struct AxCamera *Camera);
+    bool (*CameraGetOrthographic)(struct AxCamera *Camera);
+    void (*CameraSetOrthographic)(struct AxCamera *Camera, bool IsOrthographic);
+    float (*CameraGetFOV)(struct AxCamera *Camera);
+    void (*CameraSetFOV)(struct AxCamera *Camera, float FOV);
+    float (*CameraGetNearClipPlane)(struct AxCamera *Camera);
+    void (*CameraSetNearClipPlane)(struct AxCamera *Camera, float NearClipPlane);
+    float (*CameraGetFarClipPlane)(struct AxCamera *Camera);
+    void (*CameraSetFarClipPlane)(struct AxCamera *Camera, float FarClipPlane);
+    float (*CameraGetZoomLevel)(struct AxCamera *Camera);
+    void (*CameraSetZoomLevel)(struct AxCamera *Camera, float ZoomLevel);
+    float (*CameraGetAspectRatio)(struct AxCamera *Camera);
+    void (*CameraSetAspectRatio)(struct AxCamera *Camera, float AspectRatio);
+    struct AxMat4x4 (*CameraGetProjectionMatrix)(struct AxCamera *Camera);
 
     // Get the current viewport
     struct AxViewport* (*CreateViewport)(AxVec2 Position, AxVec2 Size);
@@ -171,6 +225,12 @@ struct AxOpenGLAPI
 
     void (*InitMesh)(AxMesh *Mesh, struct AxVertex *Vertices, uint32_t *Indices, uint32_t VertexCount, uint32_t IndexCount);
     //void (*DestroyMesh)(AxMesh *Mesh);
+
+    // Alpha blending control
+    void (*EnableAlphaBlending)(bool Enable);
+    void (*SetAlphaBlendMode)(uint32_t SourceFactor, uint32_t DestFactor);
+    bool (*TextureHasAlpha)(AxTexture *Texture);
+    void (*SetDepthWrite)(bool Enable);
 };
 
 // struct AxShaderData;
