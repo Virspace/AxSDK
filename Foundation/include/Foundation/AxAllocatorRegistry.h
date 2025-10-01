@@ -12,7 +12,8 @@ extern "C"
     struct AxAllocatorData;
     struct AxAllocatorRegistryAPI
     {
-        void (*Register)(struct AxAllocatorData *Info);
+        void (*Register)(struct AxAllocatorData *Data);
+        void (*Unregister)(struct AxAllocatorData *Data);
         size_t (*Length)(void);
         struct AxAllocatorData *(*GetAllocatorDataByName)(const char *Name);
         struct AxAllocatorData *(*GetAllocatorDataByIndex)(size_t Index);

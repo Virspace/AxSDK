@@ -40,7 +40,7 @@ struct AxLinearAllocator
  */
 static void *Alloc(struct AxLinearAllocator *Allocator, size_t Size, const char *File, uint32_t Line)
 {
-    Assert(Allocator && "AxLinearAllocator passed NULL allocator!");
+    AXON_ASSERT(Allocator && "AxLinearAllocatorAPI->Alloc passed NULL allocator!");
     if (!Allocator) {
         return (NULL);
     }
@@ -53,11 +53,8 @@ static void *Alloc(struct AxLinearAllocator *Allocator, size_t Size, const char 
     if (!IsAligned(CurrentAddress))
     {
         uintptr_t NewAddress = AlignAddress(CurrentAddress);
-        AlignmentSize = AddressDistance(NewAddress, CurrentAddress);
+        AlignmentSize = AddressDistance(CurrentAddress, NewAddress);
         CurrentAddress = NewAddress;
-
-        // We're just assuming this allocation is going to work out????
-        //Allocator->Info.BytesAllocated += AlignmentSize;
     }
 
     // Check if aligned address + allocation straddles a page boundary
@@ -108,7 +105,7 @@ static void *Alloc(struct AxLinearAllocator *Allocator, size_t Size, const char 
     //     // can be compiled out during release builds? Or do we always want Info in there?
     // }
 
-    void *Result = (uint8_t *)Allocator->Arena + Allocator->Data.BytesAllocated;
+    void *Result = (void *)CurrentAddress;
 
     // Update Arena Info
     //Allocator->Info.BytesAllocated += BytesRequestedRoundedToPageSize;
@@ -122,15 +119,19 @@ static void *Alloc(struct AxLinearAllocator *Allocator, size_t Size, const char 
 
 static void Free(struct AxLinearAllocator *Allocator, const char *File, uint32_t Line)
 {
-    Assert(Allocator && "AxLinearAllocator passed NULL allocator!");
+    AXON_ASSERT(Allocator && "AxLinearAllocatorAPI->Free passed NULL allocator!");
     if (!Allocator) {
         return;
     }
 
-    // If lpAddress is the base address returned by VirtualAlloc and dwSize is 0 (zero), the function decommits
-    // the entire region that is allocated by VirtualAlloc. After that, the entire region is in the reserved state.
-    munmap(Allocator->Arena, Allocator->Data.BytesAllocated);
+    // Linear allocator Free means reset - keep the arena but reset allocation counters
+    // Don't unmap the memory, just reset the allocation state for reuse
+    size_t PageSize = Allocator->Data.PageSize;
+    size_t BytesReserved = Allocator->Data.BytesReserved + Allocator->Data.BytesCommitted;
+
     memset(&Allocator->Data, 0, sizeof(struct AxAllocatorData));
+    Allocator->Data.PageSize = PageSize;
+    Allocator->Data.BytesReserved = BytesReserved;
 }
 
 static struct AxLinearAllocator *Create(const char *Name, size_t MaxSize)
@@ -193,10 +194,13 @@ static struct AxLinearAllocator *Create(const char *Name, size_t MaxSize)
 
 static void Destroy(struct AxLinearAllocator *Allocator)
 {
-    Assert(Allocator && "AxLinearAllocator passed NULL allocator!");
+    AXON_ASSERT(Allocator && "AxLinearAllocatorAPI->Destroy passed NULL allocator!")
     if (!Allocator) {
         return;
     }
+
+    // Unregister from allocator registry before destroying
+    AllocatorRegistryAPI->Unregister(Allocator->Data.Name);
 
     munmap(Allocator->Arena, Allocator->Data.BytesAllocated);
 }

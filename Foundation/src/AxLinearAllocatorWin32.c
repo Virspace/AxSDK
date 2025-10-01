@@ -29,7 +29,7 @@ struct AxLinearAllocator
  */
 static void *Alloc(struct AxLinearAllocator *Allocator, size_t Size, const char *File, uint32_t Line)
 {
-    AXON_ASSERT(Allocator && "AxLinearAllocator passed NULL allocator!");
+    AXON_ASSERT(Allocator && "AxLinearAllocatorAPI->Alloc passed NULL allocator!");
     if (!Allocator) {
         return (NULL);
     }
@@ -42,11 +42,8 @@ static void *Alloc(struct AxLinearAllocator *Allocator, size_t Size, const char 
     if (!IsAligned(CurrentAddress))
     {
         uintptr_t NewAddress = AlignAddress(CurrentAddress);
-        AlignmentSize = AddressDistance(NewAddress, CurrentAddress);
+        AlignmentSize = AddressDistance(CurrentAddress, NewAddress);
         CurrentAddress = NewAddress;
-
-        // We're just assuming this allocation is going to work out????
-        //Allocator->Info.BytesAllocated += AlignmentSize;
     }
 
     // Check if aligned address + allocation straddles a page boundary
@@ -85,7 +82,10 @@ static void *Alloc(struct AxLinearAllocator *Allocator, size_t Size, const char 
 
         // TODO(mdeforge): Check for virtual alloc failure
         uint8_t *Address = (uint8_t *)Allocator->Arena + (Allocator->Data.BytesAllocated + AlignmentSize);
-        VirtualAlloc(Address, BytesNeeded, MEM_COMMIT, PAGE_READWRITE);
+        void *Result = VirtualAlloc(Address, BytesNeeded, MEM_COMMIT, PAGE_READWRITE);
+        if (!Result) {
+            return (NULL); // VirtualAlloc failed
+        }
 
         // Does Info reserved memory go down as committed memory goes up?
         Allocator->Data.BytesCommitted += BytesNeeded;
@@ -104,7 +104,7 @@ static void *Alloc(struct AxLinearAllocator *Allocator, size_t Size, const char 
     //     // can be compiled out during release builds? Or do we always want Info in there?
     // }
 
-    void *Result = (uint8_t *)Allocator->Arena + Allocator->Data.BytesAllocated;
+    void *Result = (void *)CurrentAddress;
 
     // Update Arena Info
     //Allocator->Info.BytesAllocated += BytesRequestedRoundedToPageSize;
@@ -118,7 +118,7 @@ static void *Alloc(struct AxLinearAllocator *Allocator, size_t Size, const char 
 
 static void Free(struct AxLinearAllocator *Allocator, const char *File, uint32_t Line)
 {
-    AXON_ASSERT(Allocator && "AxLinearAllocator passed NULL allocator!");
+    AXON_ASSERT(Allocator && "AxLinearAllocatorAPI->Free passed NULL allocator!");
     if (!Allocator) {
         return;
     }
@@ -126,10 +126,25 @@ static void Free(struct AxLinearAllocator *Allocator, const char *File, uint32_t
     // Be sure to free the allocation data array first
     ArrayFree(Allocator->Data.AllocationData);
 
-    // If lpAddress is the base address returned by VirtualAlloc and dwSize is 0 (zero), the function decommits
-    // the entire region that is allocated by VirtualAlloc. After that, the entire region is in the reserved state.
-    VirtualFree(Allocator->Arena, 0, MEM_DECOMMIT);
+    // Linear allocator Free means reset - keep the arena but reset allocation counters
+    // Don't decommit the memory, just reset the allocation state for reuse
+    void *BaseAddress = Allocator->Data.BaseAddress;
+    char Name[64];
+    strncpy(Name, Allocator->Data.Name, sizeof(Name) - 1);
+    Name[sizeof(Name) - 1] = '\0';
+    size_t PageSize = Allocator->Data.PageSize;
+    size_t AllocationGranularity = Allocator->Data.AllocationGranularity;
+    size_t BytesReserved = Allocator->Data.BytesReserved;
+    size_t PagesReserved = Allocator->Data.PagesReserved;
+
     ZeroMemory(&Allocator->Data, sizeof(struct AxAllocatorData));
+    Allocator->Data.BaseAddress = BaseAddress;
+    strncpy(Allocator->Data.Name, Name, sizeof(Allocator->Data.Name) - 1);
+    Allocator->Data.Name[sizeof(Allocator->Data.Name) - 1] = '\0';
+    Allocator->Data.PageSize = PageSize;
+    Allocator->Data.AllocationGranularity = AllocationGranularity;
+    Allocator->Data.BytesReserved = BytesReserved;
+    Allocator->Data.PagesReserved = PagesReserved;
 }
 
 static struct AxLinearAllocator *Create(const char *Name, size_t MaxSize)
@@ -141,6 +156,13 @@ static struct AxLinearAllocator *Create(const char *Name, size_t MaxSize)
     // Get the system page size and allocator granularity
     uint32_t PageSize, AllocatorGranularity;
     GetSysInfo(&PageSize, &AllocatorGranularity);
+
+    // Store the user's requested size
+    size_t UserRequestedSize = MaxSize;
+
+    // Add allocator structure overhead to ensure user gets their full requested amount
+    size_t StructureOverhead = sizeof(struct AxLinearAllocator);
+    MaxSize += StructureOverhead;
 
     // Memory reserved will be a multiple of the system allocation granularity
         // NOTE(mdeforge): We wouldn't round if VirtualAlloc's BaseAddress parameter was going to be set below
@@ -165,15 +187,15 @@ static struct AxLinearAllocator *Create(const char *Name, size_t MaxSize)
     // Construct the heap
     if (Allocator)
     {
-        Allocator->Arena = (uint8_t *)BaseAddress;
+        Allocator->Arena = (uint8_t *)BaseAddress + sizeof(struct AxLinearAllocator);
         Allocator->Data = (struct AxAllocatorData) {
             .BaseAddress = Allocator->Arena,
             .PageSize = PageSize,
             .AllocationGranularity = AllocatorGranularity,
-            .BytesReserved = MaxSize,
+            .BytesReserved = UserRequestedSize,
             .BytesCommitted = 0,
             .BytesAllocated = 0,
-            .PagesReserved = MaxSize / (size_t)PageSize,
+            .PagesReserved = UserRequestedSize / (size_t)PageSize,
             .PagesCommitted = 0,
             .NumAllocs = 0
         };
@@ -191,10 +213,13 @@ static struct AxLinearAllocator *Create(const char *Name, size_t MaxSize)
 
 static void Destroy(struct AxLinearAllocator *Allocator)
 {
-    AXON_ASSERT(Allocator && "AxLinearAllocator passed NULL allocator!");
+    AXON_ASSERT(Allocator && "AxLinearAllocatorAPI->Destroy passed NULL allocator!")
     if (!Allocator) {
         return;
     }
+
+    // Unregister from allocator registry before destroying
+    AllocatorRegistryAPI->Unregister(Allocator->Data.Name);
 
     VirtualFree(Allocator, 0, MEM_RELEASE); // Will decommit and release
 }

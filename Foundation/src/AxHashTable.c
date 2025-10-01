@@ -189,9 +189,8 @@ static bool Set(AxHashTable *Table, const char *Key, const void *Value)
     // Find entry
     HashEntry *Entry = FindEntry(Table->Entries, Table->Capacity, Key);
 
-    // If it's a new key and has a tomestone, increment table length
-    bool IsNewKey = Entry->Key == NULL;
-    if (IsNewKey && Entry->Value != (void *)AXON_HASH_TOMBSTONE) {
+    // If it's a new key, increment table length (even if reusing tombstone slot)
+    if (Entry->Key == NULL) {
         Table->Size++;
     }
 
@@ -220,6 +219,9 @@ static bool Remove(AxHashTable *Table, const char *Key)
     // Place a tombstone in the entry
     Entry->Key = NULL;
     Entry->Value = (void *)AXON_HASH_TOMBSTONE;
+
+    // Decrement the size counter
+    Table->Size--;
 
     return (true);
 }
