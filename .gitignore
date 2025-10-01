@@ -66,6 +66,6 @@ build/*
 vsbuild/*
 
 # Assets
-examples/graphics/models/
+examples/graphics/scenes/models
 
 .cache/*
