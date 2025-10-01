@@ -63,7 +63,7 @@ static uint64_t Load(const char *Path, bool HotReload)
             // Read DLL into buffer for hashing
             uint64_t Hash = 0;
             AxFile DLLFile = FileAPI->OpenForRead(Path);
-            if (FileAPI->IsValid)
+            if (FileAPI->IsValid(DLLFile))
             {
                 // Read DLL
                 size_t DLLFileSize = FileAPI->Size(DLLFile);
