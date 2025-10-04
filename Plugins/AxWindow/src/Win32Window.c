@@ -86,30 +86,34 @@ typedef struct AxMonitorPlatformData
 
 struct AxWindow
 {
-    // Window title
-    const char *Title;
-    // User has requested close
-    bool IsRequestingClose;
-    // Size and Position
-    RECT Rect;
+    // Cross-platform window state
+    const char *Title;                ///< Window title
+    bool IsRequestingClose;           ///< User has requested close
+
+    // Window geometry (cross-platform)
+    int32_t X, Y;                     ///< Window position
+    int32_t Width, Height;            ///< Window size
+
     // Platform specific data
     AxWindowPlatformData Platform;
-    // Window style flags
-    enum AxWindowStyle Style;
-    // Cursor modes
-    enum AxCursorMode CursorMode;
-    // Keyboard modes
-    enum AxKeyboardMode KeyboardMode;
-    // Virtual cursor position
-    AxVec2 VirtualCursorPos;
-    // Mouse button state
-    char MouseButtons[AX_MOUSE_BUTTON_LAST + 1];
-    char Keys[AX_KEY_LAST + 1];
-    // Input handling
-    bool HasFocus;                    ///< Current window focus state
-    bool FilterEventsWhenUnfocused;   ///< Whether to filter input events when window loses focus
-    AxVec2 LastMousePos;              ///< Previous mouse position for delta calculation
 
+    // Cross-platform window properties
+    enum AxWindowStyle Style;         ///< Window style flags
+    enum AxCursorMode CursorMode;     ///< Cursor mode
+    enum AxKeyboardMode KeyboardMode; ///< Keyboard mode
+
+    // Cross-platform input state
+    AxVec2 VirtualCursorPos;          ///< Virtual cursor position for disabled mode
+    char MouseButtons[AX_MOUSE_BUTTON_LAST + 1];  ///< Mouse button states
+    char Keys[AX_KEY_LAST + 1];       ///< Key states
+
+    // Cross-platform input handling
+    bool HasFocus;                    ///< Current window focus state
+    bool FilterEventsWhenUnfocused;   ///< Whether to filter input events when unfocused
+    AxVec2 LastMousePos;              ///< Previous mouse position for delta calculation
+    bool CursorInWindow;              ///< Whether cursor is currently in window
+
+    // Callback system
     struct {
         AxKeyCallback Key;
         AxMousePosCallback MousePos;
@@ -118,6 +122,8 @@ struct AxWindow
         AxCharCallback Char;
         AxWindowStateCallback StateChanged;
     } Callbacks;
+
+    void *UserData;                   ///< User data pointer passed to callbacks
 };
 
 static AxRect RectToAxRect(RECT Rect)
@@ -129,6 +135,27 @@ static AxRect RectToAxRect(RECT Rect)
         .Bottom = (float)Rect.bottom
     };
 
+    return (Result);
+}
+
+// Helper function to update window geometry from RECT
+static void UpdateWindowGeometryFromRect(AxWindow *Window, RECT Rect)
+{
+    Window->X = Rect.left;
+    Window->Y = Rect.top;
+    Window->Width = Rect.right - Rect.left;
+    Window->Height = Rect.bottom - Rect.top;
+}
+
+// Helper function to create RECT from window geometry
+static RECT CreateRectFromWindowGeometry(const AxWindow *Window)
+{
+    RECT Result = {
+        .left = Window->X,
+        .top = Window->Y,
+        .right = Window->X + Window->Width,
+        .bottom = Window->Y + Window->Height
+    };
     return (Result);
 }
 
@@ -310,7 +337,7 @@ void InputKey(AxWindow *Window, int Key, int ScanCode, int Action, int Mods)
     }
 
     if (Window->Callbacks.Key) {
-        Window->Callbacks.Key(Window, Key, ScanCode, Action, Mods);
+        Window->Callbacks.Key(Window, Key, ScanCode, Action, Mods, Window->UserData);
     }
 }
 
@@ -331,7 +358,7 @@ void InputChar(AxWindow *Window, uint32_t CodePoint, int Mods, bool Plain)
     if (Plain)
     {
         if (Window->Callbacks.Char)
-            Window->Callbacks.Char(Window, CodePoint);
+            Window->Callbacks.Char(Window, CodePoint, Window->UserData);
     }
 }
 
@@ -348,7 +375,7 @@ void InputMouseClick(AxWindow *Window, int Button, int Action, int Mods)
     }
 
     if (Window->Callbacks.MouseButton) {
-        Window->Callbacks.MouseButton(Window, Button, Action, Mods);
+        Window->Callbacks.MouseButton(Window, Button, Action, Mods, Window->UserData);
     }
 }
 
@@ -357,7 +384,7 @@ void InputMouseScroll(AxWindow *Window, AxVec2 Offset)
     AXON_ASSERT(Window);
 
     if (Window->Callbacks.Scroll) {
-        Window->Callbacks.Scroll(Window, Offset);
+        Window->Callbacks.Scroll(Window, Offset, Window->UserData);
     }
 }
 
@@ -378,7 +405,7 @@ void InputMousePos(AxWindow *Window, AxVec2 Pos)
 
     // Only call the callback if the mouse actually moved
     if (MouseMoved && Window->Callbacks.MousePos) {
-        Window->Callbacks.MousePos(Window, Pos.X, Pos.Y);
+        Window->Callbacks.MousePos(Window, Pos.X, Pos.Y, Window->UserData);
     }
 }
 
@@ -506,7 +533,7 @@ static LRESULT CALLBACK Win32MainWindowCallback(HWND Hwnd, UINT Message, WPARAM 
 
             // TODO(mdeforge): If resizing is now allowed, enforce here
 
-            Window->Rect = ClientRect;
+            UpdateWindowGeometryFromRect(Window, ClientRect);
             Result = DefWindowProc(Hwnd, Message, WParam, LParam);
         } break;
 
@@ -534,7 +561,7 @@ static LRESULT CALLBACK Win32MainWindowCallback(HWND Hwnd, UINT Message, WPARAM 
             
             // Call state change callback if state actually changed
             if (OldState != NewState && Window->Callbacks.StateChanged) {
-                Window->Callbacks.StateChanged(Window, OldState, NewState);
+                Window->Callbacks.StateChanged(Window, OldState, NewState, Window->UserData);
             }
             
             Result = DefWindowProc(Hwnd, Message, WParam, LParam);
@@ -722,7 +749,7 @@ static LRESULT CALLBACK Win32MainWindowCallback(HWND Hwnd, UINT Message, WPARAM 
             const int32_t X = LOWORD(LParam);
             const int32_t Y = HIWORD(LParam);
 
-            if(!Window->Platform.Win32.CursorInWindow)
+            if(!Window->CursorInWindow)
             {
                 // This sets things up to post a WM_LEAVE message when the mouse leaves the window
                 TRACKMOUSEEVENT TME = {0};
@@ -731,7 +758,7 @@ static LRESULT CALLBACK Win32MainWindowCallback(HWND Hwnd, UINT Message, WPARAM 
                 TME.hwndTrack = (HWND)Window->Platform.Win32.Handle;
                 TrackMouseEvent(&TME);
 
-                Window->Platform.Win32.CursorInWindow = true;
+                Window->CursorInWindow = true;
             }
 
             if (Window->CursorMode == AX_CURSOR_DISABLED) {
@@ -741,7 +768,7 @@ static LRESULT CALLBACK Win32MainWindowCallback(HWND Hwnd, UINT Message, WPARAM 
                 InputMousePos(Window, (AxVec2){(float)X, (float)Y});
             }
 
-            Window->Platform.Win32.LastCursorPos = (AxVec2){ (float)X, (float)Y };
+            Window->LastMousePos = (AxVec2){ (float)X, (float)Y };
 
             return (0);
         }
@@ -796,8 +823,8 @@ static LRESULT CALLBACK Win32MainWindowCallback(HWND Hwnd, UINT Message, WPARAM 
                 {
                     MouseDelta = (AxVec2)
                     {
-                        .X = (float)RawInput->data.mouse.lLastX - Window->Platform.Win32.LastCursorPos.X,
-                        .Y = (float)RawInput->data.mouse.lLastY - Window->Platform.Win32.LastCursorPos.Y
+                        .X = (float)RawInput->data.mouse.lLastX - Window->LastMousePos.X,
+                        .Y = (float)RawInput->data.mouse.lLastY - Window->LastMousePos.Y
                     };
                 }
                 else
@@ -944,14 +971,14 @@ static LRESULT CALLBACK Win32MainWindowCallback(HWND Hwnd, UINT Message, WPARAM 
             }
 
             InputMousePos(Window, Vec2Add(Window->VirtualCursorPos, MouseDelta));
-            Window->Platform.Win32.LastCursorPos = Vec2Add(Window->Platform.Win32.LastCursorPos, MouseDelta);
+            Window->LastMousePos = Vec2Add(Window->LastMousePos, MouseDelta);
 
             break;
         }
 
         case WM_MOUSELEAVE:
         {
-            Window->Platform.Win32.CursorInWindow = false;
+            Window->CursorInWindow = false;
 
             return (0);
         }
@@ -987,7 +1014,7 @@ static LRESULT CALLBACK Win32MainWindowCallback(HWND Hwnd, UINT Message, WPARAM 
 
                     // Call state change callback if state actually changed
                     if (OldState != NewState && Window->Callbacks.StateChanged) {
-                        Window->Callbacks.StateChanged(Window, OldState, NewState);
+                        Window->Callbacks.StateChanged(Window, OldState, NewState, Window->UserData);
                     }
 
                     return Result;
@@ -1171,7 +1198,8 @@ static bool CreateNativeWindow(AxWindow *Window)
     }
 
     UINT DPI = GetNearestMonitorDPI(Window);
-    AdjustWindowRectExForDpi((LPRECT)&Window->Rect, Style, FALSE, 0, DPI);
+    RECT WindowRect = CreateRectFromWindowGeometry(Window);
+    AdjustWindowRectExForDpi(&WindowRect, Style, FALSE, 0, DPI);
 
     // TODO(mdeforge): If centered flag, calculate display center
     HWND Handle = CreateWindowEx(
@@ -1179,10 +1207,10 @@ static bool CreateNativeWindow(AxWindow *Window)
         AXON_WNDCLASSNAME,
         Window->Title,
         Style,
-        Window->Rect.left,
-        Window->Rect.top,
-        Window->Rect.right - Window->Rect.left,
-        Window->Rect.bottom - Window->Rect.top,
+        WindowRect.left,
+        WindowRect.top,
+        WindowRect.right - WindowRect.left,
+        WindowRect.bottom - WindowRect.top,
         NULL,
         NULL,
         GetModuleHandle(0),
@@ -1284,11 +1312,12 @@ static AxWindow *CreateWindow_(const char *Title, int32_t X, int32_t Y, int32_t 
     Window->Platform.Win32.Instance = (uint64_t)GetModuleHandle(0);
     Window->IsRequestingClose = false;
     Window->Title = Title;
-    Window->Rect = Rect;
+    UpdateWindowGeometryFromRect(Window, Rect);
     Window->Style = Style;
     Window->HasFocus = false;
     Window->FilterEventsWhenUnfocused = true;  // Default to filtering events when unfocused
     Window->LastMousePos = (AxVec2){0, 0};
+    Window->CursorInWindow = false;
 
     if (!CreateNativeWindow(Window)) {
         SET_ERROR(Error, AX_WINDOW_ERROR_WINDOW_CREATION_FAILED);
@@ -1467,7 +1496,7 @@ static bool SetWindowPosition(AxWindow *Window, int32_t X, int32_t Y, enum AxWin
         return false;
     }
 
-    Window->Rect = Rect;
+    UpdateWindowGeometryFromRect(Window, Rect);
     return true;
 }
 
@@ -1517,7 +1546,7 @@ static bool SetWindowSize(AxWindow *Window, int32_t Width, int32_t Height, enum 
         return false;
     }
 
-    Window->Rect = Rect;
+    UpdateWindowGeometryFromRect(Window, Rect);
     return true;
 }
 
@@ -1629,7 +1658,7 @@ static bool SetWindowStateEnum(AxWindow *Window, enum AxWindowState State, enum 
 
     // Call state change callback if state actually changed
     if (OldState != State && Window->Callbacks.StateChanged) {
-        Window->Callbacks.StateChanged(Window, OldState, State);
+        Window->Callbacks.StateChanged(Window, OldState, State, Window->UserData);
     }
 
     return true;
@@ -1754,7 +1783,7 @@ static bool SetWindowState(AxWindow *Window, const AxWindowStateInfo *StateInfo,
 
     // Call state change callback if state actually changed
     if (OldState != StateInfo->State && Window->Callbacks.StateChanged) {
-        Window->Callbacks.StateChanged(Window, OldState, StateInfo->State);
+        Window->Callbacks.StateChanged(Window, OldState, StateInfo->State, Window->UserData);
     }
 
     return true;
@@ -2024,7 +2053,7 @@ static const char* GetErrorString(enum AxWindowError Error)
     }
 }
 
-static bool SetCallbacks(AxWindow *Window, const AxWindowCallbacks *Callbacks, enum AxWindowError *Error)
+static bool SetCallbacks(AxWindow *Window, const AxWindowCallbacks *Callbacks, void *UserData, enum AxWindowError *Error)
 {
     AXON_ASSERT(Window);
 
@@ -2034,6 +2063,9 @@ static bool SetCallbacks(AxWindow *Window, const AxWindowCallbacks *Callbacks, e
         SET_ERROR(Error, AX_WINDOW_ERROR_INVALID_WINDOW);
         return false;
     }
+
+    // Set user data (can be NULL)
+    Window->UserData = UserData;
 
     if (Callbacks) {
         // Set all callbacks from the structure

@@ -174,12 +174,12 @@ static inline AxVec2 Vec2Norm(AxVec2 V)
     return (Vec2MulS(V, (1.0f / Vec2Len(V))));
 }
 
-static inline AxVec2 Vec2WeightedAvg3(AxVec2 A, AxVec2 B, AxVec2 C, float a, float b, float c)
+static inline AxVec2 Vec2WeightedAvg3(AxVec2 A, AxVec2 B, AxVec2 C, float Alpha, float Beta, float Gamma)
 {
-    float Weight = a + b + c;
+    float Weight = Alpha + Beta + Gamma;
     AxVec2 Result = {
-        (A.X * a + B.X * b + C.X * c) / Weight,
-        (A.Y * a + B.Y * b + C.Y * c) / Weight
+        (A.X * Alpha + B.X * Beta + C.X * Gamma) / Weight,
+        (A.Y * Alpha + B.Y * Beta + C.Y * Gamma) / Weight
     };
 
     return (Result);
@@ -243,13 +243,13 @@ static AxVec3 Vec3Neg(AxVec3 V)
     return (AxVec3) { -V.X, -V.Y, -V.Z };
 }
 
-static inline AxVec3 Vec3WeightedAvg3(AxVec3 A, AxVec3 B, AxVec3 C, float a, float b, float c)
+static inline AxVec3 Vec3WeightedAvg3(AxVec3 A, AxVec3 B, AxVec3 C, float Alpha, float Beta, float Gamma)
 {
-    float Weight = a + b + c;
+    float Weight = Alpha + Beta + Gamma;
     AxVec3 Result = {
-        (A.X * a + B.X * b + C.X * c) / Weight,
-        (A.Y * a + B.Y * b + C.Y * c) / Weight,
-        (A.Z * a + B.Z * b + C.Z * c) / Weight
+        (A.X * Alpha + B.X * Beta + C.X * Gamma) / Weight,
+        (A.Y * Alpha + B.Y * Beta + C.Y * Gamma) / Weight,
+        (A.Z * Alpha + B.Z * Beta + C.Z * Gamma) / Weight
     };
 
     return (Result);
@@ -327,14 +327,14 @@ static AxMat4x4 Transpose(const AxMat4x4 Matrix)
 
 static inline AxMat4x4 XRotation(float Angle)
 {
-    float c = Cos(Angle);
-    float s = Sin(Angle);
+    float CosAngle = Cos(Angle);
+    float SinAngle = Sin(Angle);
 
     AxMat4x4 R =
     {
         {{ 1, 0, 0, 0},
-         { 0, c, -s, 0},
-         { 0, s, c, 0},
+         { 0, CosAngle, -SinAngle, 0},
+         { 0, SinAngle, CosAngle, 0},
          { 0, 0, 0, 1}},
     };
 
@@ -343,14 +343,14 @@ static inline AxMat4x4 XRotation(float Angle)
 
 static inline AxMat4x4 YRotation(float Angle)
 {
-    float c = Cos(Angle);
-    float s = Sin(Angle);
+    float CosAngle = Cos(Angle);
+    float SinAngle = Sin(Angle);
 
     AxMat4x4 R =
     {
-        {{ c, 0, s, 0},
+        {{ CosAngle, 0, SinAngle, 0},
          { 0, 1, 0, 0},
-         { -s, 0, c, 0},
+         { -SinAngle, 0, CosAngle, 0},
          { 0, 0, 0, 1}},
     };
 
@@ -359,13 +359,13 @@ static inline AxMat4x4 YRotation(float Angle)
 
 static inline AxMat4x4 ZRotation(float Angle)
 {
-    float c = Cos(Angle);
-    float s = Sin(Angle);
+    float CosAngle = Cos(Angle);
+    float SinAngle = Sin(Angle);
 
     AxMat4x4 R =
     {
-        {{ c, -s, 0, 0},
-         { s, c, 0, 0},
+        {{ CosAngle, -SinAngle, 0, 0},
+         { SinAngle, CosAngle, 0, 0},
          { 0, 0, 1, 0},
          { 0, 0, 0, 1}},
     };
@@ -446,23 +446,24 @@ static inline AxQuat QuatFromAxisAngle(AxVec3 Axis, float AngleRadians)
 static inline AxQuat QuatFromEuler(AxVec3 Euler)
 {
     // Convert Euler angles (in radians) to quaternion
-    // Order: Yaw (Y), Pitch (X), Roll (Z)
-    float HalfYaw = Euler.Y * 0.5f;
-    float HalfPitch = Euler.X * 0.5f;
-    float HalfRoll = Euler.Z * 0.5f;
+    // Using ZYX Tait-Bryan angles: φ=roll(X), θ=pitch(Y), ψ=yaw(Z)
+    // From Wikipedia: https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
+    float Phi = Euler.X;   // Roll (φ)
+    float Theta = Euler.Y; // Pitch (θ)
+    float Psi = Euler.Z;   // Yaw (ψ)
 
-    float CosYaw = Cos(HalfYaw);
-    float SinYaw = Sin(HalfYaw);
-    float CosPitch = Cos(HalfPitch);
-    float SinPitch = Sin(HalfPitch);
-    float CosRoll = Cos(HalfRoll);
-    float SinRoll = Sin(HalfRoll);
+    float C1 = Cos(Phi * 0.5f);
+    float S1 = Sin(Phi * 0.5f);
+    float C2 = Cos(Theta * 0.5f);
+    float S2 = Sin(Theta * 0.5f);
+    float C3 = Cos(Psi * 0.5f);
+    float S3 = Sin(Psi * 0.5f);
 
     return (AxQuat) {
-        .X = SinPitch * CosYaw * CosRoll - CosPitch * SinYaw * SinRoll,
-        .Y = CosPitch * SinYaw * CosRoll + SinPitch * CosYaw * SinRoll,
-        .Z = CosPitch * CosYaw * SinRoll - SinPitch * SinYaw * CosRoll,
-        .W = CosPitch * CosYaw * CosRoll + SinPitch * SinYaw * SinRoll
+        .X = S1 * C2 * C3 - C1 * S2 * S3,
+        .Y = C1 * S2 * C3 + S1 * C2 * S3,
+        .Z = C1 * C2 * S3 - S1 * S2 * C3,
+        .W = C1 * C2 * C3 + S1 * S2 * S3
     };
 }
 
@@ -498,28 +499,26 @@ static inline AxQuat QuatNormalize(AxQuat Q)
 
 static inline AxVec3 QuatToEuler(AxQuat Q)
 {
-    // Normalize quaternion first
+    // Convert quaternion to ZYX Tait-Bryan Euler angles
+    // This is the exact inverse of QuatFromEuler
+    // From Wikipedia: https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
     Q = QuatNormalize(Q);
 
     AxVec3 Euler;
 
-    // Calculate pitch (X-axis rotation)
-    float SinRCosP = 2.0f * (Q.W * Q.X + Q.Y * Q.Z);
-    float CosRCosP = 1.0f - 2.0f * (Q.X * Q.X + Q.Y * Q.Y);
-    Euler.X = atan2(SinRCosP, CosRCosP);
+    // Roll (φ, X-axis rotation)
+    Euler.X = atan2(2.0f * (Q.W * Q.X + Q.Y * Q.Z), 1.0f - 2.0f * (Q.X * Q.X + Q.Y * Q.Y));
 
-    // Calculate yaw (Y-axis rotation)
-    float SinP = 2.0f * (Q.W * Q.Y - Q.Z * Q.X);
-    if (fabsf(SinP) >= 1.0f) {
-        Euler.Y = copysignf(AX_PI / 2.0f, SinP); // Use 90 degrees if out of range
+    // Pitch (θ, Y-axis rotation)
+    float SinPitch = 2.0f * (Q.W * Q.Y - Q.X * Q.Z);
+    if (fabsf(SinPitch) >= 1.0f) {
+        Euler.Y = copysignf(AX_PI / 2.0f, SinPitch); // Use 90 degrees if out of range
     } else {
-        Euler.Y = asinf(SinP);
+        Euler.Y = asinf(SinPitch);
     }
 
-    // Calculate roll (Z-axis rotation)
-    float SinYCosP = 2.0f * (Q.W * Q.Z + Q.X * Q.Y);
-    float CosYCosP = 1.0f - 2.0f * (Q.Y * Q.Y + Q.Z * Q.Z);
-    Euler.Z = atan2(SinYCosP, CosYCosP);
+    // Yaw (ψ, Z-axis rotation)
+    Euler.Z = atan2(2.0f * (Q.W * Q.Z + Q.X * Q.Y), 1.0f - 2.0f * (Q.Y * Q.Y + Q.Z * Q.Z));
 
     return Euler;
 }
@@ -623,25 +622,25 @@ static inline void TransformSetScale(AxTransform *Transform, AxVec3 Scale)
 AxMat4x4 TransformGetForwardMatrix(struct AxTransform *Transform, uint64_t CurrentFrame);
 AxMat4x4 TransformGetInverseMatrix(struct AxTransform *Transform, uint64_t CurrentFrame);
 
-void TransformLookAt(struct AxTransform *Transform, AxVec3 targetPosition, AxVec3 up);
+void TransformLookAt(struct AxTransform *Transform, AxVec3 TargetPosition, AxVec3 Up);
 
 static inline AxMat4x4 CalcOrthographicProjection(float Left, float Right, float Bottom, float Top, float Near, float Far)
 {
-    float WInv = 1.0f / (Right - Left);
-    float HInv = 1.0f / (Top - Bottom);
-    float DInv = 1.0f / (Far - Near);
+    float WidthInverse = 1.0f / (Right - Left);
+    float HeightInverse = 1.0f / (Top - Bottom);
+    float DepthInverse = 1.0f / (Far - Near);
 
     AxMat4x4 Result = { 0 };
 
     // Orthographic projection matrix (column-major)
-    Result.E[0][0] = 2.0f * WInv;
-    Result.E[3][0] = -(Right + Left) * WInv;
+    Result.E[0][0] = 2.0f * WidthInverse;
+    Result.E[3][0] = -(Right + Left) * WidthInverse;
 
-    Result.E[1][1] = 2.0f * HInv;
-    Result.E[3][1] = -(Top + Bottom) * HInv;
+    Result.E[1][1] = 2.0f * HeightInverse;
+    Result.E[3][1] = -(Top + Bottom) * HeightInverse;
 
-    Result.E[2][2] = DInv;
-    Result.E[3][2] = -Near * DInv;
+    Result.E[2][2] = DepthInverse;
+    Result.E[3][2] = -Near * DepthInverse;
     Result.E[3][3] = 1.0f;
 
     return Result;
@@ -649,13 +648,13 @@ static inline AxMat4x4 CalcOrthographicProjection(float Left, float Right, float
 
 static inline AxMat4x4 CalcPerspectiveProjection(float FOV, float AspectRatio, float NearClip, float FarClip)
 {
-    float TanHalfFOV_Y = tan(FOV / 2.0f);
+    float TanHalfFovY = tan(FOV / 2.0f);
 
     AxMat4x4 Result = {0};
 
     // Perspective projection matrix (column-major)
-    Result.E[0][0] = 1.0f / (AspectRatio * TanHalfFOV_Y);
-    Result.E[1][1] = 1.0f / TanHalfFOV_Y;
+    Result.E[0][0] = 1.0f / (AspectRatio * TanHalfFovY);
+    Result.E[1][1] = 1.0f / TanHalfFovY;
     Result.E[2][2] = -(FarClip + NearClip) / (FarClip - NearClip);
     Result.E[2][3] = -1.0f;  // Fixed: W component should be in [2][3] for column-major
     Result.E[3][2] = -(2.0f * FarClip * NearClip) / (FarClip - NearClip);
@@ -689,13 +688,13 @@ static inline AxMat4x4 CalcOrthographicInverseProjection(float Left, float Right
 
 static inline AxMat4x4 CalcPerspectiveInverseProjection(float FOV, float AspectRatio, float NearClip, float FarClip)
 {
-    float TanHalfFOV_Y = tan(FOV / 2.0f);
+    float TanHalfFovY = tan(FOV / 2.0f);
 
     AxMat4x4 Result = {0};
 
     // Inverse perspective projection matrix (column-major)
-    Result.E[0][0] = AspectRatio * TanHalfFOV_Y;
-    Result.E[1][1] = TanHalfFOV_Y;
+    Result.E[0][0] = AspectRatio * TanHalfFovY;
+    Result.E[1][1] = TanHalfFovY;
     Result.E[2][2] = 0.0f;
     Result.E[3][2] = -1.0f;
     Result.E[2][3] = (NearClip - FarClip) / (2.0f * FarClip * NearClip);
@@ -705,30 +704,30 @@ static inline AxMat4x4 CalcPerspectiveInverseProjection(float FOV, float AspectR
 }
 
 // Column-major 4x4 scale matrix
-static inline AxMat4x4 Mat4x4Scale(AxVec3 scale)
+static inline AxMat4x4 Mat4x4Scale(AxVec3 Scale)
 {
-    AxMat4x4 m = Identity();
+    AxMat4x4 Matrix = Identity();
 
-    m.E[0][0] = scale.X;  // Scale X
-    m.E[1][1] = scale.Y;  // Scale Y
-    m.E[2][2] = scale.Z;  // Scale Z
-    m.E[3][3] = 1.0f;     // Homogeneous w stays 1
+    Matrix.E[0][0] = Scale.X;  // Scale X
+    Matrix.E[1][1] = Scale.Y;  // Scale Y
+    Matrix.E[2][2] = Scale.Z;  // Scale Z
+    Matrix.E[3][3] = 1.0f;     // Homogeneous w stays 1
 
     // Ensure no stray values
-    m.E[0][1] = m.E[0][2] = m.E[0][3] = 0.0f;
-    m.E[1][0] = m.E[1][2] = m.E[1][3] = 0.0f;
-    m.E[2][0] = m.E[2][1] = m.E[2][3] = 0.0f;
-    m.E[3][0] = m.E[3][1] = m.E[3][2] = 0.0f;
+    Matrix.E[0][1] = Matrix.E[0][2] = Matrix.E[0][3] = 0.0f;
+    Matrix.E[1][0] = Matrix.E[1][2] = Matrix.E[1][3] = 0.0f;
+    Matrix.E[2][0] = Matrix.E[2][1] = Matrix.E[2][3] = 0.0f;
+    Matrix.E[3][0] = Matrix.E[3][1] = Matrix.E[3][2] = 0.0f;
 
-    return m;
+    return Matrix;
 }
 
 
 static inline AxVec2 CalcParabolicTouchPoint(AxVec2 A, AxVec2 B, AxVec2 C, float T)
 {
-    AxVec2 Q = { (1 - T) * A.X + T * B.X, (1 - T) * A.Y + T * B.Y };
-    AxVec2 R = { (1 - T) * B.X + T * C.X, (1 - T) * B.Y + T * C.Y };
-    AxVec2 P = { (1 - T) * Q.X + T * R.X, (1 - T) * Q.Y + T * R.Y };
+    AxVec2 IntermediateQ = { (1 - T) * A.X + T * B.X, (1 - T) * A.Y + T * B.Y };
+    AxVec2 IntermediateR = { (1 - T) * B.X + T * C.X, (1 - T) * B.Y + T * C.Y };
+    AxVec2 P = { (1 - T) * IntermediateQ.X + T * IntermediateR.X, (1 - T) * IntermediateQ.Y + T * IntermediateR.Y };
 
     return (P);
 }
@@ -790,9 +789,9 @@ float RandomFloat(const float Min, const float Max);
 // Calculate tangent and bitangent vectors for normal mapping
 // Given three vertices of a triangle, calculates tangent and bitangent vectors
 void CalculateTangentBitangent(
-    AxVec3 pos1, AxVec3 pos2, AxVec3 pos3,
-    AxVec2 uv1, AxVec2 uv2, AxVec2 uv3,
-    AxVec3 *tangent, AxVec3 *bitangent
+    AxVec3 Position1, AxVec3 Position2, AxVec3 Position3,
+    AxVec2 UV1, AxVec2 UV2, AxVec2 UV3,
+    AxVec3 *Tangent, AxVec3 *Bitangent
 );
 
 static inline void TransformTranslate(AxTransform *Transform, AxVec3 Translation, bool WorldSpace)
@@ -867,12 +866,12 @@ static inline void TransformRotateFromMouseDelta(AxTransform *Transform, AxVec2 
 
     // Calculate yaw (Y rotation) and pitch (X rotation)
     // Invert Y to match standard FPS mouse look (moving mouse up = look up)
-    float Yaw = -MouseDelta.X * Sensitivity;
-    float Pitch = -MouseDelta.Y * Sensitivity;
+    float YawAngle = -MouseDelta.X * Sensitivity;
+    float PitchAngle = -MouseDelta.Y * Sensitivity;
 
     // Apply yaw around world Y axis, pitch around local X axis
-    AxQuat YawRotation = QuatFromAxisAngle((AxVec3){ 0.0f, 1.0f, 0.0f }, Yaw);
-    AxQuat PitchRotation = QuatFromAxisAngle((AxVec3){ 1.0f, 0.0f, 0.0f }, Pitch);
+    AxQuat YawRotation = QuatFromAxisAngle((AxVec3){ 0.0f, 1.0f, 0.0f }, YawAngle);
+    AxQuat PitchRotation = QuatFromAxisAngle((AxVec3){ 1.0f, 0.0f, 0.0f }, PitchAngle);
 
     // Apply yaw first (world space), then pitch (local space)
     Transform->Rotation = QuatMultiply(YawRotation, Transform->Rotation);
@@ -908,18 +907,18 @@ static inline AxVec3 Vec3Lerp(AxVec3 A, AxVec3 B, float T)
 
 static inline AxQuat QuaternionSlerp(AxQuat A, AxQuat B, float T)
 {
-    float Dot = A.X * B.X + A.Y * B.Y + A.Z * B.Z + A.W * B.W;
+    float DotProduct = A.X * B.X + A.Y * B.Y + A.Z * B.Z + A.W * B.W;
 
     // If dot product is negative, negate one quaternion to take shorter path
-    if (Dot < 0.0f) {
+    if (DotProduct < 0.0f) {
         B.X = -B.X;
         B.Y = -B.Y;
         B.Z = -B.Z;
         B.W = -B.W;
-        Dot = -Dot;
+        DotProduct = -DotProduct;
     }
 
-    if (Dot > 0.9995f) {
+    if (DotProduct > 0.9995f) {
         // Quaternions are very close, use linear interpolation
         AxQuat Result = {
             Lerp(A.X, B.X, T),
@@ -930,16 +929,16 @@ static inline AxQuat QuaternionSlerp(AxQuat A, AxQuat B, float T)
         return (QuatNormalize(Result));
     }
 
-    float Angle = acosf(Dot);
+    float Angle = acosf(DotProduct);
     float SinAngle = sinf(Angle);
-    float t1 = sinf((1.0f - T) * Angle) / SinAngle;
-    float t2 = sinf(T * Angle) / SinAngle;
+    float T1 = sinf((1.0f - T) * Angle) / SinAngle;
+    float T2 = sinf(T * Angle) / SinAngle;
 
     return (AxQuat){
-        A.X * t1 + B.X * t2,
-        A.Y * t1 + B.Y * t2,
-        A.Z * t1 + B.Z * t2,
-        A.W * t1 + B.W * t2
+        A.X * T1 + B.X * T2,
+        A.Y * T1 + B.Y * T2,
+        A.Z * T1 + B.Z * T2,
+        A.W * T1 + B.W * T2
     };
 }
 

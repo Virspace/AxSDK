@@ -54,7 +54,8 @@ add_library(Virspace::OpenGLGame ALIAS OpenGLGame)
 # Add sources to library target
 target_sources(OpenGLGame
     PRIVATE
-        src/OpenGLGame.cpp
+        src/Engine.cpp
+        src/Game.cpp
 )
 
 # Add the executable
@@ -126,6 +127,7 @@ target_compile_definitions(OpenGLGame
 
 include_directories("$<JOIN:$<TARGET_PROPERTY:AxWindow,INCLUDE_DIRECTORIES>,;>")
 include_directories("$<JOIN:$<TARGET_PROPERTY:AxOpenGL,INCLUDE_DIRECTORIES>,;>")
+include_directories("$<JOIN:$<TARGET_PROPERTY:AxScene,INCLUDE_DIRECTORIES>,;>")
 
 # Specify include directories to use when compiling a given target
 target_include_directories(OpenGLGame
@@ -166,35 +168,20 @@ install(TARGETS OpenGLGame
     INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
-# Copy shaders to build directory during build
-set(SHADERS_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shaders")
-set(SHADERS_DESTINATION_DIR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders")
-add_custom_command(
-    TARGET OpenGLGame  # Target executable to associate the copy command with
-    POST_BUILD  # Specify that this should happen after building the executable
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${SHADERS_SOURCE_DIR} ${SHADERS_DESTINATION_DIR}
-    COMMENT "Copying shader folder to the build folder"
+# Create symlink to scenes folder in build directory
+set(SCENES_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/scenes")
+set(SCENES_DESTINATION_DIR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/examples/graphics/scenes")
+add_custom_target(link_scenes ALL
+    COMMAND ${CMAKE_COMMAND} -E echo "Creating directory structure for: ${SCENES_DESTINATION_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/examples/graphics"
+    COMMAND ${CMAKE_COMMAND} -E echo "Creating graphics example asset symlink: ${SCENES_DESTINATION_DIR} -> ${SCENES_SOURCE_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E remove ${SCENES_DESTINATION_DIR}
+    COMMAND ${CMAKE_COMMAND} -E create_symlink ${SCENES_SOURCE_DIR} ${SCENES_DESTINATION_DIR}
+    COMMENT "Creating symlink to scenes folder"
 )
 
-# Copy model to build directory during guild
-set(MODEL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/models")
-set(MODEL_DESTINATION_DIR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/models")
-add_custom_command(
-    TARGET OpenGLGame  # Target executable to associate the copy command with
-    POST_BUILD  # Specify that this should happen after building the executable
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${MODEL_SOURCE_DIR} ${MODEL_DESTINATION_DIR}
-    COMMENT "Copying models folder to the build folder"
-)
-
-# Copy textures to build directory during build
-set(TEXTURES_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/textures")
-set(TEXTURES_DESTINATION_DIR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/textures")
-add_custom_command(
-    TARGET OpenGLGame  # Target executable to associate the copy command with
-    POST_BUILD  # Specify that this should happen after building the executable
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${TEXTURES_SOURCE_DIR} ${TEXTURES_DESTINATION_DIR}
-    COMMENT "Copying textures folder to the build folder"
-)
+# Make OpenGLGame depend on symlink creation
+add_dependencies(OpenGLGame link_scenes)
 
 # TODO(mdeforge): See if we can precompile the shaders
 function(add_shaders SHADER_DIR)

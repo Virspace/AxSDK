@@ -13,7 +13,7 @@ include(FetchContent)
 FetchContent_Declare(
   googletest
   # Specify the commit you depend on and update it regularly.
-  URL https://github.com/google/googletest/archive/refs/tags/release-1.11.0.zip
+  URL https://github.com/google/googletest/releases/download/v1.17.0/googletest-1.17.0.tar.gz
 )
 
 # For Windows: Prevent overriding the parent project's compiler/linker settings
@@ -21,6 +21,24 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 
 # Get google test
 FetchContent_MakeAvailable(googletest)
+
+# Get cgltf for material tests
+FetchContent_Declare(
+    cgltf
+    GIT_REPOSITORY https://github.com/jkuhlmann/cgltf.git
+    GIT_TAG v1.14
+    GIT_SHALLOW     TRUE
+    GIT_PROGRESS    TRUE
+)
+
+FetchContent_GetProperties(cgltf)
+if(NOT cgltf_POPULATED)
+    FetchContent_Populate(cgltf)
+    message("Fetching cgltf")
+
+    add_library(cgltf INTERFACE ${cgltf_SOURCE_DIR}/cgltf.h)
+    target_include_directories(cgltf INTERFACE ${cgltf_SOURCE_DIR})
+endif()
 
 #
 # Create Target
@@ -66,6 +84,7 @@ target_compile_definitions(FoundationTests
 target_link_libraries(FoundationTests
     PRIVATE
         Virspace::Foundation
+        cgltf
         gtest
         gtest_main
 )

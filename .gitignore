@@ -69,3 +69,8 @@ vsbuild/*
 examples/graphics/scenes/models
 
 .cache/*
+
+# AI Tools
+.claude
+.agent-os
+CLAUDE.md

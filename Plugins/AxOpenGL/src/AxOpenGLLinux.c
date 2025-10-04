@@ -312,7 +312,7 @@ static void Win32SetPixelFormat(/*struct OpenGLData *Data,*/ HDC WindowDC)
     SetPixelFormat(WindowDC, SuggestedPixelFormatIndex, &SuggestedPixelFormat);
 }
 
-static void SetupRenderState(AxDrawData *DrawData, int FramebufferWidth, int FramebufferHeight, GLuint VAO)
+static void SetupRenderState(int FramebufferWidth, int FramebufferHeight, GLuint VAO)
 {
     // NOTE(mdeforge): This is currently setup for orthographic sprite drawing since the immediate focus is 2D sprites.
 
@@ -481,7 +481,7 @@ void Create(AxWindow *Window)
     Win32LoadWGLExtensions(Data);
 
     // Get device context for Window
-    AxWin32WindowData Win32WindowData = WindowAPI->GetPlatformData(Window).Win32;
+    AxWin32WindowPlatformData Win32WindowData = WindowAPI->GetPlatformData(Window).Win32;
     HDC DeviceContext = GetDC((HWND)Win32WindowData.Handle);
 
     // Set pixel format for the device

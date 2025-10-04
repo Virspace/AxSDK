@@ -1,0 +1,47 @@
+# Sponza Atrium Scene
+# Default scene for the graphics example
+
+scene "SponzaAtrium" {
+    # Material definition with shader paths
+    material "DefaultMaterial" {
+        vertexShader: "examples/graphics/scenes/shaders/vert.glsl"
+        fragmentShader: "examples/graphics/scenes/shaders/frag.glsl"
+    }
+
+    # Main light source positioned above the atrium
+    light "MainLight" {
+        type: point
+        position: 50.0, 80.0, 30.0
+        color: 1.0, 1.0, 0.9
+        intensity: 1.2
+        range: 200.0
+    }
+
+    # Secondary warm light for atmosphere
+    light "AtmosphereLight" {
+        type: point
+        position: -30.0, 60.0, -20.0
+        color: 1.0, 0.8, 0.6
+        intensity: 0.8
+        range: 150.0
+    }
+
+    object "MainEnvironment" {
+        transform {
+            translation: 0.0, 0.0, 0.0
+            rotation: 0.0, 0.0, 0.0, 1.0
+            scale: 1.0, 1.0, 1.0
+        }
+        mesh: "examples/graphics/scenes/models/atrium.glb"
+        material: "DefaultMaterial"
+    }
+
+    # Camera positioning object (used to set initial camera transform)
+    object "DefaultCamera" {
+        transform {
+            translation: 11.12, 1.7, 1.83
+            rotation: -0.064447, 0.381751, 0.026695, 0.921629
+            scale: 1.0, 1.0, 1.0
+        }
+    }
+}

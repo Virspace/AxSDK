@@ -54,7 +54,8 @@
         "xtree": "cpp",
         "string_view": "cpp",
         "gl3w.h": "c",
-        "glcorearb.h": "c"
+        "glcorearb.h": "c",
+        "axopengl.h": "c"
     },
     "C_Cpp.default.intelliSenseMode": "clang-x64",
     "C_Cpp.default.cppStandard": "c++20",

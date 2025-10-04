@@ -155,6 +155,8 @@
 
 #define AX_KEY_UNKNOWN        -1
 
+typedef struct AxWindow AxWindow;
+
 // Window state enum (moved here to avoid forward declaration issues)
 enum AxWindowState
 {
@@ -181,7 +183,7 @@ typedef struct AxInputEvent
 {
     enum AxInputEventType Type;   ///< Type of input event
     uint64_t Timestamp;           ///< Event timestamp in milliseconds
-    
+
     union {
         struct {
             int Key;              ///< Key code
@@ -189,34 +191,34 @@ typedef struct AxInputEvent
             int Action;           ///< AX_PRESS, AX_RELEASE, or AX_REPEAT
             int Mods;             ///< Modifier keys
         } Key;
-        
+
         struct {
             uint32_t Char;        ///< Unicode character
             int Mods;             ///< Modifier keys
         } Char;
-        
+
         struct {
             double X;             ///< Mouse X position
             double Y;             ///< Mouse Y position
             double DeltaX;        ///< X movement delta
             double DeltaY;        ///< Y movement delta
         } MouseMove;
-        
+
         struct {
             int Button;           ///< Mouse button
             int Action;           ///< AX_PRESS or AX_RELEASE
             int Mods;             ///< Modifier keys
         } MouseButton;
-        
+
         struct {
             double OffsetX;       ///< Horizontal scroll offset
             double OffsetY;       ///< Vertical scroll offset
         } MouseScroll;
-        
+
         struct {
             bool Focused;         ///< True if window gained focus, false if lost
         } WindowFocus;
-        
+
         struct {
             enum AxWindowState OldState;  ///< Previous window state
             enum AxWindowState NewState;  ///< New window state
@@ -340,50 +342,96 @@ enum AxKeyboardMode
     AX_KEYBOARD_DISABLED
 };
 
-// An opaque object that represents a window.
-typedef struct AxWindow AxWindow;
-
 // An opaque object that represents a display.
 typedef struct AxDisplay AxDisplay;
 
-typedef struct AxWin32WindowData
+typedef struct AxWin32WindowPlatformData
 {
-    uint64_t Handle; // A handle to a window associated with a particualr module instance.
-    uint64_t Instance; // The module instance the window belongs to (a particular EXE or DLL).
-    bool CursorInWindow;
+    // Core Windows handles
+    uint64_t Handle;              // HWND - Window handle
+    uint64_t Instance;            // HINSTANCE - Module instance
+    uint64_t DeviceContext;       // HDC - Device context for OpenGL/GDI
 
-    AxVec2 LastCursorPos;
-    int16_t KeyCodes[512];
-    int16_t ScanCodes[AX_KEY_LAST + 1];
+    // Windows-specific input mappings
+    int16_t KeyCodes[512];        // Virtual key to AxSDK key mapping
+    int16_t ScanCodes[AX_KEY_LAST + 1];  // Reverse mapping for scan codes
 
-    bool KeyMenu;
-    // The last received high surrogate when decoding pairs of UTF-16 messages
-    uint16_t HighSurrogate;
-} AxWin32WindowData;
+    // Windows-specific keyboard state
+    bool KeyMenu;                 // Alt key state for menu access
+    uint16_t HighSurrogate;       // UTF-16 surrogate pair handling
 
-typedef struct AxLinuxWindowData
+    // DPI and scaling support
+    uint32_t DpiX;                // Horizontal DPI
+    uint32_t DpiY;                // Vertical DPI
+    float ScaleFactor;            // DPI scale factor (1.0 = 100%)
+
+    // Modern Windows features
+    bool DarkModeEnabled;         // Windows 10+ dark mode support
+    bool CompositionEnabled;      // DWM composition state
+    uint64_t ThemeHandle;         // HTHEME for themed controls
+
+    // Performance and input optimization
+    bool RawInputRegistered;      // Whether raw input is registered
+    uint32_t LastMessageTime;     // Timestamp of last processed message
+
+    // Error tracking
+    uint32_t LastWin32Error;      // GetLastError() value from last operation
+} AxWin32WindowPlatformData;
+
+typedef struct AxLinuxWindowPlatformData
 {
-    uint64_t Foo; // TODO(mdeforge): How are linux windows managed?
-} AxLinuxWindowData;
+    // X11 specific data
+    uint64_t Display;             // Display* - X11 display connection
+    uint64_t Window;              // Window - X11 window handle
+    uint64_t Screen;              // Screen* - X11 screen
+    uint32_t Atom_WM_DELETE_WINDOW;  // Atom for window close events
+    uint32_t Atom_WM_PROTOCOLS;      // Atom for WM protocols
+    uint64_t Colormap;            // Colormap - X11 colormap
+    uint64_t VisualInfo;          // XVisualInfo* - Visual information
+
+    // Wayland specific data (alternative to X11)
+    uint64_t WaylandDisplay;      // wl_display*
+    uint64_t WaylandSurface;      // wl_surface*
+    uint64_t WaylandShell;        // wl_shell_surface* or xdg_surface*
+    uint64_t WaylandRegistry;     // wl_registry*
+
+    // Linux-specific input mappings
+    int16_t KeyCodes[512];        // X11 keycode to AxSDK key mapping
+    int16_t ScanCodes[AX_KEY_LAST + 1];  // Reverse mapping for scan codes
+
+    // Backend selection and state
+    bool IsWayland;               // True if using Wayland, false for X11
+    bool HasFocusEvents;          // Whether focus events are supported
+    bool HasConfigureEvents;      // Whether window configure events work
+
+    // OpenGL context data
+    uint64_t GLXContext;          // GLXContext for X11 OpenGL
+    uint64_t EGLContext;          // EGLContext for Wayland OpenGL
+    uint64_t EGLDisplay;          // EGLDisplay for Wayland
+
+    // Error tracking
+    int LastX11Error;             // Last X11 error code
+    uint32_t LastWaylandError;    // Last Wayland error code
+} AxLinuxWindowPlatformData;
 
 // NOTE(mdeforge): This is exposed so that others can add additional platform data
 typedef struct AxWindowPlatformData
 {
     union
     {
-        AxWin32WindowData Win32;
-        AxLinuxWindowData Linux;
+        AxWin32WindowPlatformData Win32;
+        AxLinuxWindowPlatformData Linux;
     };
 } AxWindowPlatformData;
 
 // Callbacks
 struct AxWindowAPI;
-typedef void (*AxKeyCallback)(struct AxWindow *Window, int Key, int ScanCode, int Action, int Mods);
-typedef void (*AxMousePosCallback)(struct AxWindow *Window, double X, double Y);
-typedef void (*AxMouseButtonCallback)(struct AxWindow *Window, int Button, int Action, int Mods);
-typedef void (*AxMouseScrollCallback)(struct AxWindow *Window, AxVec2 Offset);
-typedef void (*AxCharCallback)(struct AxWindow *Window, unsigned int Char);
-typedef void (*AxWindowStateCallback)(struct AxWindow *Window, enum AxWindowState OldState, enum AxWindowState NewState);
+typedef void (*AxKeyCallback)(struct AxWindow *Window, int Key, int ScanCode, int Action, int Mods, void *UserData);
+typedef void (*AxMousePosCallback)(struct AxWindow *Window, double X, double Y, void *UserData);
+typedef void (*AxMouseButtonCallback)(struct AxWindow *Window, int Button, int Action, int Mods, void *UserData);
+typedef void (*AxMouseScrollCallback)(struct AxWindow *Window, AxVec2 Offset, void *UserData);
+typedef void (*AxCharCallback)(struct AxWindow *Window, unsigned int Char, void *UserData);
+typedef void (*AxWindowStateCallback)(struct AxWindow *Window, enum AxWindowState OldState, enum AxWindowState NewState, void *UserData);
 
 /**
  * @brief Structure containing all window callbacks.
@@ -492,7 +540,7 @@ typedef struct AxPlatformHints
         bool DisableWindowShadows;        ///< Disable window shadows
         bool UseImmersiveDarkMode;        ///< Use immersive dark mode
     } Windows;
-    
+
     // Linux-specific hints
     struct {
         const char *Display;              ///< X11 display name
@@ -500,7 +548,7 @@ typedef struct AxPlatformHints
         bool UseWayland;                  ///< Force Wayland backend
         bool UseX11;                      ///< Force X11 backend
     } Linux;
-    
+
     // macOS-specific hints
     struct {
         bool EnableMetalLayer;            ///< Enable Metal layer for rendering
@@ -776,11 +824,12 @@ struct AxWindowAPI
      * @brief Sets all callbacks for the window at once.
      * @param Window The target window.
      * @param Callbacks Pointer to callback structure. Can be NULL to clear all callbacks.
+     * @param UserData User data pointer to be passed to all callbacks.
      * @param Error Optional pointer to receive error code. Can be NULL if error checking is not needed.
      * @return True if the operation succeeded, false otherwise.
      * @details This function sets all callbacks atomically. If Callbacks is NULL, all callbacks are cleared.
      */
-    bool (*SetCallbacks)(AxWindow *Window, const AxWindowCallbacks *Callbacks, enum AxWindowError *Error);
+    bool (*SetCallbacks)(AxWindow *Window, const AxWindowCallbacks *Callbacks, void *UserData, enum AxWindowError *Error);
 
     /**
      * @brief Gets all current callbacks for the window.
