@@ -12,6 +12,8 @@
 #include "AxWindow/AxWindow.h"
 #include "AxOpenGL/AxOpenGL.h"
 #include "AxScene/AxScene.h"
+#include "AxResource/AxResource.h"
+#include "AxResource/AxShaderManager.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -62,15 +64,15 @@ static void OnMaterialParsed(const AxMaterial* Material, void* UserData)
            Material->Name, Material->VertexShaderPath, Material->FragmentShaderPath);
 
     // Load and compile shaders immediately when material is parsed
-    AxShaderData* ShaderData = GameRef->ConstructShader(Material->VertexShaderPath, Material->FragmentShaderPath);
-    if (!ShaderData) {
+    AxShaderHandle ShaderHandle = GameRef->ConstructShader(Material->VertexShaderPath, Material->FragmentShaderPath);
+    if (!GameRef->ShaderManagerAPI_->IsValid(ShaderHandle)) {
         fprintf(stderr, "SceneAdapter: Failed to load shaders for material '%s'\n", Material->Name);
         return;
     }
 
-    // Store compiled shader for later assignment
+    // Store compiled shader handle for later assignment
     // We can't modify the scene materials during parsing, so store temporarily
-    GameRef->CompiledShaders[std::string(Material->Name)] = ShaderData;
+    GameRef->CompiledShaders[std::string(Material->Name)] = ShaderHandle;
     printf("SceneAdapter: Shaders compiled and stored for material '%s'\n", Material->Name);
 }
 
@@ -448,19 +450,9 @@ void Game::Destroy()
         Scene_ = nullptr;
     }
 
-    // Clean up shader resources from model materials
-    for (auto& [ModelName, Model] : Models) {
-        if (Model.Materials) {
-            for (size_t i = 0; i < ArraySize(Model.Materials); ++i) {
-                AxMaterial* Material = &Model.Materials[i];
-                if (Material->ShaderProgram != 0 && Material->ShaderData) {
-                    RenderAPI_->DestroyProgram(Material->ShaderProgram);
-                    delete (AxShaderData*)Material->ShaderData;
-                    Material->ShaderProgram = 0;
-                    Material->ShaderData = nullptr;
-                }
-            }
-        }
+    // Shutdown resource managers (automatically cleans up all shaders)
+    if (ResourceAPI_) {
+        ResourceAPI_->Shutdown();
     }
 
     // Clean up camera
@@ -484,52 +476,31 @@ void Game::Initialize(AxAPIRegistry *APIRegistry, AxWindow *Window, const AxView
     SceneAPI_ = (struct AxSceneAPI *)APIRegistry_->Get(AXON_SCENE_API_NAME);
     FileAPI_ = PlatformAPI_->FileAPI;
 
+    ResourceAPI_ = (AxResourceAPI*)APIRegistry_->Get(AXON_RESOURCE_API_NAME);
+    ShaderManagerAPI_ = (AxShaderManagerAPI*)APIRegistry_->Get(AXON_SHADER_MANAGER_API_NAME);
+
+    // Initialize resource managers
+    if (ResourceAPI_) {
+        ResourceAPI_->Initialize(APIRegistry_);
+    }
+
     printf("Game: APIs initialized and infrastructure received\n");
 
     // Register input callbacks now that we have everything
     RegisterCallbacks();
 }
 
-AxShaderData *Game::ConstructShader(const char *VertexShaderPath, const char *FragmentShaderPath)
+AxShaderHandle Game::ConstructShader(const char *VertexShaderPath, const char *FragmentShaderPath)
 {
-    // Load shaders
-    AxFile VertexShader = FileAPI_->OpenForRead(VertexShaderPath);
-    AXON_ASSERT(FileAPI_->IsValid(VertexShader) && "Vertex shader file size is invalid!");
-    AxFile FragmentShader = FileAPI_->OpenForRead(FragmentShaderPath);
-    AXON_ASSERT(FileAPI_->IsValid(FragmentShader) && "Fragment shader file size is invalid!");
+    // Use ShaderManagerAPI to create and manage the shader
+    AxShaderHandle Handle = ShaderManagerAPI_->CreateShader(VertexShaderPath, FragmentShaderPath);
 
-    uint64_t VertexShaderFileSize = FileAPI_->Size(VertexShader);
-    uint64_t FragmentShaderFileSize = FileAPI_->Size(FragmentShader);
+    if (!ShaderManagerAPI_->IsValid(Handle)) {
+        fprintf(stderr, "Failed to create shader: %s, %s\n", VertexShaderPath, FragmentShaderPath);
+        return AX_INVALID_SHADER_HANDLE;
+    }
 
-    // Allocate text buffers
-    char *VertexShaderBuffer = new char[VertexShaderFileSize + 1];
-    char *FragmentShaderBuffer = new char[FragmentShaderFileSize + 1];
-
-    // Read shader text
-    FileAPI_->Read(VertexShader, VertexShaderBuffer, (uint32_t)VertexShaderFileSize);
-    FileAPI_->Read(FragmentShader, FragmentShaderBuffer, (uint32_t)FragmentShaderFileSize);
-
-    // Null-terminate
-    VertexShaderBuffer[VertexShaderFileSize] = '\0';
-    FragmentShaderBuffer[FragmentShaderFileSize] = '\0';
-
-    // Create shader program
-    uint32_t ShaderProgramID = RenderAPI_->CreateProgram("", (char *)VertexShaderBuffer, (char *)FragmentShaderBuffer);
-    AXON_ASSERT(ShaderProgramID && "ShaderProgram is NULL!");
-
-    // Free text buffers
-    delete[] VertexShaderBuffer;
-    delete[] FragmentShaderBuffer;
-
-    // Setup the shader data
-    AxShaderData *ShaderData = new AxShaderData{};
-    ShaderData->ShaderHandle = ShaderProgramID;
-
-    // This will go away after I make the changes found in the TODO in GetAttribLocations
-    bool Result = RenderAPI_->GetAttributeLocations(ShaderProgramID, ShaderData);
-    AXON_ASSERT(Result && "Failed to get shader attribute locations!");
-
-    return ShaderData;
+    return Handle;
 }
 
 bool Game::LoadShadersForMaterials()
@@ -554,18 +525,20 @@ bool Game::LoadShadersForMaterials(const AxScene* Scene)
             continue;
         }
 
-        // printf("Loading shaders for material '%s': %s, %s\n", 
-        //        Material->Name, Material->VertexShaderPath, Material->FragmentShaderPath);
-
-        AxShaderData* ShaderData = ConstructShader(Material->VertexShaderPath, Material->FragmentShaderPath);
-        if (!ShaderData) {
+        // Create shader using ShaderManagerAPI
+        AxShaderHandle ShaderHandle = ConstructShader(Material->VertexShaderPath, Material->FragmentShaderPath);
+        if (!ShaderManagerAPI_->IsValid(ShaderHandle)) {
             fprintf(stderr, "Error: Failed to load shaders for material '%s'\n", Material->Name);
             return (false);
         }
 
+        // Get shader data and program from handle
+        const AxShaderData* ShaderData = ShaderManagerAPI_->GetShaderData(ShaderHandle);
+        uint32_t ShaderProgram = ShaderManagerAPI_->GetShaderProgram(ShaderHandle);
+
         // Assign shader program to material
-        Material->ShaderProgram = ShaderData->ShaderHandle;
-        Material->ShaderData = ShaderData;
+        Material->ShaderProgram = ShaderProgram;
+        Material->ShaderData = (AxShaderData*)ShaderData;  // Safe cast - manager owns the data
 
         // Also assign shader to corresponding model materials
         for (auto& [ModelName, Model] : Models) {
@@ -712,6 +685,83 @@ bool Game::LoadModel(const char *File, AxModel *Model)
         }
 
         ArrayPush(Model->Materials, AxMat);
+
+        // New Material Description System - populate AxMaterialDesc alongside legacy AxMaterial
+        AxMaterialDesc MatDesc = {};
+        snprintf(MatDesc.Name, sizeof(MatDesc.Name), "%s", Material.name ? Material.name : "Unnamed");
+        MatDesc.Type = AX_MATERIAL_TYPE_PBR;
+
+        // Map base color factor (RGBA)
+        MatDesc.PBR.BaseColorFactor.X = pbr->base_color_factor[0];
+        MatDesc.PBR.BaseColorFactor.Y = pbr->base_color_factor[1];
+        MatDesc.PBR.BaseColorFactor.Z = pbr->base_color_factor[2];
+        MatDesc.PBR.BaseColorFactor.W = pbr->base_color_factor[3];
+
+        // Map emissive factor (RGB)
+        MatDesc.PBR.EmissiveFactor.X = Material.emissive_factor[0];
+        MatDesc.PBR.EmissiveFactor.Y = Material.emissive_factor[1];
+        MatDesc.PBR.EmissiveFactor.Z = Material.emissive_factor[2];
+
+        // Map metallic and roughness factors (default to 1.0 per glTF spec)
+        MatDesc.PBR.MetallicFactor = pbr->metallic_factor;
+        MatDesc.PBR.RoughnessFactor = pbr->roughness_factor;
+
+        // Map texture indices (use -1 for no texture as per renderer-agnostic design)
+        MatDesc.PBR.BaseColorTexture = (AxMat.BaseColorTexture == kNoTexture) ? -1 : (int32_t)AxMat.BaseColorTexture;
+        MatDesc.PBR.NormalTexture = (AxMat.NormalTexture == kNoTexture) ? -1 : (int32_t)AxMat.NormalTexture;
+        MatDesc.PBR.MetallicRoughnessTexture = (AxMat.MetallicRoughnessTexture == kNoTexture) ? -1 : (int32_t)AxMat.MetallicRoughnessTexture;
+
+        // Load emissive texture if present
+        if (Material.emissive_texture.texture) {
+            AxTexture EmissiveTexture = {0};
+            if (LoadModelTexture(&EmissiveTexture, (cgltf_texture_view*)&Material.emissive_texture, ModelData, BasePath, true)) { // true = sRGB
+                size_t EmissiveTextureIndex = ArraySize(Model->Textures);
+                ArrayPush(Model->Textures, EmissiveTexture);
+                MatDesc.PBR.EmissiveTexture = (int32_t)EmissiveTextureIndex;
+            } else {
+                MatDesc.PBR.EmissiveTexture = -1;
+            }
+        } else {
+            MatDesc.PBR.EmissiveTexture = -1;
+        }
+
+        // Load occlusion texture if present
+        if (Material.occlusion_texture.texture) {
+            AxTexture OcclusionTexture = {0};
+            if (LoadModelTexture(&OcclusionTexture, (cgltf_texture_view*)&Material.occlusion_texture, ModelData, BasePath, false)) { // false = linear
+                size_t OcclusionTextureIndex = ArraySize(Model->Textures);
+                ArrayPush(Model->Textures, OcclusionTexture);
+                MatDesc.PBR.OcclusionTexture = (int32_t)OcclusionTextureIndex;
+            } else {
+                MatDesc.PBR.OcclusionTexture = -1;
+            }
+        } else {
+            MatDesc.PBR.OcclusionTexture = -1;
+        }
+
+        // Map alpha mode
+        switch (Material.alpha_mode) {
+            case cgltf_alpha_mode_opaque:
+                MatDesc.PBR.AlphaMode = AX_ALPHA_MODE_OPAQUE;
+                break;
+            case cgltf_alpha_mode_mask:
+                MatDesc.PBR.AlphaMode = AX_ALPHA_MODE_MASK;
+                break;
+            case cgltf_alpha_mode_blend:
+                MatDesc.PBR.AlphaMode = AX_ALPHA_MODE_BLEND;
+                break;
+            default:
+                MatDesc.PBR.AlphaMode = AX_ALPHA_MODE_OPAQUE;
+                break;
+        }
+
+        // Map alpha cutoff (default to 0.5 per glTF spec)
+        MatDesc.PBR.AlphaCutoff = (Material.alpha_cutoff > 0.0f) ? Material.alpha_cutoff : 0.5f;
+
+        // Map double-sided flag
+        MatDesc.PBR.DoubleSided = Material.double_sided;
+
+        ArrayPush(Model->MaterialDescs, MatDesc);
     }
 
     // Diagnostic: Report texture loading success rate
@@ -1228,11 +1278,16 @@ void Game::AssignCompiledShadersToScene(const AxScene* Scene)
 
         auto ShaderIt = CompiledShaders.find(std::string(SceneMaterial->Name));
         if (ShaderIt != CompiledShaders.end()) {
-            AxShaderData* ShaderData = ShaderIt->second;
+            AxShaderHandle ShaderHandle = ShaderIt->second;
 
-            // Assign shader data to scene material
-            SceneMaterial->ShaderData = ShaderData;
-            SceneMaterial->ShaderProgram = ShaderData->ShaderHandle;
+            // Get shader data and program ID from the handle
+            const AxShaderData* ShaderData = ShaderManagerAPI_->GetShaderData(ShaderHandle);
+            uint32_t ShaderProgram = ShaderManagerAPI_->GetShaderProgram(ShaderHandle);
+
+            // Assign to scene material (note: ShaderData is const, but AxMaterial expects non-const)
+            // This is safe because the ShaderManager owns the data and won't delete it while refcount > 0
+            SceneMaterial->ShaderData = (AxShaderData*)ShaderData;
+            SceneMaterial->ShaderProgram = ShaderProgram;
 
             printf("Assigned shader to scene material '%s'\n", SceneMaterial->Name);
         } else {
@@ -1240,9 +1295,9 @@ void Game::AssignCompiledShadersToScene(const AxScene* Scene)
         }
     }
 
-    // Clear the temporary storage since shaders are now assigned
-    CompiledShaders.clear();
-    printf("Shader assignment complete, temporary storage cleared\n");
+    // NOTE: We don't clear CompiledShaders here because we need to keep the handles alive
+    // The handles will be released when ResourceAPI_->Shutdown() is called
+    printf("Shader assignment complete\n");
 }
 
 void Game::SetupSceneCamera(const AxScene* Scene)
@@ -1345,23 +1400,10 @@ void Game::RenderModelWithMeshes(AxModel* Model, AxCamera* Camera, AxTransform* 
     AxMat4x4 ProjectionMatrix = RenderAPI_->CameraGetProjectionMatrix(Camera);
     AxVec3 ViewPos = CameraTransform->Translation;
 
-    // Prepare scene lights (max 8 lights supported by shader)
-    constexpr int MaxLights = 8;
+    // Get scene light count (max 8 lights supported by shader)
     int LightCount = 0;
-    AxVec3 LightPositions[MaxLights] = {};
-    AxVec3 LightColors[MaxLights] = {};
-    float LightIntensities[MaxLights] = {};
-    float LightRanges[MaxLights] = {};
-
     if (Scene_ && Scene_->Lights) {
-        LightCount = Scene_->LightCount < MaxLights ? Scene_->LightCount : MaxLights;
-        for (int i = 0; i < LightCount; i++) {
-            const AxLight* Light = &Scene_->Lights[i];
-            LightPositions[i] = Light->Position;
-            LightColors[i] = Light->Color;
-            LightIntensities[i] = Light->Intensity;
-            LightRanges[i] = Light->Range;
-        }
+        LightCount = (Scene_->LightCount < 8) ? Scene_->LightCount : 8;
     }
 
     // Enable blending for transparent objects
@@ -1371,123 +1413,111 @@ void Game::RenderModelWithMeshes(AxModel* Model, AxCamera* Camera, AxTransform* 
     for (int i = 0; i < ArraySize(Model->Meshes); i++) {
         AxMesh* Mesh = &Model->Meshes[i];
 
-        if (!Model->Materials || Mesh->MaterialIndex >= ArraySize(Model->Materials)) {
-            continue;
+        // Use MaterialDesc system
+        if (!Model->MaterialDescs || Mesh->MaterialIndex >= ArraySize(Model->MaterialDescs)) {
+            continue;  // No material available
         }
 
-        AxMaterial* Material = &Model->Materials[Mesh->MaterialIndex];
-        AxShaderData* ShaderData = (AxShaderData*)Material->ShaderData;
+        AxMaterialDesc* MatDesc = &Model->MaterialDescs[Mesh->MaterialIndex];
+
+        // Get shader data from legacy material array (temporary until shader management is refactored)
+        AxShaderData* ShaderData = nullptr;
+        if (Model->Materials && Mesh->MaterialIndex < ArraySize(Model->Materials)) {
+            ShaderData = (AxShaderData*)Model->Materials[Mesh->MaterialIndex].ShaderData;
+        }
 
         if (!ShaderData) {
             continue;
         }
 
-        // Transform
+        // Transform matrices
         AxMat4x4 ModelMatrix = Model->Transforms[Mesh->TransformIndex];
         RenderAPI_->SetUniform(ShaderData, "model", &ModelMatrix);
         RenderAPI_->SetUniform(ShaderData, "view", &ViewMatrix);
         RenderAPI_->SetUniform(ShaderData, "projection", &ProjectionMatrix);
         RenderAPI_->SetUniform(ShaderData, "viewPos", &ViewPos);
 
-        // Set light count and light arrays
-        RenderAPI_->SetUniform(ShaderData, "lightCount", &LightCount);
-        for (int LightIdx = 0; LightIdx < LightCount; LightIdx++) {
-            char UniformName[64];
-            snprintf(UniformName, sizeof(UniformName), "lightPositions[%d]", LightIdx);
-            RenderAPI_->SetUniform(ShaderData, UniformName, &LightPositions[LightIdx]);
-
-            snprintf(UniformName, sizeof(UniformName), "lightColors[%d]", LightIdx);
-            RenderAPI_->SetUniform(ShaderData, UniformName, &LightColors[LightIdx]);
-
-            snprintf(UniformName, sizeof(UniformName), "lightIntensities[%d]", LightIdx);
-            RenderAPI_->SetUniform(ShaderData, UniformName, &LightIntensities[LightIdx]);
-
-            snprintf(UniformName, sizeof(UniformName), "lightRanges[%d]", LightIdx);
-            RenderAPI_->SetUniform(ShaderData, UniformName, &LightRanges[LightIdx]);
+        // Use MaterialDesc PBR system
+        if (MatDesc->Type != AX_MATERIAL_TYPE_PBR) {
+            continue;  // Only PBR materials supported for now
         }
 
-        // Material color with alpha - now using vec4
-        AxVec4 MaterialColor = {
-            Material->BaseColorFactor[0],
-            Material->BaseColorFactor[1], 
-            Material->BaseColorFactor[2],
-            Material->BaseColorFactor[3]  // Alpha channel
-        };
-        RenderAPI_->SetUniform(ShaderData, "materialColor", &MaterialColor);
+        const AxPBRMaterial* PBR = &MatDesc->PBR;
 
-        // Alpha mode and cutoff uniforms
-        int AlphaModeInt = (int)Material->AlphaMode;
-        RenderAPI_->SetUniform(ShaderData, "alphaMode", &AlphaModeInt);
-        RenderAPI_->SetUniform(ShaderData, "alphaCutoff", &Material->AlphaCutoff);
-
-        // Texture handling
-        bool HasDiffuseTexture = false;
-        bool HasNormalTexture = false;
-        bool HasAlpha = false;
-
-        // Diffuse texture
-        if (Model->Textures &&
-            Material->BaseColorTexture != kNoTexture &&
-            Material->BaseColorTexture < ArraySize(Model->Textures)) {
-
-            AxTexture* DiffuseTex = &Model->Textures[Material->BaseColorTexture];
-            if (DiffuseTex->ID != 0) {
-                RenderAPI_->BindTexture(DiffuseTex, 0);
-                HasDiffuseTexture = true;
-                HasAlpha = RenderAPI_->TextureHasAlpha(DiffuseTex);
+        // Bind textures to their respective slots
+        // Base color texture (slot 0)
+        if (PBR->BaseColorTexture >= 0 && Model->Textures && PBR->BaseColorTexture < (int32_t)ArraySize(Model->Textures)) {
+            AxTexture* Tex = &Model->Textures[PBR->BaseColorTexture];
+            if (Tex->ID != 0) {
+                RenderAPI_->BindTexture(Tex, 0);
             }
         }
 
-        // Normal texture
-        if (Model->Textures &&
-            Material->NormalTexture != kNoTexture &&
-            Material->NormalTexture < ArraySize(Model->Textures)) {
-
-            AxTexture* NormalTex = &Model->Textures[Material->NormalTexture];
-            if (NormalTex->ID != 0) {
-                RenderAPI_->BindTexture(NormalTex, 1);
-                HasNormalTexture = true;
+        // Normal texture (slot 1)
+        if (PBR->NormalTexture >= 0 && Model->Textures && PBR->NormalTexture < (int32_t)ArraySize(Model->Textures)) {
+            AxTexture* Tex = &Model->Textures[PBR->NormalTexture];
+            if (Tex->ID != 0) {
+                RenderAPI_->BindTexture(Tex, 1);
             }
         }
 
-        // Set texture flags
-        int UseDiffuseTexture = HasDiffuseTexture ? 1 : 0;
-        int UseNormalTexture = HasNormalTexture ? 1 : 0;
-        RenderAPI_->SetUniform(ShaderData, "useDiffuseTexture", &UseDiffuseTexture);
-        RenderAPI_->SetUniform(ShaderData, "useNormalTexture", &UseNormalTexture);
+        // Metallic-Roughness texture (slot 2)
+        if (PBR->MetallicRoughnessTexture >= 0 && Model->Textures && PBR->MetallicRoughnessTexture < (int32_t)ArraySize(Model->Textures)) {
+            AxTexture* Tex = &Model->Textures[PBR->MetallicRoughnessTexture];
+            if (Tex->ID != 0) {
+                RenderAPI_->BindTexture(Tex, 2);
+            }
+        }
 
-        // Texture slots
-        int DiffuseSlot = 0;
-        int NormalSlot = 1;
-        RenderAPI_->SetUniform(ShaderData, "diffuseTexture", &DiffuseSlot);
-        RenderAPI_->SetUniform(ShaderData, "normalTexture", &NormalSlot);
+        // Emissive texture (slot 3)
+        if (PBR->EmissiveTexture >= 0 && Model->Textures && PBR->EmissiveTexture < (int32_t)ArraySize(Model->Textures)) {
+            AxTexture* Tex = &Model->Textures[PBR->EmissiveTexture];
+            if (Tex->ID != 0) {
+                RenderAPI_->BindTexture(Tex, 3);
+            }
+        }
+
+        // Occlusion texture (slot 4)
+        if (PBR->OcclusionTexture >= 0 && Model->Textures && PBR->OcclusionTexture < (int32_t)ArraySize(Model->Textures)) {
+            AxTexture* Tex = &Model->Textures[PBR->OcclusionTexture];
+            if (Tex->ID != 0) {
+                RenderAPI_->BindTexture(Tex, 4);
+            }
+        }
+
+        // Set all PBR material uniforms, texture samplers, and lights in one efficient call
+        // This replaces ~25 individual SetUniform calls and eliminates uniform warnings
+        RenderAPI_->SetPBRMaterialUniforms(ShaderData, PBR, Scene_->Lights, LightCount);
 
         // Configure depth and blending based on alpha mode
-        switch (Material->AlphaMode) {
+        switch (PBR->AlphaMode) {
             case AX_ALPHA_MODE_OPAQUE:
-                // Opaque mode - no blending, write to depth buffer
                 RenderAPI_->EnableBlending(false);
                 RenderAPI_->SetDepthWrite(true);
                 break;
 
             case AX_ALPHA_MODE_MASK:
-                // Mask mode - no blending (alpha testing in shader), write to depth buffer
                 RenderAPI_->EnableBlending(false);
                 RenderAPI_->SetDepthWrite(true);
                 break;
 
             case AX_ALPHA_MODE_BLEND:
-                // Blend mode - enable alpha blending, no depth write for transparent objects
                 RenderAPI_->EnableBlending(true);
                 RenderAPI_->SetBlendFunction(AX_BLEND_SRC_ALPHA, AX_BLEND_ONE_MINUS_SRC_ALPHA);
                 RenderAPI_->SetDepthWrite(false);
                 break;
 
             default:
-                // Default to opaque behavior
                 RenderAPI_->EnableBlending(false);
                 RenderAPI_->SetDepthWrite(true);
                 break;
+        }
+
+        // Double-sided rendering
+        if (PBR->DoubleSided) {
+            RenderAPI_->SetCullMode(false);  // Disable backface culling
+        } else {
+            RenderAPI_->SetCullMode(true);   // Enable backface culling
         }
 
         // Render this mesh
@@ -1496,6 +1526,7 @@ void Game::RenderModelWithMeshes(AxModel* Model, AxCamera* Camera, AxTransform* 
         // Restore defaults for next mesh
         RenderAPI_->SetDepthWrite(true);
         RenderAPI_->EnableBlending(false);
+        RenderAPI_->SetCullMode(true);  // Re-enable culling by default
     }
 
     // Restore blending state

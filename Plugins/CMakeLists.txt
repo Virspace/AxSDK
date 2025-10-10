@@ -11,3 +11,6 @@ set_target_properties(AxOpenGL PROPERTIES FOLDER Plugins)
 
 add_subdirectory(AxScene)
 set_target_properties(AxScene PROPERTIES FOLDER Plugins)
+
+add_subdirectory(AxResource)
+set_target_properties(AxResource PROPERTIES FOLDER Plugins)

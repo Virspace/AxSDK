@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Foundation/AxTypes.h"
+#include "AxResource/AxShaderManager.h"
 #include <unordered_map>
 #include <string>
 
@@ -13,6 +14,8 @@ struct AxPlatformAPI;
 struct AxPlatformFileAPI;
 struct AxHashTableAPI;
 struct AxSceneAPI;
+struct AxResourceAPI;
+struct AxShaderManagerAPI;
 struct AxModel;
 struct AxCamera;
 struct AxMesh;
@@ -45,6 +48,7 @@ public:
 
     // Public for callbacks to access
     AxWindowAPI *WindowAPI_{nullptr};
+    AxShaderManagerAPI *ShaderManagerAPI_{nullptr};
 
     // Scene adapter methods for callbacks - need to be public for static callback access
     void LoadObjectModel(const AxSceneObject* Object);
@@ -53,10 +57,10 @@ public:
     bool LoadShadersForMaterials(const AxScene* Scene);
     void ApplySceneMaterialsToModel(AxModel* Model, const char* ObjectName);
     void AssignCompiledShadersToScene(const AxScene* Scene);
-    AxShaderData *ConstructShader(const char *VertexShaderPath, const char *FragmentShaderPath);
+    AxShaderHandle ConstructShader(const char *VertexShaderPath, const char *FragmentShaderPath);
 
     // Temporary storage for compiled shaders during scene parsing
-    std::unordered_map<std::string, AxShaderData*> CompiledShaders;
+    std::unordered_map<std::string, AxShaderHandle> CompiledShaders;
 
 private:
     // Game content methods
@@ -82,6 +86,7 @@ private:
     AxPlatformAPI *PlatformAPI_{nullptr};
     AxPlatformFileAPI *FileAPI_{nullptr};
     AxSceneAPI *SceneAPI_{nullptr};
+    AxResourceAPI *ResourceAPI_{nullptr};
 
     // Infrastructure provided by Host/Engine
     AxWindow *Window_{nullptr};

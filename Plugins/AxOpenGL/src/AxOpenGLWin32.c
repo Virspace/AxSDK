@@ -1,5 +1,6 @@
 #include <Windows.h>
 #include <stdio.h>
+#include <string.h>
 #include "GL/gl3w.h"
 
 #include "AxOpenGL.h"
@@ -838,16 +839,9 @@ static bool AxGetAttributeLocations(const uint32_t ProgramID, struct AxShaderDat
         return (false);
     }
 
-    // Optional uniforms - warn but don't fail
+    // Optional legacy uniforms - silently ignore if not found (used by old non-PBR shaders)
     ShaderData->AttribLocationLightPos = glGetUniformLocation(ShaderData->ShaderHandle, "lightPos");
-    if (ShaderData->AttribLocationLightPos < 0) {
-        printf("Warning: Could not find uniform 'lightPos'\n");
-    }
-
     ShaderData->AttribLocationLightColor = glGetUniformLocation(ShaderData->ShaderHandle, "lightColor");
-    if (ShaderData->AttribLocationLightColor < 0) {
-        printf("Warning: Could not find uniform 'lightColor'\n");
-    }
 
     ShaderData->AttribLocationViewPos = glGetUniformLocation(ShaderData->ShaderHandle, "viewPos");
     if (ShaderData->AttribLocationViewPos < 0) {
@@ -987,6 +981,118 @@ static void AxSetUniform(struct AxShaderData *ShaderData, const char *UniformNam
     uint32_t Result = glGetError();
     if (Result != GL_NO_ERROR) {
         printf("OpenGL Error in SetUniform('%s'): %u\n", UniformName, Result);
+    }
+}
+
+// New PBR material uniform setter - sets all PBR material + lighting uniforms in one call
+// This replaces individual SetUniform calls for materials, maintaining performance while
+// decoupling material data from AxShaderData structure per the hybrid material system spec
+static void AxSetPBRMaterialUniforms(struct AxShaderData* ShaderData, const AxPBRMaterial* Material,
+                                      const AxLight* Lights, int32_t LightCount)
+{
+    AXON_ASSERT(ContextInitialized && "Context not initialized!");
+    AXON_ASSERT(ShaderData && "ShaderData is NULL!");
+    AXON_ASSERT(Material && "Material is NULL!");
+
+    uint32_t ShaderHandle = ShaderData->ShaderHandle;
+
+    // Helper macros to get uniform location and set if it exists
+    #define GET_UNIFORM_LOC(name) glGetUniformLocation(ShaderHandle, name)
+    #define SET_UNIFORM_IF_EXISTS(loc, setter) if (loc != -1) { setter; }
+
+    // Set PBR material properties
+    GLint loc = GET_UNIFORM_LOC("materialColor");
+    SET_UNIFORM_IF_EXISTS(loc, glProgramUniform4fv(ShaderHandle, loc, 1, &Material->BaseColorFactor.X));
+
+    loc = GET_UNIFORM_LOC("metallicFactor");
+    SET_UNIFORM_IF_EXISTS(loc, glProgramUniform1f(ShaderHandle, loc, Material->MetallicFactor));
+
+    loc = GET_UNIFORM_LOC("roughnessFactor");
+    SET_UNIFORM_IF_EXISTS(loc, glProgramUniform1f(ShaderHandle, loc, Material->RoughnessFactor));
+
+    loc = GET_UNIFORM_LOC("emissiveFactor");
+    SET_UNIFORM_IF_EXISTS(loc, glProgramUniform3fv(ShaderHandle, loc, 1, &Material->EmissiveFactor.X));
+
+    // Set texture usage flags
+    int32_t useDiffuse = (Material->BaseColorTexture >= 0) ? 1 : 0;
+    loc = GET_UNIFORM_LOC("useDiffuseTexture");
+    SET_UNIFORM_IF_EXISTS(loc, glProgramUniform1i(ShaderHandle, loc, useDiffuse));
+
+    int32_t useNormal = (Material->NormalTexture >= 0) ? 1 : 0;
+    loc = GET_UNIFORM_LOC("useNormalTexture");
+    SET_UNIFORM_IF_EXISTS(loc, glProgramUniform1i(ShaderHandle, loc, useNormal));
+
+    int32_t useMetallicRoughness = (Material->MetallicRoughnessTexture >= 0) ? 1 : 0;
+    loc = GET_UNIFORM_LOC("useMetallicRoughnessTexture");
+    SET_UNIFORM_IF_EXISTS(loc, glProgramUniform1i(ShaderHandle, loc, useMetallicRoughness));
+
+    int32_t useEmissive = (Material->EmissiveTexture >= 0) ? 1 : 0;
+    loc = GET_UNIFORM_LOC("useEmissiveTexture");
+    SET_UNIFORM_IF_EXISTS(loc, glProgramUniform1i(ShaderHandle, loc, useEmissive));
+
+    int32_t useOcclusion = (Material->OcclusionTexture >= 0) ? 1 : 0;
+    loc = GET_UNIFORM_LOC("useOcclusionTexture");
+    SET_UNIFORM_IF_EXISTS(loc, glProgramUniform1i(ShaderHandle, loc, useOcclusion));
+
+    // Set alpha mode and cutoff
+    loc = GET_UNIFORM_LOC("alphaMode");
+    SET_UNIFORM_IF_EXISTS(loc, glProgramUniform1i(ShaderHandle, loc, (int32_t)Material->AlphaMode));
+
+    loc = GET_UNIFORM_LOC("alphaCutoff");
+    SET_UNIFORM_IF_EXISTS(loc, glProgramUniform1f(ShaderHandle, loc, Material->AlphaCutoff));
+
+    // Set texture sampler slots (which texture unit each sampler should read from)
+    loc = GET_UNIFORM_LOC("diffuseTexture");
+    SET_UNIFORM_IF_EXISTS(loc, glProgramUniform1i(ShaderHandle, loc, 0));  // Texture unit 0
+
+    loc = GET_UNIFORM_LOC("normalTexture");
+    SET_UNIFORM_IF_EXISTS(loc, glProgramUniform1i(ShaderHandle, loc, 1));  // Texture unit 1
+
+    loc = GET_UNIFORM_LOC("metallicRoughnessTexture");
+    SET_UNIFORM_IF_EXISTS(loc, glProgramUniform1i(ShaderHandle, loc, 2));  // Texture unit 2
+
+    loc = GET_UNIFORM_LOC("emissiveTexture");
+    SET_UNIFORM_IF_EXISTS(loc, glProgramUniform1i(ShaderHandle, loc, 3));  // Texture unit 3
+
+    loc = GET_UNIFORM_LOC("occlusionTexture");
+    SET_UNIFORM_IF_EXISTS(loc, glProgramUniform1i(ShaderHandle, loc, 4));  // Texture unit 4
+
+    // Set light count
+    int32_t ClampedLightCount = (LightCount > 8) ? 8 : LightCount;
+    loc = GET_UNIFORM_LOC("lightCount");
+    SET_UNIFORM_IF_EXISTS(loc, glProgramUniform1i(ShaderHandle, loc, ClampedLightCount));
+
+    // Set light array uniforms only for lights that exist
+    // This avoids setting uniforms that have been optimized out by the shader compiler
+    if (Lights) {
+        for (int32_t i = 0; i < ClampedLightCount; i++) {
+            char uniformName[64];
+            const AxLight* Light = &Lights[i];
+
+            snprintf(uniformName, sizeof(uniformName), "lightPositions[%d]", i);
+            loc = GET_UNIFORM_LOC(uniformName);
+            SET_UNIFORM_IF_EXISTS(loc, glProgramUniform3fv(ShaderHandle, loc, 1, &Light->Position.X));
+
+            snprintf(uniformName, sizeof(uniformName), "lightColors[%d]", i);
+            loc = GET_UNIFORM_LOC(uniformName);
+            SET_UNIFORM_IF_EXISTS(loc, glProgramUniform3fv(ShaderHandle, loc, 1, &Light->Color.X));
+
+            snprintf(uniformName, sizeof(uniformName), "lightIntensities[%d]", i);
+            loc = GET_UNIFORM_LOC(uniformName);
+            SET_UNIFORM_IF_EXISTS(loc, glProgramUniform1f(ShaderHandle, loc, Light->Intensity));
+
+            snprintf(uniformName, sizeof(uniformName), "lightRanges[%d]", i);
+            loc = GET_UNIFORM_LOC(uniformName);
+            SET_UNIFORM_IF_EXISTS(loc, glProgramUniform1f(ShaderHandle, loc, Light->Range));
+        }
+    }
+
+    #undef GET_UNIFORM_LOC
+    #undef SET_UNIFORM_IF_EXISTS
+
+    uint32_t Result = glGetError();
+    if (Result != GL_NO_ERROR) {
+        printf("OpenGL Error in AxSetPBRMaterialUniforms: %u\n", Result);
     }
 }
 
@@ -1295,6 +1401,17 @@ static void AxSetDepthWrite(bool Enable)
     glDepthMask(Enable ? GL_TRUE : GL_FALSE);
 }
 
+static void AxSetCullMode(bool Enable)
+{
+    AXON_ASSERT(ContextInitialized && "Context not initialized in SetCullMode()!");
+    if (Enable) {
+        glEnable(GL_CULL_FACE);
+        glCullFace(GL_BACK);  // Cull back faces
+    } else {
+        glDisable(GL_CULL_FACE);
+    }
+}
+
 static uint32_t AxTextureWrapModeToGL(AxTextureWrapMode WrapMode)
 {
     switch (WrapMode) {
@@ -1493,6 +1610,7 @@ struct AxOpenGLAPI *AxOpenGLAPI = &(struct AxOpenGLAPI) {
     .DestroyProgram = AxDestroyProgram,
     .GetAttributeLocations = AxGetAttributeLocations,
     .SetUniform = AxSetUniform,
+    .SetPBRMaterialUniforms = AxSetPBRMaterialUniforms,
     .InitTexture = AxInitTexture,
     .DestroyTexture = AxDestroyTexture,
     .SetTextureData = AxSetTextureData,
@@ -1504,7 +1622,8 @@ struct AxOpenGLAPI *AxOpenGLAPI = &(struct AxOpenGLAPI) {
     .EnableBlending = AxEnableBlending,
     .SetBlendFunction = AxSetBlendFunction,
     .TextureHasAlpha = AxTextureHasAlpha,
-    .SetDepthWrite = AxSetDepthWrite
+    .SetDepthWrite = AxSetDepthWrite,
+    .SetCullMode = AxSetCullMode
 };
 
 AXON_DLL_EXPORT void LoadPlugin(struct AxAPIRegistry *APIRegistry, bool Load)

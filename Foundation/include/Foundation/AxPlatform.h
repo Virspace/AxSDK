@@ -96,11 +96,11 @@ struct AxPlatformDirectoryAPI
 {
     bool (*CreateDir)(const char *Path, AxPlatformError *ErrorCode);
     bool (*RemoveDir)(const char *Path, bool Recursive, AxPlatformError *ErrorCode);
-    
+
     // Directory navigation functions
     bool (*ChangeDirectory)(const char *Path);
     char *(*GetCurrentDirectory)(void);
-    
+
     // Directory iteration functions
     AxDirectoryHandle (*OpenDirectory)(const char *Path);
     bool (*ReadDirectoryEntry)(AxDirectoryHandle Handle, AxDirectoryEntry *Entry);

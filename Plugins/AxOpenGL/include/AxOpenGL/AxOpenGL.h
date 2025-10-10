@@ -133,6 +133,10 @@ struct AxOpenGLAPI
     bool (*GetAttributeLocations)(const uint32_t ProgramID, struct AxShaderData *Data);
     void (*SetUniform)(struct AxShaderData *ShaderData, const char *Name, const void *Value);
 
+    // PBR material uniform setter - efficiently sets all PBR material + lighting uniforms
+    void (*SetPBRMaterialUniforms)(struct AxShaderData* ShaderData, const AxPBRMaterial* Material,
+                                    const AxLight* Lights, int32_t LightCount);
+
     void (*InitTexture)(AxTexture *Texture, uint8_t *Pixels);
     void (*DestroyTexture)(AxTexture *Texture);
     void (*SetTextureData)(AxTexture *Texture, uint8_t *Pixels);
@@ -149,4 +153,7 @@ struct AxOpenGLAPI
     void (*SetBlendFunction)(AxBlendFunction SourceFactor, AxBlendFunction DestFactor);
     bool (*TextureHasAlpha)(AxTexture *Texture);
     void (*SetDepthWrite)(bool Enable);
+
+    // Face culling control
+    void (*SetCullMode)(bool Enable);  // Enable/disable backface culling
 };

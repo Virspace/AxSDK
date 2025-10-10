@@ -448,6 +448,10 @@ static struct AxMaterial* CreateMaterial(AxScene* Scene, const char* Name, const
     Material->BaseColorTexture = 0;
     Material->NormalTexture = 0;
 
+    // Initialize renderer-specific fields to prevent accessing garbage memory
+    Material->ShaderProgram = 0;
+    Material->ShaderData = NULL;
+
     Scene->MaterialCount++;
     return (Material);
 }

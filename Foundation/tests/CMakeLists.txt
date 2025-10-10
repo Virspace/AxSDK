@@ -58,6 +58,7 @@ target_sources(FoundationTests
         src/LinkedListTests.cpp
         src/PlatformTests.cpp
         src/MathTests.cpp
+        src/MaterialTests.cpp
 )
 
 #

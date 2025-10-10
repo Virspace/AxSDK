@@ -128,6 +128,7 @@ target_compile_definitions(OpenGLGame
 include_directories("$<JOIN:$<TARGET_PROPERTY:AxWindow,INCLUDE_DIRECTORIES>,;>")
 include_directories("$<JOIN:$<TARGET_PROPERTY:AxOpenGL,INCLUDE_DIRECTORIES>,;>")
 include_directories("$<JOIN:$<TARGET_PROPERTY:AxScene,INCLUDE_DIRECTORIES>,;>")
+include_directories("$<JOIN:$<TARGET_PROPERTY:AxResource,INCLUDE_DIRECTORIES>,;>")
 
 # Specify include directories to use when compiling a given target
 target_include_directories(OpenGLGame

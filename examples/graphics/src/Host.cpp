@@ -131,6 +131,11 @@ static bool HostInitialize(HostBootstrap *Host, struct AxAPIRegistry *RegistryAP
         return false;
     }
 
+    if (!Host->PluginAPI->Load("libAxResource.dll", false)) {
+        fprintf(stderr, "Failed to load AxScene plugin\n");
+        return false;
+    }
+
     // Get core APIs
     Host->WindowAPI = (struct AxWindowAPI *)RegistryAPI->Get(AXON_WINDOW_API_NAME);
 

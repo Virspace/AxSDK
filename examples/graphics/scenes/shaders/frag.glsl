@@ -8,17 +8,32 @@ in vec3 fragBitangent;
 
 out vec4 FragColor;
 
-uniform sampler2D diffuseTexture;
-uniform sampler2D normalTexture;
-uniform vec4 materialColor;  // Now vec4 to include alpha
-uniform vec3 viewPos;
+// PBR Textures
+uniform sampler2D diffuseTexture;           // Base color texture
+uniform sampler2D normalTexture;            // Normal map
+uniform sampler2D metallicRoughnessTexture; // Metallic (B) and Roughness (G) in one texture
+uniform sampler2D emissiveTexture;          // Emissive texture
+uniform sampler2D occlusionTexture;         // Ambient occlusion texture
 
+// PBR Material properties
+uniform vec4 materialColor;      // Base color factor (RGBA)
+uniform vec3 emissiveFactor;     // Emissive color factor
+uniform float metallicFactor;    // Metallic factor (0.0 = dielectric, 1.0 = metal)
+uniform float roughnessFactor;   // Roughness factor (0.0 = smooth, 1.0 = rough)
+
+// Texture usage flags
 uniform int useDiffuseTexture;
 uniform int useNormalTexture;
+uniform int useMetallicRoughnessTexture;
+uniform int useEmissiveTexture;
+uniform int useOcclusionTexture;
 
 // Alpha handling uniforms
 uniform int alphaMode;      // 0=opaque, 1=mask, 2=blend
 uniform float alphaCutoff;  // Alpha cutoff for mask mode
+
+// Camera
+uniform vec3 viewPos;
 
 // Multiple lights support (max 8 lights)
 #define MAX_LIGHTS 8
@@ -28,26 +43,60 @@ uniform vec3 lightColors[MAX_LIGHTS];
 uniform float lightIntensities[MAX_LIGHTS];
 uniform float lightRanges[MAX_LIGHTS];
 
-// Gamma correction functions
-vec3 LinearToSRGB(vec3 linear) {
-    return pow(linear, vec3(1.0 / 2.2));
+// Constants
+const float PI = 3.14159265359;
+
+// PBR Functions
+
+// Normal Distribution Function (GGX/Trowbridge-Reitz)
+float DistributionGGX(vec3 N, vec3 H, float roughness)
+{
+    float a = roughness * roughness;
+    float a2 = a * a;
+    float NdotH = max(dot(N, H), 0.0);
+    float NdotH2 = NdotH * NdotH;
+
+    float num = a2;
+    float denom = (NdotH2 * (a2 - 1.0) + 1.0);
+    denom = PI * denom * denom;
+
+    return num / denom;
 }
 
-vec3 SRGBToLinear(vec3 srgb) {
-    return pow(srgb, vec3(2.2));
+// Geometry Function (Schlick-GGX)
+float GeometrySchlickGGX(float NdotV, float roughness)
+{
+    float r = (roughness + 1.0);
+    float k = (r * r) / 8.0;
+
+    float num = NdotV;
+    float denom = NdotV * (1.0 - k) + k;
+
+    return num / denom;
+}
+
+float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
+{
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
+    float ggx2 = GeometrySchlickGGX(NdotV, roughness);
+    float ggx1 = GeometrySchlickGGX(NdotL, roughness);
+
+    return ggx1 * ggx2;
+}
+
+// Fresnel Function (Schlick approximation)
+vec3 FresnelSchlick(float cosTheta, vec3 F0)
+{
+    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
 void main()
 {
-    // Base color and alpha - texture or material
+    // Base color and alpha
     vec4 baseColor = materialColor;
     if (useDiffuseTexture == 1) {
         vec4 textureColor = texture(diffuseTexture, fragTexCoord);
-
-        // If texture is in sRGB space but we're working in linear, convert
-        // textureColor.rgb = SRGBToLinear(textureColor.rgb);
-
-        // According to GLTF spec: multiply texture color with material factor
         baseColor = materialColor * textureColor;
     }
 
@@ -60,36 +109,56 @@ void main()
         if (baseColor.a < alphaCutoff) {
             discard;
         }
-        baseColor.a = 1.0; // Set to fully opaque after passing test
+        baseColor.a = 1.0;
     } else if (alphaMode == 2) {
         // BLEND mode - use alpha as-is for blending
-        // Early discard for completely transparent fragments
         if (baseColor.a < 0.01) {
             discard;
         }
     }
 
     // Normal mapping
-    vec3 normal;
+    vec3 N;
     if (useNormalTexture == 1) {
-        // Sample normal from texture and transform to [-1, 1] range
-        normal = texture(normalTexture, fragTexCoord).rgb;
-        normal = normalize(normal * 2.0 - 1.0);
-
-        // Transform normal from tangent space to world space using TBN matrix
+        N = texture(normalTexture, fragTexCoord).rgb;
+        N = normalize(N * 2.0 - 1.0);
         mat3 TBN = mat3(fragTangent, fragBitangent, fragNormal);
-        normal = normalize(TBN * normal);
+        N = normalize(TBN * N);
     } else {
-        normal = normalize(fragNormal);
+        N = normalize(fragNormal);
     }
 
-    // View direction (used for specular on all lights)
-    vec3 viewDir = normalize(viewPos - fragPos);
+    // Metallic and roughness
+    float metallic = metallicFactor;
+    float roughness = roughnessFactor;
+    if (useMetallicRoughnessTexture == 1) {
+        vec3 mrSample = texture(metallicRoughnessTexture, fragTexCoord).rgb;
+        roughness *= mrSample.g;  // Green channel = roughness
+        metallic *= mrSample.b;   // Blue channel = metallic
+    }
 
-    // Accumulate lighting from all lights
-    vec3 totalAmbient = vec3(0.0);
-    vec3 totalDiffuse = vec3(0.0);
-    vec3 totalSpecular = vec3(0.0);
+    // Ambient occlusion
+    float ao = 1.0;
+    if (useOcclusionTexture == 1) {
+        ao = texture(occlusionTexture, fragTexCoord).r;
+    }
+
+    // Emissive
+    vec3 emissive = emissiveFactor;
+    if (useEmissiveTexture == 1) {
+        emissive *= texture(emissiveTexture, fragTexCoord).rgb;
+    }
+
+    // View direction
+    vec3 V = normalize(viewPos - fragPos);
+
+    // Calculate reflectance at normal incidence
+    // For dielectrics use 0.04, for metals use the albedo color
+    vec3 F0 = vec3(0.04);
+    F0 = mix(F0, baseColor.rgb, metallic);
+
+    // Reflectance equation
+    vec3 Lo = vec3(0.0);
 
     for (int i = 0; i < lightCount && i < MAX_LIGHTS; i++) {
         vec3 lightPos = lightPositions[i];
@@ -97,39 +166,48 @@ void main()
         float lightIntensity = lightIntensities[i];
         float lightRange = lightRanges[i];
 
-        // Calculate light direction and distance
-        vec3 lightDir = lightPos - fragPos;
-        float distance = length(lightDir);
-        lightDir = normalize(lightDir);
+        // Calculate per-light radiance
+        vec3 L = lightPos - fragPos;
+        float distance = length(L);
+        L = normalize(L);
+        vec3 H = normalize(V + L);
 
-        // Calculate attenuation based on range (if range > 0)
+        // Attenuation
         float attenuation = 1.0;
         if (lightRange > 0.0) {
-            // Smooth attenuation that reaches zero at range
             attenuation = max(0.0, 1.0 - (distance * distance) / (lightRange * lightRange));
-            attenuation = attenuation * attenuation; // Squared for smoother falloff
+            attenuation = attenuation * attenuation;
         }
 
-        // Apply intensity and attenuation
-        vec3 effectiveLight = lightColor * lightIntensity * attenuation;
+        vec3 radiance = lightColor * lightIntensity * attenuation;
 
-        // Ambient (small contribution from each light)
-        totalAmbient += 0.05 * effectiveLight;
+        // Cook-Torrance BRDF
+        float NDF = DistributionGGX(N, H, roughness);
+        float G = GeometrySmith(N, V, L, roughness);
+        vec3 F = FresnelSchlick(max(dot(H, V), 0.0), F0);
 
-        // Diffuse
-        float diff = max(dot(normal, lightDir), 0.0);
-        totalDiffuse += diff * effectiveLight;
+        vec3 kS = F;
+        vec3 kD = vec3(1.0) - kS;
+        kD *= 1.0 - metallic; // Metals have no diffuse
 
-        // Specular
-        vec3 reflectDir = reflect(-lightDir, normal);
-        float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
-        totalSpecular += spec * effectiveLight;
+        vec3 numerator = NDF * G * F;
+        float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
+        vec3 specular = numerator / denominator;
+
+        // Add to outgoing radiance Lo
+        float NdotL = max(dot(N, L), 0.0);
+        Lo += (kD * baseColor.rgb / PI + specular) * radiance * NdotL;
     }
 
-    // Clamp ambient to reasonable range
-    totalAmbient = min(totalAmbient, vec3(0.2));
+    // Ambient lighting (simplified)
+    vec3 ambient = vec3(0.03) * baseColor.rgb * ao;
 
-    // Final color with alpha
-    vec3 result = (totalAmbient + totalDiffuse + totalSpecular) * baseColor.rgb;
-    FragColor = vec4(result, baseColor.a);
+    // Final color
+    vec3 color = ambient + Lo + emissive;
+
+    // No manual gamma correction needed - GL_FRAMEBUFFER_SRGB handles linear-to-sRGB automatically
+    // sRGB textures are automatically converted to linear on read, we do PBR in linear space,
+    // and the sRGB framebuffer converts back to sRGB for display
+
+    FragColor = vec4(color, baseColor.a);
 }
