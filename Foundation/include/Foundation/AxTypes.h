@@ -55,6 +55,12 @@ extern "C" {
 
 // Forward declarations
 typedef struct AxLinearAllocator AxLinearAllocator;
+
+// Opaque renderer-specific types (concrete definitions provided by renderer plugins)
+typedef struct AxTexture AxTexture;
+typedef struct AxMesh AxMesh;
+typedef struct AxShaderData AxShaderData;
+typedef struct AxViewport AxViewport;
 typedef struct AxMaterial AxMaterial;
 
 /**
@@ -304,9 +310,12 @@ typedef struct AxScene {
     AxSceneObject* RootObject;          // Root of scene hierarchy (NULL for empty scenes)
     AxMaterial* Materials;              // Dynamic array of materials defined in scene
     AxLight* Lights;                    // Dynamic array of lights defined in scene
+    AxCamera* Cameras;                  // Dynamic array of cameras defined in scene
+    AxTransform* CameraTransforms;      // Dynamic array of camera transforms (parallel to Cameras)
     uint32_t ObjectCount;               // Total number of objects in scene
     uint32_t MaterialCount;             // Total number of materials in scene
     uint32_t LightCount;                // Total number of lights in scene
+    uint32_t CameraCount;               // Total number of cameras in scene
     uint32_t NextObjectID;              // Next available object ID
 
     // Memory management
@@ -377,20 +386,7 @@ typedef struct AxMaterialDesc {
     };
 } AxMaterialDesc;
 
-typedef struct AxTexture
-{
-    uint32_t ID;
-    uint32_t Width;
-    uint32_t Height;
-    uint32_t Channels;
-    bool IsSRGB;             // true for color textures (baseColor, emissive), false for data textures (normal, metallic, etc.)
-
-    // Sampler properties
-    uint32_t WrapS;          // GL_REPEAT, GL_CLAMP_TO_EDGE, GL_MIRRORED_REPEAT
-    uint32_t WrapT;          // GL_REPEAT, GL_CLAMP_TO_EDGE, GL_MIRRORED_REPEAT
-    uint32_t MagFilter;      // GL_NEAREST, GL_LINEAR
-    uint32_t MinFilter;      // GL_NEAREST, GL_LINEAR, GL_NEAREST_MIPMAP_NEAREST, etc.
-} AxTexture;
+// AxTexture is opaque - concrete definition provided by renderer plugins
 
 typedef struct AxVertex
 {
@@ -400,22 +396,7 @@ typedef struct AxVertex
     AxVec4 Tangent; // XYZ = tangent vector, W = handedness (-1.0 or 1.0)
 } AxVertex;
 
-typedef struct AxMesh
-{
-    uint32_t VAO;
-    uint32_t VBO;
-    uint32_t EBO;
-    uint32_t IndexCount;
-    int32_t VertexOffset;
-    uint32_t IndexOffset;
-    // NOT OpenGL handles, just indices
-    uint32_t TransformIndex;
-    uint32_t BaseColorTexture;
-    uint32_t NormalTexture;
-    uint32_t MaterialIndex;
-    // Mesh name from GLTF (for debugging)
-    char Name[64];
-} AxMesh;
+// AxMesh is opaque - concrete definition provided by renderer plugins
 
 typedef struct AxModel
 {
@@ -432,70 +413,11 @@ typedef struct AxModel
     uint32_t TransformData;
 } AxModel;
 
-// TODO(mdeforge): I wish I didn't need the AxAlphaMode enum in here
-// Makes me wonder if this should be an opaque type...
-typedef struct AxMaterial
-{
-    float BaseColorFactor[4]; // RGBA
-    uint32_t BaseColorTexture;
-    uint32_t NormalTexture;
-    uint32_t MetallicRoughnessTexture;
-    char Name[64];
-    char VertexShaderPath[256];   // Path to vertex shader
-    char FragmentShaderPath[256]; // Path to fragment shader
+// AxMaterial is opaque - concrete definition provided by renderer plugins
 
-    // Alpha handling
-    AxAlphaMode AlphaMode;        // Alpha rendering mode (opaque, mask, blend)
-    float AlphaCutoff;            // Alpha cutoff value for mask mode (default 0.5)
+// AxShaderData is opaque - concrete definition provided by renderer plugins
 
-    // Shader program storage (render API agnostic)
-    uint32_t ShaderProgram;       // Render API handle (0 = not loaded)
-    void* ShaderData;             // API-specific shader data (e.g., AxShaderData for OpenGL)
-} AxMaterial;
-
-typedef struct AxShaderData {
-    uint32_t ShaderHandle;
-
-    // Required uniforms
-    int32_t AttribLocationModelMatrix;
-    int32_t AttribLocationViewMatrix;
-    int32_t AttribLocationProjectionMatrix;
-
-    // Required vertex attributes
-    int32_t AttribLocationVertexPos;
-    int32_t AttribLocationVertexNormal;
-    int32_t AttribLocationVertexUV;
-    int32_t AttribLocationVertexTangent;
-
-    // Optional uniforms
-    int32_t AttribLocationLightPos;
-    int32_t AttribLocationLightColor;
-    int32_t AttribLocationViewPos;
-    int32_t AttribLocationMaterialColor;
-    int32_t AttribLocationDiffuseTexture;
-    int32_t AttribLocationNormalTexture;
-    int32_t AttribLocationUseDiffuseTexture;
-    int32_t AttribLocationUseNormalTexture;
-
-    // Alpha handling uniforms
-    int32_t AttribLocationAlphaMode;
-    int32_t AttribLocationAlphaCutoff;
-
-    // Legacy (for backward compatibility)
-    int32_t AttribLocationColor;
-    int32_t AttribLocationMaterialAlpha;
-    int32_t AttribLocationHasNormalMap;
-} AxShaderData;
-
-typedef struct AxViewport
-{
-    AxVec2 Position;
-    AxVec2 Size;
-    AxVec2 Depth;
-    AxVec2 Scale;
-    bool IsActive;
-    AxVec4 ClearColor;
-} AxViewport;
+// AxViewport is opaque - concrete definition provided by renderer plugins
 
 #ifdef __cplusplus
 }

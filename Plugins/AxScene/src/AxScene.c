@@ -194,9 +194,12 @@ static AxScene* CreateScene(const char* Name, size_t MemorySize)
     Scene->RootObject = NULL;
     Scene->Materials = NULL;
     Scene->Lights = NULL;
+    Scene->Cameras = NULL;
+    Scene->CameraTransforms = NULL;
     Scene->ObjectCount = 0;
     Scene->MaterialCount = 0;
     Scene->LightCount = 0;
+    Scene->CameraCount = 0;
     Scene->NextObjectID = 1; // Start IDs at 1 (0 reserved for invalid)
     Scene->Allocator = Allocator;
 
@@ -522,6 +525,104 @@ static AxLight* CreateLight(AxScene* Scene, const char* Name, AxLightType Type)
 
     Scene->LightCount++;
     return (Light);
+}
+
+static AxSceneResult AddCamera(AxScene* Scene, const AxCamera* Camera, const AxTransform* Transform)
+{
+    if (!Scene || !Camera || !Transform) {
+        return (AX_SCENE_ERROR_INVALID_ARGUMENTS);
+    }
+
+    printf("SceneAPI: AddCamera called - Camera FOV=%.2f, ptr=%p\n", Camera->FieldOfView, (void*)Camera);
+    printf("SceneAPI: Scene->Allocator = %p\n", (void*)Scene->Allocator);
+
+    // Check if allocator is valid
+    if (!Scene->Allocator) {
+        printf("SceneAPI: ERROR - Scene allocator is NULL!\n");
+        return (AX_SCENE_ERROR_OUT_OF_MEMORY);
+    }
+
+    // Allocate space for new camera (expand arrays if needed)
+    if (Scene->Cameras == NULL) {
+        Scene->Cameras = (AxCamera*)LinearAllocatorAPI->Alloc(
+            Scene->Allocator,
+            sizeof(AxCamera),
+            __FILE__,
+            __LINE__
+        );
+        Scene->CameraTransforms = (AxTransform*)LinearAllocatorAPI->Alloc(
+            Scene->Allocator,
+            sizeof(AxTransform),
+            __FILE__,
+            __LINE__
+        );
+        printf("SceneAPI: Allocated new camera arrays - Cameras=%p, Transforms=%p\n",
+               (void*)Scene->Cameras, (void*)Scene->CameraTransforms);
+
+        if (!Scene->Cameras || !Scene->CameraTransforms) {
+            printf("SceneAPI: ERROR - LinearAllocator returned NULL!\n");
+            return (AX_SCENE_ERROR_OUT_OF_MEMORY);
+        }
+
+        // Zero out the allocated memory
+        memset(Scene->Cameras, 0, sizeof(AxCamera));
+        memset(Scene->CameraTransforms, 0, sizeof(AxTransform));
+    } else {
+        // Allocate new arrays with space for one more camera
+        AxCamera* NewCameras = (AxCamera*)LinearAllocatorAPI->Alloc(
+            Scene->Allocator,
+            sizeof(AxCamera) * (Scene->CameraCount + 1),
+            __FILE__,
+            __LINE__
+        );
+        AxTransform* NewTransforms = (AxTransform*)LinearAllocatorAPI->Alloc(
+            Scene->Allocator,
+            sizeof(AxTransform) * (Scene->CameraCount + 1),
+            __FILE__,
+            __LINE__
+        );
+
+        if (!NewCameras || !NewTransforms) {
+            return (AX_SCENE_ERROR_OUT_OF_MEMORY);
+        }
+
+        // Copy existing cameras and transforms
+        for (uint32_t i = 0; i < Scene->CameraCount; i++) {
+            NewCameras[i] = Scene->Cameras[i];
+            NewTransforms[i] = Scene->CameraTransforms[i];
+        }
+
+        Scene->Cameras = NewCameras;
+        Scene->CameraTransforms = NewTransforms;
+    }
+
+    // Copy camera and transform to scene
+    Scene->Cameras[Scene->CameraCount] = *Camera;
+    Scene->CameraTransforms[Scene->CameraCount] = *Transform;
+
+    printf("SceneAPI: Camera copied to index %u - FOV=%.2f, CameraPtr=%p\n",
+           Scene->CameraCount, Scene->Cameras[Scene->CameraCount].FieldOfView,
+           (void*)&Scene->Cameras[Scene->CameraCount]);
+
+    Scene->CameraCount++;
+    return (AX_SCENE_SUCCESS);
+}
+
+static AxCamera* GetCamera(const AxScene* Scene, uint32_t Index, AxTransform** OutTransform)
+{
+    if (!Scene || !Scene->Cameras || !Scene->CameraTransforms || Index >= Scene->CameraCount) {
+        printf("SceneAPI: GetCamera failed - Scene=%p, Cameras=%p, Transforms=%p, Index=%u, Count=%u\n",
+               (void*)Scene, (void*)(Scene ? Scene->Cameras : NULL),
+               (void*)(Scene ? Scene->CameraTransforms : NULL),
+               Index, Scene ? Scene->CameraCount : 0);
+        return (NULL);
+    }
+
+    if (OutTransform) {
+        *OutTransform = &Scene->CameraTransforms[Index];
+    }
+
+    return (&Scene->Cameras[Index]);
 }
 
 static AxLight* FindLight(AxScene* Scene, const char* Name)
@@ -1588,25 +1689,26 @@ static AxScene* LoadSceneFromFile(const char* FilePath)
         return (NULL);
     }
 
-    // Create a temporary allocator for parsing
-    AxLinearAllocator* ParseAllocator = LinearAllocatorAPI->Create("SceneParser", Megabytes(1));
-    if (!ParseAllocator) {
-        SetError("Failed to create parse allocator");
+    // Create a PERSISTENT allocator for the Scene (NOT temporary!)
+    // The Scene owns this allocator and it will be destroyed when Scene is destroyed
+    AxLinearAllocator* SceneAllocator = LinearAllocatorAPI->Create("ScenePersistent", g_DefaultSceneMemorySize);
+    if (!SceneAllocator) {
+        SetError("Failed to create scene allocator");
         return (NULL);
     }
 
-    // Parse the scene using the internal parser
-    AxScene* Scene = ParseFromFile(FilePath, ParseAllocator);
-
-    // Clean up the parse allocator
-    LinearAllocatorAPI->Destroy(ParseAllocator);
+    // Parse the scene using the persistent allocator
+    AxScene* Scene = ParseFromFile(FilePath, SceneAllocator);
 
     if (!Scene) {
+        // If parsing failed, clean up the allocator
+        LinearAllocatorAPI->Destroy(SceneAllocator);
         const char* ParseError = (g_ParserLastErrorMessage[0] != '\0' ? g_ParserLastErrorMessage : NULL);
         SetError("Failed to parse scene file '%s': %s", FilePath, ParseError ? ParseError : "Unknown error");
         return (NULL);
     }
 
+    // Scene now owns the allocator - do NOT destroy it here!
     return (Scene);
 }
 
@@ -1617,25 +1719,26 @@ static AxScene* LoadSceneFromString(const char* SceneData)
         return (NULL);
     }
 
-    // Create a temporary allocator for parsing
-    AxLinearAllocator* ParseAllocator = LinearAllocatorAPI->Create("SceneParser", Megabytes(1));
-    if (!ParseAllocator) {
-        SetError("Failed to create parse allocator");
+    // Create a PERSISTENT allocator for the Scene (NOT temporary!)
+    // The Scene owns this allocator and it will be destroyed when Scene is destroyed
+    AxLinearAllocator* SceneAllocator = LinearAllocatorAPI->Create("ScenePersistent", g_DefaultSceneMemorySize);
+    if (!SceneAllocator) {
+        SetError("Failed to create scene allocator");
         return (NULL);
     }
 
-    // Parse the scene using the internal parser
-    AxScene* Scene = ParseFromString(SceneData, ParseAllocator);
-
-    // Clean up the parse allocator
-    LinearAllocatorAPI->Destroy(ParseAllocator);
+    // Parse the scene using the persistent allocator
+    AxScene* Scene = ParseFromString(SceneData, SceneAllocator);
 
     if (!Scene) {
+        // If parsing failed, clean up the allocator
+        LinearAllocatorAPI->Destroy(SceneAllocator);
         const char* ParseError = (g_ParserLastErrorMessage[0] != '\0' ? g_ParserLastErrorMessage : NULL);
         SetError("Failed to parse scene data: %s", ParseError ? ParseError : "Unknown error");
         return (NULL);
     }
 
+    // Scene now owns the allocator - do NOT destroy it here!
     return (Scene);
 }
 
@@ -1688,6 +1791,8 @@ struct AxSceneAPI* SceneAPI = &(struct AxSceneAPI) {
     .FindObject = FindObject,
     .CreateLight = CreateLight,
     .FindLight = FindLight,
+    .AddCamera = AddCamera,
+    .GetCamera = GetCamera,
     .GetWorldTransform = GetWorldTransform,
     .LoadSceneFromFile = LoadSceneFromFile,
     .LoadSceneFromString = LoadSceneFromString,

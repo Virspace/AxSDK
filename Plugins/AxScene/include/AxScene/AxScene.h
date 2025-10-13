@@ -142,6 +142,27 @@ struct AxSceneAPI {
      */
     AxLight* (*FindLight)(AxScene* Scene, const char* Name);
 
+    // === Camera Management ===
+
+    /**
+     * Add a camera to the scene with its transform.
+     * Memory is allocated from the scene's allocator.
+     * @param Scene Target scene
+     * @param Camera Camera to add (will be copied)
+     * @param Transform Camera transform (will be copied)
+     * @return AX_SCENE_SUCCESS on success, error code on failure
+     */
+    AxSceneResult (*AddCamera)(AxScene* Scene, const AxCamera* Camera, const AxTransform* Transform);
+
+    /**
+     * Get a camera from the scene by index.
+     * @param Scene Target scene
+     * @param Index Camera index (0-based)
+     * @param OutTransform Optional pointer to receive camera transform (can be NULL)
+     * @return Camera pointer, or NULL if index out of bounds
+     */
+    AxCamera* (*GetCamera)(const AxScene* Scene, uint32_t Index, AxTransform** OutTransform);
+
     /**
      * Get the world transform for a scene object (accumulated through hierarchy).
      * @param Object Target object

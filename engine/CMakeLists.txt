@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(AxEngine VERSION 1.0.0 LANGUAGES CXX)
+project(AxEngine VERSION 1.0.0 LANGUAGES C)
 
 #
 # Create Target
@@ -13,8 +13,46 @@ add_library(Virspace::AxEngine ALIAS AxEngine)
 target_sources(AxEngine
     PRIVATE
         include/AxEngine/AxEngine.h
-        src/AxEngine.cpp
+        src/AxEngine.c
 )
+
+#
+# Fetch dependencies
+#
+
+include(FetchContent)
+
+# STB for image loading
+FetchContent_Declare(
+    axsdk_stb
+    GIT_REPOSITORY https://github.com/nothings/stb.git
+    GIT_TAG master
+)
+
+FetchContent_GetProperties(axsdk_stb)
+if(NOT axsdk_stb_POPULATED)
+    FetchContent_Populate(axsdk_stb)
+    message("Fetching stb for AxEngine")
+
+    add_library(axsdk_stb INTERFACE)
+    target_include_directories(axsdk_stb INTERFACE ${axsdk_stb_SOURCE_DIR})
+endif()
+
+# CGLTF for GLTF model loading
+FetchContent_Declare(
+    cgltf
+    GIT_REPOSITORY https://github.com/jkuhlmann/cgltf.git
+    GIT_TAG master
+)
+
+FetchContent_GetProperties(cgltf)
+if(NOT cgltf_POPULATED)
+    FetchContent_Populate(cgltf)
+    message("Fetching cgltf for AxEngine")
+
+    add_library(cgltf INTERFACE ${cgltf_SOURCE_DIR}/cgltf.h)
+    target_include_directories(cgltf INTERFACE ${cgltf_SOURCE_DIR})
+endif()
 
 #
 # Usage Requirements
@@ -44,6 +82,8 @@ target_include_directories(AxEngine
 target_link_libraries(AxEngine
     PRIVATE
         Virspace::Foundation
+        axsdk_stb
+        cgltf
 )
 
 #

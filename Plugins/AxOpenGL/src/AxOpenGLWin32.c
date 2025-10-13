@@ -1626,13 +1626,21 @@ struct AxOpenGLAPI *AxOpenGLAPI = &(struct AxOpenGLAPI) {
     .SetCullMode = AxSetCullMode
 };
 
-AXON_DLL_EXPORT void LoadPlugin(struct AxAPIRegistry *APIRegistry, bool Load)
+AXON_DLL_EXPORT void LoadPlugin(struct AxAPIRegistry *APIRegistry)
 {
     if (APIRegistry)
     {
-        //WindowAPI = APIRegistry->Get(AXON_WINDOW_API_NAME);
         PlatformAPI = APIRegistry->Get(AXON_PLATFORM_API_NAME);
 
         APIRegistry->Set(AXON_OPENGL_API_NAME, AxOpenGLAPI, sizeof(struct AxOpenGLAPI));
+    }
+}
+
+AXON_DLL_EXPORT void UnloadPlugin(struct AxAPIRegistry *APIRegistry)
+{
+    if (APIRegistry)
+    {
+        APIRegistry->Set(AXON_OPENGL_API_NAME, NULL, 0);
+        PlatformAPI = NULL;
     }
 }

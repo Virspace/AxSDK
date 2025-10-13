@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Foundation/AxTypes.h"
+#include "AxOpenGL/AxOpenGLTypes.h"
 
 // struct AxRenderCommands
 // {

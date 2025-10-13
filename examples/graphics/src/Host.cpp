@@ -132,7 +132,13 @@ static bool HostInitialize(HostBootstrap *Host, struct AxAPIRegistry *RegistryAP
     }
 
     if (!Host->PluginAPI->Load("libAxResource.dll", false)) {
-        fprintf(stderr, "Failed to load AxScene plugin\n");
+        fprintf(stderr, "Failed to load AxResource plugin\n");
+        return false;
+    }
+
+    // TEMPORARILY DISABLED for debugging
+    if (!Host->PluginAPI->Load("libAxEngine.dll", false)) {
+        fprintf(stderr, "Failed to load AxEngine plugin\n");
         return false;
     }
 
@@ -154,13 +160,22 @@ static bool HostInitialize(HostBootstrap *Host, struct AxAPIRegistry *RegistryAP
 
 
     // Get render API after plugin loading
+    printf("DEBUG: About to query AXON_OPENGL_API_NAME from registry...\n");
     Host->RenderAPI = (struct AxOpenGLAPI *)RegistryAPI->Get(AXON_OPENGL_API_NAME);
+    printf("DEBUG: After query, Host->RenderAPI = %p\n", (void*)Host->RenderAPI);
     if (!Host->RenderAPI) {
         fprintf(stderr, "Failed to get OpenGL API after plugin loading\n");
         return false;
     }
 
+    printf("DEBUG: RenderAPI = %p\n", (void*)Host->RenderAPI);
+printf("DEBUG: RenderAPI->CreateContext = %p\n", (void*)Host->RenderAPI->CreateContext);
+printf("DEBUG: RenderAPI->DestroyContext = %p\n", (void*)Host->RenderAPI->DestroyContext);
+printf("DEBUG: sizeof(struct AxOpenGLAPI) = %zu\n", sizeof(struct AxOpenGLAPI));
+
+
     Host->IsInitialized = true;
+    printf("DEBUG: HostInitialize completed successfully\n");
     return true;
 }
 
@@ -232,7 +247,10 @@ static bool HostCreateWindow(HostBootstrap *Host)
 
 static bool HostCreateRenderer(HostBootstrap *Host)
 {
+    printf("DEBUG: HostCreateRenderer called\n");
     if (!Host || !Host->IsInitialized || !Host->Window) {
+        fprintf(stderr, "DEBUG: Host validation failed (Host=%p, IsInit=%d, Window=%p)\n",
+                (void*)Host, Host ? Host->IsInitialized : 0, Host ? (void*)Host->Window : NULL);
         return false;
     }
 
@@ -245,6 +263,11 @@ static bool HostCreateRenderer(HostBootstrap *Host)
     Host->Viewport.ClearColor = { 0.42f, 0.51f, 0.54f, 0.0f };
 
     // Initialize renderer
+    printf("DEBUG: Host->RenderAPI = %p\n", (void*)Host->RenderAPI);
+    if (!Host->RenderAPI) {
+        fprintf(stderr, "ERROR: RenderAPI is NULL in HostCreateRenderer!\n");
+        return false;
+    }
     AxWindowPlatformData WindowPlatformData = Host->WindowAPI->GetPlatformData(Host->Window);
     Host->RenderAPI->CreateContext(WindowPlatformData.Win32.Handle); // Need the handle here
 
