@@ -30,9 +30,7 @@ public:
     void IsRequestingExit(bool Value);
     bool IsRequestingExit() { return IsRequestingExit_; }
     inline AxTransform *GetTransform() { return Transform_; }
-
-    // Public members for callback access
-    AxWindowAPI *WindowAPI_{nullptr};
+    inline AxWindowAPI *GetWindowAPI() { return WindowAPI_; }
 
 private:
     // Scene loading
@@ -45,13 +43,12 @@ private:
     // API handles
     AxAPIRegistry *APIRegistry_{nullptr};
     AxEngineAPI *EngineAPI_{nullptr};
-    AxEngineHandle *Engine_{nullptr};
     AxOpenGLAPI *RenderAPI_{nullptr};
-    AxPlatformAPI *PlatformAPI_{nullptr};
-    AxPlatformFileAPI *FileAPI_{nullptr};
     AxSceneAPI *SceneAPI_{nullptr};
+    AxWindowAPI *WindowAPI_{nullptr};
 
     // Infrastructure
+    AxEngineHandle *Engine_{nullptr};
     AxWindow *Window_{nullptr};
     const AxViewport *Viewport_{nullptr};
 

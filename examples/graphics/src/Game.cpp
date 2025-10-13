@@ -1,7 +1,6 @@
 #include "Game.h"
 
 #include "Foundation/AxAPIRegistry.h"
-#include "Foundation/AxPlatform.h"
 #include "Foundation/AxPlugin.h"
 #include "Foundation/AxHashTable.h"
 #include "Foundation/AxMath.h"
@@ -12,15 +11,9 @@
 #include "AxWindow/AxWindow.h"
 #include "AxOpenGL/AxOpenGL.h"
 #include "AxScene/AxScene.h"
-#include "AxResource/AxResource.h"
-#include "AxResource/AxShaderManager.h"
 #include "AxEngine/AxEngine.h"
 
 #include <stdio.h>
-#include <unordered_map>
-#include <string>
-#include <string.h>
-#include <functional>
 
 // Camera controls state
 static float CameraSpeed = 5.0f;
@@ -33,7 +26,7 @@ static void KeyCallback(AxWindow *Window, int Key, int ScanCode, int Action, int
     Game* App = static_cast<Game*>(UserData);
 
     // Game now has direct access to WindowAPI, no need to query registry
-    AxWindowAPI *WindowAPI = App->WindowAPI_;
+    AxWindowAPI *WindowAPI = App->GetWindowAPI();
 
 
     if (Key == AX_KEY_ESCAPE && Action == AX_PRESS) {
@@ -160,8 +153,6 @@ void Game::Destroy()
         EngineAPI_->Destroy(Engine_);
         Engine_ = nullptr;
     }
-
-    printf("Game cleanup complete\n");
 }
 
 void Game::Initialize(AxAPIRegistry *APIRegistry, AxWindow *Window, const AxViewport *Viewport)
@@ -174,9 +165,7 @@ void Game::Initialize(AxAPIRegistry *APIRegistry, AxWindow *Window, const AxView
     // Get APIs from the registry
     WindowAPI_ = (struct AxWindowAPI *)APIRegistry_->Get(AXON_WINDOW_API_NAME);
     RenderAPI_ = (struct AxOpenGLAPI *)APIRegistry_->Get(AXON_OPENGL_API_NAME);
-    PlatformAPI_ = (struct AxPlatformAPI *)APIRegistry_->Get(AXON_PLATFORM_API_NAME);
     SceneAPI_ = (struct AxSceneAPI *)APIRegistry_->Get(AXON_SCENE_API_NAME);
-    FileAPI_ = PlatformAPI_->FileAPI;
 
     // Get Engine API and create Engine handle (Engine handles ResourceAPI initialization internally)
     EngineAPI_ = (struct AxEngineAPI *)APIRegistry_->Get(AX_ENGINE_API_NAME);
