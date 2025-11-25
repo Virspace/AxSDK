@@ -23,7 +23,7 @@ class PlatformTest : public testing::Test
             FileAPI = PlatformAPI->FileAPI;
             PathAPI = PlatformAPI->PathAPI;
             DirectoryAPI = PlatformAPI->DirectoryAPI;
-            
+
             // Clean up any test directories that might exist from previous runs
             // Use recursive removal to clean up directories and their contents
             AxPlatformError errorCode;
@@ -32,7 +32,7 @@ class PlatformTest : public testing::Test
             DirectoryAPI->RemoveDir("EmptyTestDir", true, &errorCode);
             DirectoryAPI->RemoveDir("AlreadyExistsTestDir", true, &errorCode);
             DirectoryAPI->RemoveDir("RecursiveTestDir", true, &errorCode);
-            
+
             // Clean up any individual test files that might be left over
             // (files created by tests that don't clean up after themselves)
             FileAPI->DeleteFile("TestFileForDirTest.txt", &errorCode);
@@ -457,50 +457,90 @@ TEST_F(PlatformTest, SetPositionTest)
     FileAPI->Close(ReadFile);
 }
 
-TEST_F(PlatformTest, BasePathTest)
-{
-    // Test Windows-style paths with backslashes
-    const char *Result1 = PathAPI->BasePath("C:\\Users\\Test\\file.txt");
-    EXPECT_STREQ(Result1, "C:\\Users\\Test\\");
-    
-    const char *Result2 = PathAPI->BasePath("C:\\file.txt");
-    EXPECT_STREQ(Result2, "C:\\");
-    
-    const char *Result3 = PathAPI->BasePath("file.txt");
-    EXPECT_STREQ(Result3, "file.txt") << "Should return full path when no separator found";
-    
-    // Test Unix-style paths with forward slashes
-    const char *Result4 = PathAPI->BasePath("/home/user/file.txt");
-    EXPECT_STREQ(Result4, "/home/user/");
-    
-    const char *Result5 = PathAPI->BasePath("/file.txt");
-    EXPECT_STREQ(Result5, "/");
-    
-    // Test mixed separators (should use the latter one)
-    const char *Result6 = PathAPI->BasePath("C:\\Users/Test\\file.txt");
-    EXPECT_STREQ(Result6, "C:\\Users/Test\\");
-    
-    const char *Result7 = PathAPI->BasePath("C:/Users\\Test/file.txt");
-    EXPECT_STREQ(Result7, "C:/Users\\Test/");
-    
-    // Test paths ending with separator
-    const char *Result8 = PathAPI->BasePath("C:\\Users\\Test\\");
-    EXPECT_STREQ(Result8, "C:\\Users\\Test\\");
-    
-    const char *Result9 = PathAPI->BasePath("/home/user/");
-    EXPECT_STREQ(Result9, "/home/user/");
-    
-    // Test edge cases
-    const char *Result10 = PathAPI->BasePath("");
-    EXPECT_STREQ(Result10, "") << "Empty path should return empty string";
-    
-    const char *Result11 = PathAPI->BasePath("justafilename");
-    EXPECT_STREQ(Result11, "justafilename") << "Filename without path should return filename";
-    
-    // Test paths with multiple separators
-    const char *Result12 = PathAPI->BasePath("C:\\Users\\\\Test\\file.txt");
-    EXPECT_STREQ(Result12, "C:\\Users\\\\Test\\");
-    
-    const char *Result13 = PathAPI->BasePath("/home//user/file.txt");
-    EXPECT_STREQ(Result13, "/home//user/");
+TEST_F(PlatformTest, BasePath) {
+    // Normal paths
+    EXPECT_STREQ(PathAPI->BasePath("/home/user/file.txt"), "/home/user");
+    EXPECT_STREQ(PathAPI->BasePath("C:\\Users\\John\\file.txt"), "C:\\Users\\John");
+
+    // No separator
+    EXPECT_STREQ(PathAPI->BasePath("file.txt"), ".");
+    EXPECT_STREQ(PathAPI->BasePath("document"), ".");
+
+    // Root paths
+    EXPECT_STREQ(PathAPI->BasePath("/file.txt"), "/");
+    EXPECT_STREQ(PathAPI->BasePath("\\file.txt"), "\\");
+
+    // Edge cases
+    EXPECT_STREQ(PathAPI->BasePath(""), ".");
+    EXPECT_STREQ(PathAPI->BasePath(NULL), ".");
+    EXPECT_STREQ(PathAPI->BasePath("/home/user/"), "/home");
+    EXPECT_STREQ(PathAPI->BasePath("C:\\Users\\"), "C:");
+
+    // Mixed separators and relative paths
+    EXPECT_STREQ(PathAPI->BasePath("C:/Users\\John/file.txt"), "C:/Users\\John");
+    EXPECT_STREQ(PathAPI->BasePath("./dir/file.txt"), "./dir");
+    EXPECT_STREQ(PathAPI->BasePath("../dir/file.txt"), "../dir");
+}
+
+TEST_F(PlatformTest, FileName) {
+    // Normal paths
+    EXPECT_STREQ(PathAPI->FileName("/home/user/file.txt"), "file.txt");
+    EXPECT_STREQ(PathAPI->FileName("C:\\Users\\John\\document.doc"), "document.doc");
+
+    // No separator
+    EXPECT_STREQ(PathAPI->FileName("file.txt"), "file.txt");
+    EXPECT_STREQ(PathAPI->FileName("document"), "document");
+
+    // Root paths
+    EXPECT_STREQ(PathAPI->FileName("/file.txt"), "file.txt");
+    EXPECT_STREQ(PathAPI->FileName("\\file.txt"), "file.txt");
+
+    // Edge cases
+    EXPECT_STREQ(PathAPI->FileName(""), "");
+    EXPECT_STREQ(PathAPI->FileName(NULL), "");
+    EXPECT_STREQ(PathAPI->FileName("/home/user/"), "");
+    EXPECT_STREQ(PathAPI->FileName("C:\\Users\\"), "");
+    EXPECT_STREQ(PathAPI->FileName("/"), "");
+    EXPECT_STREQ(PathAPI->FileName("\\"), "");
+
+    // Special cases
+    EXPECT_STREQ(PathAPI->FileName("C:/Users\\John/file.txt"), "file.txt");
+    EXPECT_STREQ(PathAPI->FileName("/home/user/archive.tar.gz"), "archive.tar.gz");
+    EXPECT_STREQ(PathAPI->FileName("/home/user/Makefile"), "Makefile");
+    EXPECT_STREQ(PathAPI->FileName("/home/user/file name.txt"), "file name.txt");
+}
+
+TEST_F(PlatformTest, BaseName) {
+    // Normal paths
+    EXPECT_STREQ(PathAPI->BaseName("C:\\temp\\foo.txt"), "foo");
+    EXPECT_STREQ(PathAPI->BaseName("/home/user/file.txt"), "file");
+
+    // Filename only
+    EXPECT_STREQ(PathAPI->BaseName("foo.txt"), "foo");
+    EXPECT_STREQ(PathAPI->BaseName("document.doc"), "document");
+
+    // No extension
+    EXPECT_STREQ(PathAPI->BaseName("C:\\temp\\file"), "file");
+    EXPECT_STREQ(PathAPI->BaseName("Makefile"), "Makefile");
+
+    // Multiple extensions
+    EXPECT_STREQ(PathAPI->BaseName("/home/user/archive.tar.gz"), "archive");
+    EXPECT_STREQ(PathAPI->BaseName("file.backup.old"), "file");
+
+    // Dot files
+    EXPECT_STREQ(PathAPI->BaseName(".bashrc"), ".bashrc");
+    EXPECT_STREQ(PathAPI->BaseName(".gitignore"), ".gitignore");
+    EXPECT_STREQ(PathAPI->BaseName("/home/user/.config"), ".config");
+
+    // Edge cases
+    EXPECT_STREQ(PathAPI->BaseName("file."), "file");
+    EXPECT_STREQ(PathAPI->BaseName(""), "");
+    EXPECT_STREQ(PathAPI->BaseName(NULL), "");
+    EXPECT_STREQ(PathAPI->BaseName("C:\\temp\\"), "");
+    EXPECT_STREQ(PathAPI->BaseName("/home/user/"), "");
+    EXPECT_STREQ(PathAPI->BaseName("/"), "");
+    EXPECT_STREQ(PathAPI->BaseName("\\"), "");
+
+    // Mixed separators
+    EXPECT_STREQ(PathAPI->BaseName("C:/temp\\foo.txt"), "foo");
 }

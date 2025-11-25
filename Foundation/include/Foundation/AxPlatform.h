@@ -56,8 +56,8 @@ struct AxPlatformPathAPI
     bool (*FileExists)(const char *Path);
     bool (*DirectoryExists)(const char *Path);
     const char *(*BasePath)(const char *Path);
-
-    //char *(*CurrentWorkingDirectory)(void);
+    const char *(*FileName)(const char *Path);
+    const char *(*BaseName)(const char *Path);
 };
 
 // Interface for File I/O

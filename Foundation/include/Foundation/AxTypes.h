@@ -29,6 +29,7 @@ extern "C" {
 #include <stddef.h>
 
 #define AXON_DLL_EXPORT __declspec(dllexport)
+#define AXON_DLL_IMPORT __declspec(dllimport)
 
 #define AX_PI 3.14159265359f
 

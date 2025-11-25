@@ -44,22 +44,33 @@ static bool DirectoryExists(const char *Path)
 
 static const char *BasePath(const char *Path)
 {
-    AXON_ASSERT(Path);
+    // Handle NULL or empty path
+    if (!Path || *Path == '\0') {
+        return (".");  // Return current directory for empty paths
+    }
 
     // Find the last occurrence of both '/' and '\\'
     const char *LastSlash = strrchr(Path, '/');
     const char *LastBackslash = strrchr(Path, '\\');
 
     // Use the latter of the two separators
-    const char *lastSeparator = (LastSlash > LastBackslash) ? LastSlash : LastBackslash;
+    const char *LastSeparator = (LastSlash > LastBackslash) ? LastSlash : LastBackslash;
 
-    if (lastSeparator == NULL) {
+    if (LastSeparator == NULL) {
         // No directory separator found, return the full path
-        return Path;
+        return (".");
+    }
+
+    // Handle root path cases ("/" or "\\")
+    if (LastSeparator == Path) {
+        static char RootPath[MAX_PATH];
+        RootPath[0] = *Path;
+        RootPath[1] = '\0';
+        return RootPath;
     }
 
     // Calculate the length of the base path
-    size_t BaseLength = lastSeparator - Path + 1;
+    size_t BaseLength = LastSeparator - Path + 1;
 
     // Create a static buffer to store the base path
     static char BasePath[MAX_PATH];
@@ -68,15 +79,72 @@ static const char *BasePath(const char *Path)
     strncpy(BasePath, Path, BaseLength);
     BasePath[BaseLength] = '\0';
 
-    return BasePath;
+    return (BasePath);
 }
 
-static char *CurrentWorkingDirectory(void)
+static const char *FileName(const char *Path)
 {
-    //return (GetCurrentDirectoryA(MAX_PATH, CurrentDirectory));
-    return NULL;
+    // Handle NULL or empty path
+    if (!Path || *Path == '\0') {
+        return "";  // Return empty string for empty paths
+    }
+
+    // Find the last occurrence of both '/' and '\\'
+    const char *LastSlash = strrchr(Path, '/');
+    const char *LastBackslash = strrchr(Path, '\\');
+
+    // Use the latter of the two separators
+    const char *LastSeparator = (LastSlash > LastBackslash) ? LastSlash : LastBackslash;
+
+    if (LastSeparator == NULL) {
+        // No directory separator found, return the full path as filename
+        return Path;
+    }
+
+    // Return everything after the last separator
+    return LastSeparator + 1;
 }
 
+static const char *BaseName(const char *Path)
+{
+    // Handle NULL or empty path
+    if (!Path || *Path == '\0') {
+        return "";
+    }
+
+    // First, get the filename part (everything after last separator)
+    const char *LastSlash = strrchr(Path, '/');
+    const char *LastBackslash = strrchr(Path, '\\');
+    const char *LastSeparator = (LastSlash > LastBackslash) ? LastSlash : LastBackslash;
+
+    // Start from after the separator, or from the beginning if no separator
+    const char *FileStart = (LastSeparator != NULL) ? LastSeparator + 1 : Path;
+
+    // Handle empty filename (e.g., path ends with separator)
+    if (*FileStart == '\0') {
+        return "";
+    }
+
+    // Find the FIRST dot for extension (not last)
+    const char *FirstDot = strchr(FileStart, '.');
+
+    // Calculate length (if no dot, use entire filename)
+    size_t BaseLength;
+    if (FirstDot != NULL && FirstDot > FileStart) {
+        // Has extension - exclude everything from first dot onward
+        BaseLength = FirstDot - FileStart;
+    } else {
+        // No extension or dot is first character (.bashrc case)
+        BaseLength = strlen(FileStart);
+    }
+
+    // Copy to static buffer
+    static char BaseName[MAX_PATH];
+    strncpy(BaseName, FileStart, BaseLength);
+    BaseName[BaseLength] = '\0';
+
+    return (BaseName);
+}
 
 /* ========================================================================
    Axon File
@@ -638,7 +706,9 @@ struct AxPlatformAPI *PlatformAPI = &(struct AxPlatformAPI) {
     .PathAPI = &(struct AxPlatformPathAPI) {
         .FileExists = FileExists,
         .DirectoryExists = DirectoryExists,
-        .BasePath = BasePath
+        .BasePath = BasePath,
+        .FileName = FileName,
+        .BaseName = BaseName,
     },
     .TimeAPI = &(struct AxTimeAPI) {
         .WallTime = WallTime,
