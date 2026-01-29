@@ -1,4 +1,3 @@
-#include "AxResource/AxShaderManager.h"
 #include "Foundation/AxAPIRegistry.h"
 #include "Foundation/AxTypes.h"
 #include "AxOpenGL/AxOpenGL.h"
@@ -6,6 +5,8 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#include "AxShaderManager.h"
 
 /**
  * Internal shader slot structure
@@ -97,7 +98,7 @@ static bool IsHandleValid(AxShaderHandle Handle)
 // API Implementation
 ///////////////////////////////////////////////////////////////
 
-static void Initialize(struct AxAPIRegistry* Registry, uint32_t InitialCapacity)
+void AxShaderManager::Initialize(struct AxAPIRegistry* Registry, uint32_t InitialCapacity)
 {
     if (State.Initialized) {
         fprintf(stderr, "ShaderManager: Already initialized\n");
@@ -137,7 +138,7 @@ static void Initialize(struct AxAPIRegistry* Registry, uint32_t InitialCapacity)
     printf("ShaderManager: Initialized with capacity %u\n", InitialCapacity);
 }
 
-static void Shutdown(void)
+void AxShaderManager::Shutdown(void)
 {
     if (!State.Initialized) {
         return;
@@ -159,7 +160,7 @@ static void Shutdown(void)
     printf("ShaderManager: Shutdown complete\n");
 }
 
-static AxShaderHandle CreateShader(const char* VertexShaderPath, const char* FragmentShaderPath)
+AxShaderHandle AxShaderManager::CreateShader(const char* VertexShaderPath, const char* FragmentShaderPath)
 {
     if (!State.Initialized) {
         fprintf(stderr, "ShaderManager: Not initialized\n");
@@ -252,7 +253,14 @@ static void AddRef(AxShaderHandle Handle)
     State.Slots[Handle.Index].RefCount++;
 }
 
-static void Release(AxShaderHandle Handle)
+static void CollectGarbage(void)
+{
+    // For now, garbage collection is automatic when refcount hits zero
+    // Future: Could compact slots and reduce capacity if usage is low
+    printf("ShaderManager: Garbage collection - %u active shaders\n", State.Count);
+}
+
+void AxShaderManager::Release(AxShaderHandle Handle)
 {
     if (!IsHandleValid(Handle)) {
         fprintf(stderr, "ShaderManager: Release called with invalid handle [%u:%u]\n",
@@ -304,7 +312,7 @@ static uint32_t GetShaderProgram(AxShaderHandle Handle)
     return (Slot->Data ? Slot->Data->ShaderHandle : 0);
 }
 
-static uint32_t GetRefCount(AxShaderHandle Handle)
+uint32_t AxShaderManager::GetRefCount(AxShaderHandle Handle)
 {
     if (!IsHandleValid(Handle)) {
         return (0);
@@ -313,37 +321,12 @@ static uint32_t GetRefCount(AxShaderHandle Handle)
     return (State.Slots[Handle.Index].RefCount);
 }
 
-static bool IsValid(AxShaderHandle Handle)
+bool AxShaderManager::IsValid(AxShaderHandle Handle)
 {
     return (IsHandleValid(Handle));
 }
 
-static uint32_t GetActiveShaderCount(void)
+uint32_t AxShaderManager::GetActiveShaderCount(void)
 {
     return (State.Count);
 }
-
-static void CollectGarbage(void)
-{
-    // For now, garbage collection is automatic when refcount hits zero
-    // Future: Could compact slots and reduce capacity if usage is low
-    printf("ShaderManager: Garbage collection - %u active shaders\n", State.Count);
-}
-
-///////////////////////////////////////////////////////////////
-// API Structure
-///////////////////////////////////////////////////////////////
-
-struct AxShaderManagerAPI* ShaderManagerAPI = &(struct AxShaderManagerAPI) {
-    .Initialize = Initialize,
-    .Shutdown = Shutdown,
-    .CreateShader = CreateShader,
-    .AddRef = AddRef,
-    .Release = Release,
-    .GetShaderData = GetShaderData,
-    .GetShaderProgram = GetShaderProgram,
-    .GetRefCount = GetRefCount,
-    .IsValid = IsValid,
-    .GetActiveShaderCount = GetActiveShaderCount,
-    .CollectGarbage = CollectGarbage
-};

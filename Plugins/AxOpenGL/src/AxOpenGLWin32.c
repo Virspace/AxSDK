@@ -630,7 +630,7 @@ static void AxNewFrame(void)
 
     // Reset to default OpenGL state at start of frame
     glDisable(GL_SCISSOR_TEST);
-    
+
     // Reset viewport to full window size
     GLint viewport[4];
     glGetIntegerv(GL_VIEWPORT, viewport);

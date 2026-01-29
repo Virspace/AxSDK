@@ -11,7 +11,6 @@
 #include "AxWindow/AxWindow.h"
 #include "AxOpenGL/AxOpenGL.h"
 #include "AxScene/AxScene.h"
-#include "AxEngine/AxEngine.h"
 
 #include <stdio.h>
 
@@ -19,6 +18,8 @@
 static float CameraSpeed = 5.0f;
 static float MouseSensitivity = 0.001f;
 static AxVec2 LastMousePos = { 0.0f, 0.0f };
+
+struct AxWindowAPI *Window;
 
 // Static callback functions
 static void KeyCallback(AxWindow *Window, int Key, int ScanCode, int Action, int Mods, void *UserData)
@@ -137,160 +138,133 @@ bool Game::Create()
 
 bool Game::Tick(float DeltaT)
 {
-    AXON_ASSERT(EngineAPI_ && "EngineAPI is invalid!");
-
     // Update camera with input
     UpdateCamera(DeltaT);
-    EngineAPI_->RenderScene(Engine_, Viewport_, 0);  // Use camera index 0
 
     return true;
 }
 
 void Game::Destroy()
 {
-    // Clean up Engine (Engine handles scene destruction and resource cleanup internally)
-    if (Engine_ && EngineAPI_) {
-        EngineAPI_->Destroy(Engine_);
-        Engine_ = nullptr;
-    }
 }
 
-void Game::Initialize(AxAPIRegistry *APIRegistry, AxWindow *Window, const AxViewport *Viewport)
-{
-    // Store provided infrastructure
-    APIRegistry_ = APIRegistry;
-    Window_ = Window;
-    Viewport_ = Viewport;
+// void Game::Initialize(AxAPIRegistry *APIRegistry, AxWindow *Window, const AxViewport *Viewport)
+// {
+//     // Store provided infrastructure
+//     APIRegistry_ = APIRegistry;
+//     // Window = Window;
+//     // Viewport = Viewport;
 
-    // Get APIs from the registry
-    WindowAPI_ = (struct AxWindowAPI *)APIRegistry_->Get(AXON_WINDOW_API_NAME);
-    RenderAPI_ = (struct AxOpenGLAPI *)APIRegistry_->Get(AXON_OPENGL_API_NAME);
-    SceneAPI_ = (struct AxSceneAPI *)APIRegistry_->Get(AXON_SCENE_API_NAME);
+//     // Get APIs from the registry
+//     WindowAPI = (struct AxWindowAPI *)APIRegistry_->Get(AXON_WINDOW_API_NAME);
+//     SceneAPI = (struct AxSceneAPI *)APIRegistry_->Get(AXON_SCENE_API_NAME);
 
-    // Get Engine API and create Engine handle (Engine handles ResourceAPI initialization internally)
-    EngineAPI_ = (struct AxEngineAPI *)APIRegistry_->Get(AX_ENGINE_API_NAME);
-    if (EngineAPI_) {
-        Engine_ = EngineAPI_->Create(APIRegistry_);
-        if (Engine_) {
-            if (!EngineAPI_->Initialize(Engine_)) {
-                fprintf(stderr, "Game: Failed to initialize Engine\n");
-            }
-        }
-    } else {
-        fprintf(stderr, "Game: AxEngine API not found in registry\n");
-    }
+//     // Register input callbacks now that we have everything
+//     RegisterCallbacks();
 
-    // Register input callbacks now that we have everything
-    RegisterCallbacks();
-}
+//     // Set cursor for FPS-style controls
+//     enum AxCursorMode CursorMode = AX_CURSOR_DISABLED;
+//     AxWindowError Error;
+//     if (!WindowAPI->SetCursorMode(Window, CursorMode, &Error)) {
+//         fprintf(stderr, "Failed to set cursor mode: %s\n", WindowAPI->GetErrorString(Error));
+//     }
+// }
 
-void Game::SetupSceneCamera(const AxScene* Scene)
-{
-    if (!Scene) return;
+// void Game::SetupSceneCamera(const AxScene* Scene)
+// {
+//     if (!Scene) return;
 
-    // Allocate camera transform (owned by Game for modification)
-    static AxTransform CameraTransform = {0};
+//     // Allocate camera transform (owned by Game for modification)
+//     static AxTransform CameraTransform = {0};
 
-    // Find camera object in scene for initial camera positioning
-    AxSceneObject* CameraObject = SceneAPI_->FindObject(Scene, "DefaultCamera");
-    if (CameraObject) {
-        // Copy transform from scene object so we can modify it
-        CameraTransform = CameraObject->Transform;
-        Transform_ = &CameraTransform;
-    } else {
-        // Use default camera transform if no camera object found
-        CameraTransform = (AxTransform){
-            .Translation = {0.0f, 2.0f, 5.0f},
-            .Rotation = {0.0f, 0.0f, 0.0f, 1.0f},
-            .Scale = {1.0f, 1.0f, 1.0f},
-            .Up = {0.0f, 1.0f, 0.0f}
-        };
-        Transform_ = &CameraTransform;
-    }
-}
+//     // Find camera object in scene for initial camera positioning
+//     AxSceneObject* CameraObject = SceneAPI_->FindObject(Scene, "DefaultCamera");
+//     if (CameraObject) {
+//         // Copy transform from scene object so we can modify it
+//         CameraTransform = CameraObject->Transform;
+//         Transform_ = &CameraTransform;
+//     } else {
+//         // Use default camera transform if no camera object found
+//         CameraTransform = (AxTransform){
+//             .Translation = {0.0f, 2.0f, 5.0f},
+//             .Rotation = {0.0f, 0.0f, 0.0f, 1.0f},
+//             .Scale = {1.0f, 1.0f, 1.0f},
+//             .Up = {0.0f, 1.0f, 0.0f}
+//         };
+//         Transform_ = &CameraTransform;
+//     }
+// }
 
-bool Game::CreateScene()
-{
-    // Use Engine to load scene - Engine handles all resource loading automatically
-    if (!EngineAPI_ || !Engine_) {
-        fprintf(stderr, "Engine not available for scene loading\n");
-        return (false);
-    }
+// bool Game::CreateScene()
+// {
+//     // // Get camera from Engine (creates default if scene doesn't have one)
+//     // AxTransform* CameraTransform = nullptr;
+//     // Camera_ = EngineAPI_->GetSceneCamera(Engine_, 0, &CameraTransform);
+//     // if (!Camera_) {
+//     //     fprintf(stderr, "Failed to get scene camera\n");
+//     //     return (false);
+//     // }
 
-    Scene_ = EngineAPI_->LoadScene(Engine_, "examples/graphics/scenes/sponza_atrium.ats");
-    if (!Scene_) {
-        fprintf(stderr, "Failed to load scene\n");
-        return (false);
-    }
+//     // Set up camera transform from scene's DefaultCamera object
+//     SetupSceneCamera(Scene_);
 
-    // Get camera from Engine (creates default if scene doesn't have one)
-    AxTransform* CameraTransform = nullptr;
-    Camera_ = EngineAPI_->GetSceneCamera(Engine_, 0, &CameraTransform);
-    if (!Camera_) {
-        fprintf(stderr, "Failed to get scene camera\n");
-        return (false);
-    }
+//     // Customize camera properties for this game
+//     RenderAPI_->CameraSetFOV(Camera_, 60.0f * (AX_PI / 180.0f));
+//     RenderAPI_->CameraSetAspectRatio(Camera_, Viewport_->Size.X / Viewport_->Size.Y);
+//     RenderAPI_->CameraSetNearClipPlane(Camera_, 0.1f);
+//     RenderAPI_->CameraSetFarClipPlane(Camera_, 100.0f);
 
-    // Set up camera transform from scene's DefaultCamera object
-    SetupSceneCamera(Scene_);
+//     return (true);
+// }
 
-    // Customize camera properties for this game
-    RenderAPI_->CameraSetFOV(Camera_, 60.0f * (AX_PI / 180.0f));
-    RenderAPI_->CameraSetAspectRatio(Camera_, Viewport_->Size.X / Viewport_->Size.Y);
-    RenderAPI_->CameraSetNearClipPlane(Camera_, 0.1f);
-    RenderAPI_->CameraSetFarClipPlane(Camera_, 100.0f);
+// void Game::UpdateCamera(float DeltaTime)
+// {
+//     // Get input state
+//     enum AxWindowError Error = AX_WINDOW_ERROR_NONE;
+//     AxInputState InputState = {0};
+//     if (!WindowAPI_->GetWindowInputState(Window_, &InputState, &Error)) {
+//         return;
+//     }
 
-    return (true);
-}
+//     float Horizontal = GetAxis(InputState.Keys[AX_KEY_D], InputState.Keys[AX_KEY_A]);
+//     float Vertical = GetAxis(InputState.Keys[AX_KEY_W], InputState.Keys[AX_KEY_S]);
+//     float VerticalUpDown = GetAxis(InputState.Keys[AX_KEY_E], InputState.Keys[AX_KEY_Q]);
 
-void Game::UpdateCamera(float DeltaTime)
-{
-    // Get input state
-    enum AxWindowError Error = AX_WINDOW_ERROR_NONE;
-    AxInputState InputState = {0};
-    if (!WindowAPI_->GetWindowInputState(Window_, &InputState, &Error)) {
-        return;
-    }
+//     // Calculate movement in local space (relative to camera rotation)
+//     // Note: In OpenGL/3D graphics, -Z is forward, so negate the vertical movement
+//     AxVec3 LocalMovement = {
+//         Horizontal * CameraSpeed * DeltaTime,        // X: right/left
+//         VerticalUpDown * CameraSpeed * DeltaTime,    // Y: up/down
+//         -Vertical * CameraSpeed * DeltaTime          // Z: forward/back (negated for OpenGL)
+//     };
 
-    float Horizontal = GetAxis(InputState.Keys[AX_KEY_D], InputState.Keys[AX_KEY_A]);
-    float Vertical = GetAxis(InputState.Keys[AX_KEY_W], InputState.Keys[AX_KEY_S]);
-    float VerticalUpDown = GetAxis(InputState.Keys[AX_KEY_E], InputState.Keys[AX_KEY_Q]);
+//     TransformTranslate(Transform_, LocalMovement, false); // false = local space
 
-    // Calculate movement in local space (relative to camera rotation)
-    // Note: In OpenGL/3D graphics, -Z is forward, so negate the vertical movement
-    AxVec3 LocalMovement = {
-        Horizontal * CameraSpeed * DeltaTime,        // X: right/left
-        VerticalUpDown * CameraSpeed * DeltaTime,    // Y: up/down
-        -Vertical * CameraSpeed * DeltaTime          // Z: forward/back (negated for OpenGL)
-    };
+//     // Update the scene's camera transform so Engine uses the updated position
+//     if (Scene_ && SceneAPI_) {
+//         AxTransform* SceneCameraTransform = nullptr;
+//         SceneAPI_->GetCamera(Scene_, 0, &SceneCameraTransform);
+//         if (SceneCameraTransform) {
+//             *SceneCameraTransform = *Transform_;
+//         }
+//     }
 
-    TransformTranslate(Transform_, LocalMovement, false); // false = local space
+//     // Print camera position and rotation when P key is pressed
+//     if (InputState.Keys[AX_KEY_P]) {
+//         AxVec3 EulerAngles = QuatToEuler(Transform_->Rotation);
+//         printf("Camera Position: X=%.2f, Y=%.2f, Z=%.2f\n",
+//                Transform_->Translation.X,
+//                Transform_->Translation.Y,
+//                Transform_->Translation.Z);
+//         printf("Camera Rotation (Euler): Pitch=%.2f, Yaw=%.2f, Roll=%.2f\n",
+//                EulerAngles.X * (180.0f / AX_PI),
+//                EulerAngles.Y * (180.0f / AX_PI),
+//                EulerAngles.Z * (180.0f / AX_PI));
+//     }
+// }
 
-    // Update the scene's camera transform so Engine uses the updated position
-    if (Scene_ && SceneAPI_) {
-        AxTransform* SceneCameraTransform = nullptr;
-        SceneAPI_->GetCamera(Scene_, 0, &SceneCameraTransform);
-        if (SceneCameraTransform) {
-            *SceneCameraTransform = *Transform_;
-        }
-    }
-
-    // Print camera position and rotation when P key is pressed
-    if (InputState.Keys[AX_KEY_P]) {
-        AxVec3 EulerAngles = QuatToEuler(Transform_->Rotation);
-        printf("Camera Position: X=%.2f, Y=%.2f, Z=%.2f\n",
-               Transform_->Translation.X,
-               Transform_->Translation.Y,
-               Transform_->Translation.Z);
-        printf("Camera Rotation (Euler): Pitch=%.2f, Yaw=%.2f, Roll=%.2f\n",
-               EulerAngles.X * (180.0f / AX_PI),
-               EulerAngles.Y * (180.0f / AX_PI),
-               EulerAngles.Z * (180.0f / AX_PI));
-    }
-}
-
-void Game::IsRequestingExit(bool Value)
-{
-    IsRequestingExit_ = Value;
-}
+// void Game::IsRequestingExit(bool Value)
+// {
+//     IsRequestingExit_ = Value;
+// }
 

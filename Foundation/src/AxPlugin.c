@@ -58,7 +58,7 @@ static uint64_t Load(const char *Path, bool HotReload)
         if (LoadPlugin)
         {
             // Call the plugins LoadPlugin function
-            LoadPlugin(AxonGlobalAPIRegistry, false);
+            LoadPlugin(AxonGlobalAPIRegistry, true);
 
             // Read DLL into buffer for hashing
             uint64_t Hash = 0;

@@ -54,17 +54,7 @@ add_library(Virspace::OpenGLGame ALIAS OpenGLGame)
 # Add sources to library target
 target_sources(OpenGLGame
     PRIVATE
-        src/Engine.cpp
         src/Game.cpp
-)
-
-# Add the executable
-add_executable(OpenGLExample)
-
-# Add source to executable target
-target_sources(OpenGLExample
-    PRIVATE
-        src/Host.cpp
 )
 
 #
@@ -112,13 +102,6 @@ else()
     # add_compile_options(-Wall -Wextra -pedantic -Werror)
 endif()
 
-# Add compiler features and definitions
-target_compile_features(OpenGLExample PRIVATE cxx_std_20)
-target_compile_definitions(OpenGLExample
-    PRIVATE
-        AXON_LINKS_FOUNDATION
-)
-
 target_compile_features(OpenGLGame PRIVATE cxx_std_20)
 target_compile_definitions(OpenGLGame
     PRIVATE
@@ -129,7 +112,6 @@ include_directories("$<JOIN:$<TARGET_PROPERTY:AxWindow,INCLUDE_DIRECTORIES>,;>")
 include_directories("$<JOIN:$<TARGET_PROPERTY:AxOpenGL,INCLUDE_DIRECTORIES>,;>")
 include_directories("$<JOIN:$<TARGET_PROPERTY:AxScene,INCLUDE_DIRECTORIES>,;>")
 include_directories("$<JOIN:$<TARGET_PROPERTY:AxResource,INCLUDE_DIRECTORIES>,;>")
-include_directories("$<JOIN:$<TARGET_PROPERTY:AxEngine,INCLUDE_DIRECTORIES>,;>")
 
 # Specify include directories to use when compiling a given target
 target_include_directories(OpenGLGame
@@ -146,12 +128,6 @@ target_link_libraries(OpenGLGame
         Virspace::Foundation
         cgltf
         axsdk_stb
-)
-
-target_link_libraries(OpenGLExample
-    PRIVATE
-        Virspace::Foundation
-        shell32
 )
 
 #

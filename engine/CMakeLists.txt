@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(AxEngine VERSION 1.0.0 LANGUAGES C)
+project(AxEngine VERSION 1.0.0 LANGUAGES C CXX)
 
 #
 # Create Target
@@ -13,8 +13,23 @@ add_library(Virspace::AxEngine ALIAS AxEngine)
 target_sources(AxEngine
     PRIVATE
         include/AxEngine/AxEngine.h
-        src/AxEngine.c
+        include/AxEngine/AxScript.h
+        include/AxEngine/AxResource.h
+        include/AxEngine/AxShaderManager.h
+        src/AxEngine.cpp
+        src/AxShaderManager.cpp
+        src/AxResource.cpp
 )
+
+# Add the standalone bootstrap executable
+add_executable(AxStandalone)
+
+# Add source to executable target
+target_sources(AxStandalone
+    PRIVATE
+        src/AxStandalone.cpp
+)
+
 
 #
 # Fetch dependencies
@@ -59,15 +74,21 @@ endif()
 #
 
 # Add compiler features and definitions
-target_compile_features(AxEngine PRIVATE c_std_11)
-# target_compile_definitions(AxEngine
-#     PRIVATE
-#         AXON_LINKS_FOUNDATION
-# )
+target_compile_features(AxEngine PRIVATE cxx_std_23)
+target_compile_definitions(AxEngine
+    PRIVATE
+        AXENGINE_EXPORTS
+)
 
-include_directories("$<JOIN:$<TARGET_PROPERTY:AxOpenGL,INCLUDE_DIRECTORIES>,;>")
+# Add compiler features and definitions for AxStandalone
+target_compile_features(AxStandalone PRIVATE cxx_std_23)
+target_compile_definitions(AxStandalone
+    PRIVATE
+        AXON_LINKS_FOUNDATION
+)
+
 include_directories("$<JOIN:$<TARGET_PROPERTY:AxWindow,INCLUDE_DIRECTORIES>,;>")
-include_directories("$<JOIN:$<TARGET_PROPERTY:AxResource,INCLUDE_DIRECTORIES>,;>")
+include_directories("$<JOIN:$<TARGET_PROPERTY:AxOpenGL,INCLUDE_DIRECTORIES>,;>")
 include_directories("$<JOIN:$<TARGET_PROPERTY:AxScene,INCLUDE_DIRECTORIES>,;>")
 
 # Specify include directories
@@ -84,6 +105,19 @@ target_link_libraries(AxEngine
         Virspace::Foundation
         axsdk_stb
         cgltf
+)
+
+# Link AxStandalone with Foundation
+target_link_libraries(AxStandalone
+    PRIVATE
+        Virspace::Foundation
+        shell32
+)
+
+# Add include directories for AxStandalone
+target_include_directories(AxStandalone
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
 #
@@ -143,3 +177,5 @@ export(EXPORT AxEngineTargets
     FILE ${CMAKE_CURRENT_BINARY_DIR}/AxEngineTargets.cmake
     NAMESPACE Virspace::
 )
+
+add_subdirectory(examples)

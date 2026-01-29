@@ -1,27 +1,10 @@
-#include "AxEngine/AxEngine.h"
+#include "AxEngine/AxResource.h"
 #include "AxOpenGL/AxOpenGL.h"
-#include "AxResource/AxResource.h"
-#include "AxResource/AxShaderManager.h"
-#include "AxScene/AxScene.h"
-#include "Foundation/AxAPIRegistry.h"
-#include "Foundation/AxPlatform.h"
-#include "Foundation/AxMath.h"
-#include "Foundation/AxHashTable.h"
-
-#define AXARRAY_IMPLEMENTATION
-#include "Foundation/AxArray.h"
-
+#include "cgltf.h"
+#include "stb_image.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-
-// STB Image for texture loading
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
-
-// CGLTF for GLTF model loading
-#define CGLTF_IMPLEMENTATION
-#include "cgltf.h"
 
 ///////////////////////////////////////////////////////////////
 // GLTF Helper Functions
@@ -51,7 +34,7 @@ static AxTextureFilter ConvertGLTFFilter(int32_t GLTFFilter)
 }
 
 static void SetSamplerPropertiesFromGLTF(
-    struct AxOpenGLAPI* OpenGLAPI,
+    struct AxOpenGLAPI* RenderAPI,
     AxTexture* Texture,
     cgltf_sampler* Sampler
 )
@@ -69,8 +52,8 @@ static void SetSamplerPropertiesFromGLTF(
         MinFilter = ConvertGLTFFilter(Sampler->min_filter);
     }
 
-    OpenGLAPI->SetTextureWrapMode(Texture, WrapS, WrapT);
-    OpenGLAPI->SetTextureFilterMode(Texture, MagFilter, MinFilter);
+    RenderAPI->SetTextureWrapMode(Texture, WrapS, WrapT);
+    RenderAPI->SetTextureFilterMode(Texture, MagFilter, MinFilter);
 }
 
 static void LoadFloatAttribute(
@@ -106,7 +89,7 @@ static void LoadFloatAttribute(
 }
 
 static bool LoadModelTexture(
-    struct AxOpenGLAPI* OpenGLAPI,
+    struct AxOpenGLAPI* RenderAPI,
     AxTexture* Texture,
     cgltf_texture_view* TextureView,
     cgltf_data* ModelData,
@@ -175,432 +158,29 @@ static bool LoadModelTexture(
     Texture->Channels = (uint32_t)Channels;
     Texture->IsSRGB = IsSRGB;
 
-    OpenGLAPI->InitTexture(Texture, Pixels);
-    OpenGLAPI->BindTexture(Texture, 0);
-    SetSamplerPropertiesFromGLTF(OpenGLAPI, Texture, Sampler);
+    RenderAPI->InitTexture(Texture, Pixels);
+    RenderAPI->BindTexture(Texture, 0);
+    SetSamplerPropertiesFromGLTF(RenderAPI, Texture, Sampler);
 
     stbi_image_free(Pixels);
     return (true);
 }
 
-///////////////////////////////////////////////////////////////
-// Engine Handle Structure
-///////////////////////////////////////////////////////////////
-
-struct AxEngineHandle {
-    struct AxAPIRegistry* Registry;
-    struct AxOpenGLAPI* OpenGLAPI;
-    struct AxShaderManagerAPI* ShaderManagerAPI;
-    struct AxSceneAPI* SceneAPI;
-    struct AxPlatformAPI* PlatformAPI;
-    struct AxResourceAPI* ResourceAPI;
-
-    // Scene management
-    AxScene* LoadedScene;
-
-    // Model storage (hash table: object name -> AxModel)
-    struct AxHashTable* LoadedModels;
-
-    // Shader compilation cache (dynamic array of shader handles)
-    AxShaderHandle* CompiledShaders;
-};
-
-///////////////////////////////////////////////////////////////
-// Forward Declarations
-///////////////////////////////////////////////////////////////
-
-static AxEngineHandle* EngineCreate(struct AxAPIRegistry* Registry);
-static bool EngineInitialize(AxEngineHandle* Engine);
-static void EngineUpdate(AxEngineHandle* Engine, float DeltaTime);
-static void EngineDestroy(AxEngineHandle* Engine);
-static AxScene* EngineLoadScene(AxEngineHandle* Engine, const char* ScenePath);
-static AxScene* EngineGetScene(AxEngineHandle* Engine);
-static AxCamera* EngineGetSceneCamera(AxEngineHandle* Engine, uint32_t CameraIndex, AxTransform** OutTransform);
-static void EngineUpdateSystems(AxEngineHandle* Engine, float DeltaTime);
-static AxTexture* EngineLoadTexture(AxEngineHandle* Engine, const char* Path, bool IsSRGB);
-static AxMesh* EngineLoadMesh(AxEngineHandle* Engine, const char* Path);
-static bool EngineLoadModel(AxEngineHandle* Engine, const char* Path, AxModel* Model);
-static uint32_t EngineLoadShader(AxEngineHandle* Engine, const char* VertPath, const char* FragPath);
-static void EngineRenderScene(AxEngineHandle* Engine, const AxViewport* Viewport, uint32_t CameraIndex);
-
-// Scene event callback forward declarations
-static void EngineOnLightParsed(const AxLight* Light, void* UserData);
-static void EngineOnMaterialParsed(const AxMaterial* Material, void* UserData);
-static void EngineOnObjectParsed(const AxSceneObject* Object, void* UserData);
-static void EngineOnTransformParsed(const AxTransform* Transform, void* UserData);
-static void EngineOnSceneParsed(const AxScene* Scene, void* UserData);
-
-///////////////////////////////////////////////////////////////
-// Scene Event Callbacks
-///////////////////////////////////////////////////////////////
-
-static void EngineOnLightParsed(const AxLight* Light, void* UserData)
-{
-    // Lights are automatically added to the scene by SceneAPI
-    printf("Engine: Light parsed - %s (Type: %d, Intensity: %.2f)\n",
-           Light->Name, Light->Type, Light->Intensity);
-}
-
-static void EngineOnMaterialParsed(const AxMaterial* Material, void* UserData)
-{
-    AxEngineHandle* Engine = (AxEngineHandle*)UserData;
-    printf("Engine: Material parsed - %s (Vertex: %s, Fragment: %s)\n",
-           Material->Name, Material->VertexShaderPath, Material->FragmentShaderPath);
-
-    // Load and compile shaders immediately when material is parsed
-    if (Material->VertexShaderPath[0] == '\0' || Material->FragmentShaderPath[0] == '\0') {
-        fprintf(stderr, "Engine: Material '%s' has empty shader paths, skipping\n", Material->Name);
-        return;
-    }
-
-    AxShaderHandle ShaderHandle = Engine->ShaderManagerAPI->CreateShader(
-        Material->VertexShaderPath,
-        Material->FragmentShaderPath
-    );
-
-    if (!Engine->ShaderManagerAPI->IsValid(ShaderHandle)) {
-        fprintf(stderr, "Engine: Failed to compile shaders for material '%s'\n", Material->Name);
-        return;
-    }
-
-    // Store compiled shader handle in array
-    ArrayPush(Engine->CompiledShaders, ShaderHandle);
-    printf("Engine: Shaders compiled for material '%s' (Handle index: %zu)\n",
-           Material->Name, ArraySize(Engine->CompiledShaders) - 1);
-}
-
-static void EngineOnObjectParsed(const AxSceneObject* Object, void* UserData)
-{
-    AxEngineHandle* Engine = (AxEngineHandle*)UserData;
-    printf("Engine: Object parsed - %s (Mesh: %s)\n", Object->Name, Object->MeshPath);
-
-    // Automatically load models for objects with mesh paths
-    if (Object->MeshPath[0] != '\0') {
-        AxModel LoadedModel = {0};
-        if (EngineLoadModel(Engine, Object->MeshPath, &LoadedModel)) {
-            // Store model in hash table using object name as key
-            struct AxHashTableAPI* HashTableAPI =
-                (struct AxHashTableAPI*)Engine->Registry->Get(AXON_HASH_TABLE_API_NAME);
-            if (HashTableAPI && Engine->LoadedModels) {
-                // Allocate model on heap to store in hash table
-                AxModel* ModelPtr = (AxModel*)malloc(sizeof(AxModel));
-                if (ModelPtr) {
-                    *ModelPtr = LoadedModel;
-                    HashTableAPI->Set(Engine->LoadedModels, Object->Name, ModelPtr);
-                    printf("Engine: Stored model for object '%s'\n", Object->Name);
-                }
-            }
-        }
-    }
-}
-
-static void EngineOnTransformParsed(const AxTransform* Transform, void* UserData)
-{
-    // Transforms are automatically handled by the scene object hierarchy
-    printf("Engine: Transform parsed - Position(%.2f, %.2f, %.2f)\n",
-           Transform->Translation.X, Transform->Translation.Y, Transform->Translation.Z);
-}
-
-static void EngineOnSceneParsed(const AxScene* Scene, void* UserData)
-{
-    AxEngineHandle* Engine = (AxEngineHandle*)UserData;
-
-    // Assign compiled shaders to scene materials
-    size_t ShaderCount = ArraySize(Engine->CompiledShaders);
-    for (size_t i = 0; i < Scene->MaterialCount && i < ShaderCount; i++) {
-        AxMaterial* Material = &Scene->Materials[i];
-        AxShaderHandle Handle = Engine->CompiledShaders[i];
-
-        if (Engine->ShaderManagerAPI->IsValid(Handle)) {
-            const AxShaderData* ShaderData = Engine->ShaderManagerAPI->GetShaderData(Handle);
-            uint32_t ShaderProgram = Engine->ShaderManagerAPI->GetShaderProgram(Handle);
-
-            Material->ShaderProgram = ShaderProgram;
-            Material->ShaderData = (AxShaderData*)ShaderData;
-        }
-    }
-
-    // Apply scene materials to loaded models
-    struct AxHashTableAPI* HashTableAPI =
-        (struct AxHashTableAPI*)Engine->Registry->Get(AXON_HASH_TABLE_API_NAME);
-    if (HashTableAPI && Engine->LoadedModels) {
-        for (uint32_t objIdx = 0; objIdx < Scene->ObjectCount; objIdx++) {
-            AxSceneObject* Object = &Scene->RootObject[objIdx];
-            if (!Object || Object->MeshPath[0] == '\0') {
-                continue;
-            }
-
-            // Find loaded model for this object
-            AxModel* Model = (AxModel*)HashTableAPI->Find(Engine->LoadedModels, Object->Name);
-            if (!Model || !Model->Materials) {
-                continue;
-            }
-
-            // Find the scene material specified by the object
-            if (Object->MaterialPath[0] == '\0') {
-                continue;
-            }
-
-            AxMaterial* SceneMaterial = Engine->SceneAPI->FindMaterial(Scene, Object->MaterialPath);
-            if (!SceneMaterial || !SceneMaterial->ShaderData) {
-                continue;
-            }
-
-            // Apply scene material to ALL model materials (matches Game.cpp behavior)
-            for (size_t matIdx = 0; matIdx < ArraySize(Model->Materials); matIdx++) {
-                AxMaterial* ModelMat = &Model->Materials[matIdx];
-                ModelMat->ShaderData = SceneMaterial->ShaderData;
-                ModelMat->ShaderProgram = SceneMaterial->ShaderProgram;
-            }
-        }
-    }
-}
-
-///////////////////////////////////////////////////////////////
-// Lifecycle Functions
-///////////////////////////////////////////////////////////////
-
-static AxEngineHandle* EngineCreate(struct AxAPIRegistry* Registry)
-{
-    if (!Registry) {
-        return (NULL);
-    }
-
-    AxEngineHandle* Engine = (AxEngineHandle*)malloc(sizeof(AxEngineHandle));
-    if (!Engine) {
-        return (NULL);
-    }
-
-    memset(Engine, 0, sizeof(AxEngineHandle));
-    Engine->Registry = Registry;
-
-    return (Engine);
-}
-
-static bool EngineInitialize(AxEngineHandle* Engine)
-{
-    if (!Engine || !Engine->Registry) {
-        return (false);
-    }
-
-    // Query required plugin APIs
-    Engine->OpenGLAPI = (struct AxOpenGLAPI*)Engine->Registry->Get(AXON_OPENGL_API_NAME);
-    Engine->ShaderManagerAPI = (struct AxShaderManagerAPI*)Engine->Registry->Get(AXON_SHADER_MANAGER_API_NAME);
-    Engine->PlatformAPI = (struct AxPlatformAPI*)Engine->Registry->Get(AXON_PLATFORM_API_NAME);
-    Engine->ResourceAPI = (struct AxResourceAPI*)Engine->Registry->Get(AXON_RESOURCE_API_NAME);
-
-    // OpenGL API is required
-    if (!Engine->OpenGLAPI) {
-        return (false);
-    }
-
-    // ShaderManagerAPI is required for shader loading
-    if (!Engine->ShaderManagerAPI) {
-        return (false);
-    }
-
-    // ResourceAPI is required for resource management
-    if (!Engine->ResourceAPI) {
-        return (false);
-    }
-
-    // Initialize ResourceAPI
-    Engine->ResourceAPI->Initialize(Engine->Registry);
-
-    // Initialize model storage hash table
-    struct AxHashTableAPI* HashTableAPI = (struct AxHashTableAPI*)Engine->Registry->Get(AXON_HASH_TABLE_API_NAME);
-    if (HashTableAPI) {
-        Engine->LoadedModels = HashTableAPI->CreateTable();
-    }
-
-    // Initialize shader array as NULL (will be allocated on first use)
-    Engine->CompiledShaders = NULL;
-
-    // SceneAPI is optional (may be queried later)
-    Engine->SceneAPI = (struct AxSceneAPI*)Engine->Registry->Get(AXON_SCENE_API_NAME);
-
-    return (true);
-}
-
-static void EngineUpdate(AxEngineHandle* Engine, float DeltaTime)
-{
-    if (!Engine) {
-        return;
-    }
-
-    // Future: Resource streaming, async loading, etc.
-    AXON_UNUSED(DeltaTime);
-}
-
-static void EngineDestroy(AxEngineHandle* Engine)
-{
-    if (!Engine) {
-        return;
-    }
-
-    // Clean up loaded resources
-    if (Engine->CompiledShaders) {
-        // Release all shader handles
-        size_t ShaderCount = ArraySize(Engine->CompiledShaders);
-        for (size_t i = 0; i < ShaderCount; i++) {
-            if (Engine->ShaderManagerAPI && Engine->ShaderManagerAPI->IsValid(Engine->CompiledShaders[i])) {
-                Engine->ShaderManagerAPI->Release(Engine->CompiledShaders[i]);
-            }
-        }
-        ArrayFree(Engine->CompiledShaders);
-    }
-
-    // Clean up hash table
-    if (Engine->LoadedModels) {
-        struct AxHashTableAPI* HashTableAPI = (struct AxHashTableAPI*)Engine->Registry->Get(AXON_HASH_TABLE_API_NAME);
-        if (HashTableAPI) {
-            HashTableAPI->DestroyTable(Engine->LoadedModels);
-        }
-    }
-
-    // Shutdown ResourceAPI
-    if (Engine->ResourceAPI) {
-        Engine->ResourceAPI->Shutdown();
-    }
-
-    free(Engine);
-}
-
-///////////////////////////////////////////////////////////////
-// Orchestration Functions
-///////////////////////////////////////////////////////////////
-
-static AxScene* EngineLoadScene(AxEngineHandle* Engine, const char* ScenePath)
-{
-    if (!Engine || !ScenePath) {
-        return (NULL);
-    }
-
-    // Ensure SceneAPI is available
-    if (!Engine->SceneAPI) {
-        Engine->SceneAPI = (struct AxSceneAPI*)Engine->Registry->Get(AXON_SCENE_API_NAME);
-    }
-
-    if (!Engine->SceneAPI || !Engine->SceneAPI->LoadSceneFromFile) {
-        fprintf(stderr, "AxScene plugin not available or incomplete\n");
-        return (NULL);
-    }
-
-    // Register scene event callbacks before loading
-    AxSceneEvents Events = {0};
-    Events.OnLightParsed = EngineOnLightParsed;
-    Events.OnMaterialParsed = EngineOnMaterialParsed;
-    Events.OnObjectParsed = EngineOnObjectParsed;
-    Events.OnTransformParsed = EngineOnTransformParsed;
-    Events.OnSceneParsed = EngineOnSceneParsed;
-    Events.UserData = Engine;  // Pass Engine as UserData so callbacks can access it
-
-    AxSceneResult Result = Engine->SceneAPI->RegisterEventHandler(&Events);
-    if (Result != AX_SCENE_SUCCESS) {
-        fprintf(stderr, "Engine: Failed to register scene event handler: %s\n",
-                Engine->SceneAPI->GetLastError());
-        return (NULL);
-    }
-
-    // Load scene using AxScene plugin (callbacks will be invoked during parsing)
-    Engine->LoadedScene = Engine->SceneAPI->LoadSceneFromFile(ScenePath);
-
-    // Unregister callbacks after loading
-    Engine->SceneAPI->UnregisterEventHandler(&Events);
-
-    if (!Engine->LoadedScene) {
-        const char* Error = Engine->SceneAPI->GetLastError ? Engine->SceneAPI->GetLastError() : "Unknown error";
-        fprintf(stderr, "Failed to load scene '%s': %s\n", ScenePath, Error);
-        return (NULL);
-    }
-
-    return (Engine->LoadedScene);
-}
-
-static AxScene* EngineGetScene(AxEngineHandle* Engine)
-{
-    if (!Engine) {
-        return (NULL);
-    }
-    return (Engine->LoadedScene);
-}
-
-static AxCamera* EngineGetSceneCamera(AxEngineHandle* Engine, uint32_t CameraIndex, AxTransform** OutTransform)
-{
-    if (!Engine || !Engine->LoadedScene || !Engine->SceneAPI) {
-        return (NULL);
-    }
-
-    AxScene* Scene = Engine->LoadedScene;
-
-    // If scene has cameras, use GetCamera API
-    if (Scene->CameraCount > 0) {
-        return (Engine->SceneAPI->GetCamera(Scene, CameraIndex, OutTransform));
-    }
-
-    // If no cameras exist in scene, create a default camera using SceneAPI
-    if (Scene->CameraCount == 0) {
-        // Ensure OpenGLAPI is available for camera creation
-        if (!Engine->OpenGLAPI) {
-            Engine->OpenGLAPI = (struct AxOpenGLAPI*)Engine->Registry->Get(AXON_OPENGL_API_NAME);
-            if (!Engine->OpenGLAPI) {
-                fprintf(stderr, "Engine: OpenGLAPI not available for camera creation\n");
-                return (NULL);
-            }
-        }
-
-        // Create default camera and initialize it
-        AxCamera DefaultCamera = {0};
-        Engine->OpenGLAPI->CreateCamera(&DefaultCamera);
-
-        // Create default transform
-        AxTransform DefaultTransform = {
-            .Translation = {0.0f, 2.0f, 5.0f},
-            .Rotation = {0.0f, 0.0f, 0.0f, 1.0f},
-            .Scale = {1.0f, 1.0f, 1.0f},
-            .Up = {0.0f, 1.0f, 0.0f}
-        };
-
-        // Add camera to scene using SceneAPI
-        AxSceneResult Result = Engine->SceneAPI->AddCamera(Scene, &DefaultCamera, &DefaultTransform);
-        if (Result != AX_SCENE_SUCCESS) {
-            fprintf(stderr, "Engine: Failed to add default camera to scene\n");
-            return (NULL);
-        }
-
-        // Now get the camera from the scene
-        return (Engine->SceneAPI->GetCamera(Scene, 0, OutTransform));
-    }
-
-    // Requested index out of bounds
-    fprintf(stderr, "Engine: Camera index %u out of bounds (count: %u)\n", CameraIndex, Scene->CameraCount);
-    return (NULL);
-}
-
-static void EngineUpdateSystems(AxEngineHandle* Engine, float DeltaTime)
-{
-    // Alias for Update
-    EngineUpdate(Engine, DeltaTime);
-}
 
 ///////////////////////////////////////////////////////////////
 // Resource Loading Functions
 ///////////////////////////////////////////////////////////////
 
-static AxTexture* EngineLoadTexture(
-    AxEngineHandle* Engine,
-    const char* Path,
-    bool IsSRGB
-)
+AxTexture* AxResource::LoadTexture(const char* Path, bool IsSRGB)
 {
-    if (!Engine || !Engine->OpenGLAPI || !Path) {
-        return (NULL);
+    if (!RenderAPI || !Path) {
+        return (nullptr);
     }
 
     // Allocate texture structure
     AxTexture* Texture = (AxTexture*)malloc(sizeof(AxTexture));
     if (!Texture) {
-        return (NULL);
+        return (nullptr);
     }
 
     memset(Texture, 0, sizeof(AxTexture));
@@ -612,7 +192,7 @@ static AxTexture* EngineLoadTexture(
 
     if (!Pixels) {
         free(Texture);
-        return (NULL);
+        return (nullptr);
     }
 
     Texture->Width = (uint32_t)Width;
@@ -620,7 +200,7 @@ static AxTexture* EngineLoadTexture(
     Texture->Channels = (uint32_t)Channels;
 
     // Initialize texture using OpenGL API
-    Engine->OpenGLAPI->InitTexture(Texture, Pixels);
+    RenderAPI->InitTexture(Texture, Pixels);
 
     // Free image data
     stbi_image_free(Pixels);
@@ -628,37 +208,37 @@ static AxTexture* EngineLoadTexture(
     return (Texture);
 }
 
-static AxMesh* EngineLoadMesh(AxEngineHandle* Engine, const char* Path)
+AxMesh* AxResource::LoadMesh(const char* Path)
 {
-    if (!Engine || !Engine->OpenGLAPI || !Path) {
-        return (NULL);
+    if (!RenderAPI || !Path) {
+        return (nullptr);
     }
 
     // Parse GLTF file
-    cgltf_options Options = {0};
-    cgltf_data* ModelData = NULL;
+    cgltf_options Options = {};
+    cgltf_data* ModelData = nullptr;
     cgltf_result Result = cgltf_parse_file(&Options, Path, &ModelData);
 
     if (Result != cgltf_result_success) {
-        return (NULL);
+        return (nullptr);
     }
 
     Result = cgltf_load_buffers(&Options, ModelData, Path);
     if (Result != cgltf_result_success) {
         cgltf_free(ModelData);
-        return (NULL);
+        return (nullptr);
     }
 
     // Simplified: Load only first mesh (full implementation would load all)
     if (ModelData->meshes_count == 0 || ModelData->meshes[0].primitives_count == 0) {
         cgltf_free(ModelData);
-        return (NULL);
+        return (nullptr);
     }
 
     cgltf_primitive* Primitive = &ModelData->meshes[0].primitives[0];
 
     // Find position accessor to get vertex count
-    cgltf_accessor* PosAccessor = NULL;
+    cgltf_accessor* PosAccessor = nullptr;
     for (cgltf_size i = 0; i < Primitive->attributes_count; ++i) {
         if (Primitive->attributes[i].type == cgltf_attribute_type_position) {
             PosAccessor = Primitive->attributes[i].data;
@@ -668,7 +248,7 @@ static AxMesh* EngineLoadMesh(AxEngineHandle* Engine, const char* Path)
 
     if (!PosAccessor) {
         cgltf_free(ModelData);
-        return (NULL);
+        return (nullptr);
     }
 
     size_t VertexCount = PosAccessor->count;
@@ -678,7 +258,7 @@ static AxMesh* EngineLoadMesh(AxEngineHandle* Engine, const char* Path)
     AxVertex* Vertices = (AxVertex*)malloc(sizeof(AxVertex) * VertexCount);
     if (!Vertices) {
         cgltf_free(ModelData);
-        return (NULL);
+        return (nullptr);
     }
     memset(Vertices, 0, sizeof(AxVertex) * VertexCount);
 
@@ -730,7 +310,7 @@ static AxMesh* EngineLoadMesh(AxEngineHandle* Engine, const char* Path)
     memset(Mesh, 0, sizeof(AxMesh));
 
     // Initialize mesh with OpenGL buffers
-    Engine->OpenGLAPI->InitMesh(Mesh, Vertices, Indices, (uint32_t)VertexCount, (uint32_t)IndexCount);
+    RenderAPI->InitMesh(Mesh, Vertices, Indices, (uint32_t)VertexCount, (uint32_t)IndexCount);
 
     snprintf(Mesh->Name, sizeof(Mesh->Name), "%s", ModelData->meshes[0].name ? ModelData->meshes[0].name : "Mesh");
 
@@ -743,217 +323,204 @@ static AxMesh* EngineLoadMesh(AxEngineHandle* Engine, const char* Path)
     return (Mesh);
 }
 
-static uint32_t EngineLoadShader(
-    AxEngineHandle* Engine,
-    const char* VertPath,
-    const char* FragPath
-)
+uint32_t AxResource::LoadShader(const char* VertPath, const char* FragPath)
 {
-    if (!Engine || !Engine->ShaderManagerAPI || !VertPath || !FragPath) {
+    if (!ShaderManagerAPI || !VertPath || !FragPath) {
         return (0);
     }
 
     // Use ShaderManagerAPI to create shader
-    AxShaderHandle ShaderHandle = Engine->ShaderManagerAPI->CreateShader(VertPath, FragPath);
+    AxShaderHandle ShaderHandle = ShaderManagerAPI->CreateShader(VertPath, FragPath);
 
-    if (!Engine->ShaderManagerAPI->IsValid(ShaderHandle)) {
+    if (!ShaderManagerAPI->IsValid(ShaderHandle)) {
         return (0);
     }
 
-    uint32_t Program = Engine->ShaderManagerAPI->GetShaderProgram(ShaderHandle);
+    uint32_t Program = ShaderManagerAPI->GetShaderProgram(ShaderHandle);
     return (Program);
 }
 
-static void EngineRenderScene(
-    AxEngineHandle* Engine,
-    const AxViewport* Viewport,
-    uint32_t CameraIndex
-)
-{
-    if (!Engine || !Engine->LoadedScene || !Viewport || !Engine->OpenGLAPI) {
-        return;
-    }
+// void AxResource::RenderScene(const AxViewport* Viewporta, uint32_t CameraIndex)
+// {
+//     if (!Scene_ || !Viewport || !RenderAPI) {
+//         return;
+//     }
 
-    // Get camera and transform
-    AxTransform* CameraTransform = NULL;
-    AxCamera* Camera = EngineGetSceneCamera(Engine, CameraIndex, &CameraTransform);
-    if (!Camera || !CameraTransform) {
-        return;
-    }
+//     // Get camera and transform
+//     AxTransform* CameraTransform = NULL;
+//     AxCamera* Camera = GetSceneCamera(CameraIndex, &CameraTransform);
+//     if (!Camera || !CameraTransform) {
+//         return;
+//     }
 
-    // Compute view and projection matrices
-    AxMat4x4 ViewMatrix = CreateViewMatrix(CameraTransform);
-    AxMat4x4 ProjectionMatrix = Engine->OpenGLAPI->CameraGetProjectionMatrix(Camera);
-    AxVec3 ViewPos = CameraTransform->Translation;
+//     // Compute view and projection matrices
+//     AxMat4x4 ViewMatrix = CreateViewMatrix(CameraTransform);
+//     AxMat4x4 ProjectionMatrix = RenderAPI->CameraGetProjectionMatrix(Camera);
+//     AxVec3 ViewPos = CameraTransform->Translation;
 
-    // Get scene light count (max 8 lights supported by shader)
-    int LightCount = 0;
-    if (Engine->LoadedScene->Lights) {
-        LightCount = (Engine->LoadedScene->LightCount < 8) ? Engine->LoadedScene->LightCount : 8;
-    }
+//     // Get scene light count (max 8 lights supported by shader)
+//     int LightCount = 0;
+//     if (Scene_->Lights) {
+//         LightCount = (Scene_->LightCount < 8) ? Scene_->LightCount : 8;
+//     }
 
-    // Enable blending for transparent objects
-    Engine->OpenGLAPI->EnableBlending(true);
-    Engine->OpenGLAPI->SetBlendFunction(AX_BLEND_SRC_ALPHA, AX_BLEND_ONE_MINUS_SRC_ALPHA);
+//     // Enable blending for transparent objects
+//     RenderAPI->EnableBlending(true);
+//     RenderAPI->SetBlendFunction(AX_BLEND_SRC_ALPHA, AX_BLEND_ONE_MINUS_SRC_ALPHA);
 
-    // Get hash table API for looking up loaded models
-    struct AxHashTableAPI* HashTableAPI =
-        (struct AxHashTableAPI*)Engine->Registry->Get(AXON_HASH_TABLE_API_NAME);
-    if (!HashTableAPI || !Engine->LoadedModels) {
-        Engine->OpenGLAPI->EnableBlending(false);
-        return;
-    }
+//     // Get hash table API for looking up loaded models
+//     struct AxHashTableAPI* HashTableAPI =
+//         (struct AxHashTableAPI*)APIRegistry->Get(AXON_HASH_TABLE_API_NAME);
+//     if (!HashTableAPI || !LoadedModels) {
+//         RenderAPI->EnableBlending(false);
+//         return;
+//     }
 
-    // Iterate through all scene objects
-    for (uint32_t objIdx = 0; objIdx < Engine->LoadedScene->ObjectCount; objIdx++) {
-        AxSceneObject* Object = &Engine->LoadedScene->RootObject[objIdx];
-        if (!Object || Object->MeshPath[0] == '\0') {
-            continue;
-        }
+//     // Iterate through all scene objects
+//     for (uint32_t objIdx = 0; objIdx < Scene_->ObjectCount; objIdx++) {
+//         AxSceneObject* Object = &Scene_->RootObject[objIdx];
+//         if (!Object || Object->MeshPath[0] == '\0') {
+//             continue;
+//         }
 
-        // Look up loaded model from hash table
-        AxModel* Model = (AxModel*)HashTableAPI->Find(Engine->LoadedModels, Object->Name);
-        if (!Model || !Model->Meshes) {
-            continue;
-        }
+//         // Look up loaded model from hash table
+//         AxModel* Model = (AxModel*)HashTableAPI->Find(LoadedModels, Object->Name);
+//         if (!Model || !Model->Meshes) {
+//             continue;
+//         }
 
-        // Render all meshes in the model
-        for (int meshIdx = 0; meshIdx < ArraySize(Model->Meshes); meshIdx++) {
-            AxMesh* Mesh = &Model->Meshes[meshIdx];
+//         // Render all meshes in the model
+//         for (int meshIdx = 0; meshIdx < ArraySize(Model->Meshes); meshIdx++) {
+//             AxMesh* Mesh = &Model->Meshes[meshIdx];
 
-            // Use MaterialDesc system
-            if (!Model->MaterialDescs || Mesh->MaterialIndex >= ArraySize(Model->MaterialDescs)) {
-                continue;  // No material available
-            }
+//             // Use MaterialDesc system
+//             if (!Model->MaterialDescs || Mesh->MaterialIndex >= ArraySize(Model->MaterialDescs)) {
+//                 continue;  // No material available
+//             }
 
-            AxMaterialDesc* MatDesc = &Model->MaterialDescs[Mesh->MaterialIndex];
+//             AxMaterialDesc* MatDesc = &Model->MaterialDescs[Mesh->MaterialIndex];
 
-            // Get shader data from legacy material array (temporary until shader management is refactored)
-            AxShaderData* ShaderData = NULL;
-            if (Model->Materials && Mesh->MaterialIndex < ArraySize(Model->Materials)) {
-                ShaderData = (AxShaderData*)Model->Materials[Mesh->MaterialIndex].ShaderData;
-            }
+//             // Get shader data from legacy material array (temporary until shader management is refactored)
+//             AxShaderData* ShaderData = NULL;
+//             if (Model->Materials && Mesh->MaterialIndex < ArraySize(Model->Materials)) {
+//                 ShaderData = (AxShaderData*)Model->Materials[Mesh->MaterialIndex].ShaderData;
+//             }
 
-            if (!ShaderData) {
-                continue;
-            }
+//             if (!ShaderData) {
+//                 continue;
+//             }
 
-            // Transform matrices
-            AxMat4x4 ModelMatrix = Model->Transforms[Mesh->TransformIndex];
-            Engine->OpenGLAPI->SetUniform(ShaderData, "model", &ModelMatrix);
-            Engine->OpenGLAPI->SetUniform(ShaderData, "view", &ViewMatrix);
-            Engine->OpenGLAPI->SetUniform(ShaderData, "projection", &ProjectionMatrix);
-            Engine->OpenGLAPI->SetUniform(ShaderData, "viewPos", &ViewPos);
+//             // Transform matrices
+//             AxMat4x4 ModelMatrix = Model->Transforms[Mesh->TransformIndex];
+//             RenderAPI->SetUniform(ShaderData, "model", &ModelMatrix);
+//             RenderAPI->SetUniform(ShaderData, "view", &ViewMatrix);
+//             RenderAPI->SetUniform(ShaderData, "projection", &ProjectionMatrix);
+//             RenderAPI->SetUniform(ShaderData, "viewPos", &ViewPos);
 
-            // Use MaterialDesc PBR system
-            if (MatDesc->Type != AX_MATERIAL_TYPE_PBR) {
-                continue;  // Only PBR materials supported for now
-            }
+//             // Use MaterialDesc PBR system
+//             if (MatDesc->Type != AX_MATERIAL_TYPE_PBR) {
+//                 continue;  // Only PBR materials supported for now
+//             }
 
-            const AxPBRMaterial* PBR = &MatDesc->PBR;
+//             const AxPBRMaterial* PBR = &MatDesc->PBR;
 
-            // Bind textures to their respective slots
-            // Base color texture (slot 0)
-            if (PBR->BaseColorTexture >= 0 && Model->Textures &&
-                PBR->BaseColorTexture < (int32_t)ArraySize(Model->Textures)) {
-                AxTexture* Tex = &Model->Textures[PBR->BaseColorTexture];
-                if (Tex->ID != 0) {
-                    Engine->OpenGLAPI->BindTexture(Tex, 0);
-                }
-            }
+//             // Bind textures to their respective slots
+//             // Base color texture (slot 0)
+//             if (PBR->BaseColorTexture >= 0 && Model->Textures &&
+//                 PBR->BaseColorTexture < (int32_t)ArraySize(Model->Textures)) {
+//                 AxTexture* Tex = &Model->Textures[PBR->BaseColorTexture];
+//                 if (Tex->ID != 0) {
+//                     RenderAPI->BindTexture(Tex, 0);
+//                 }
+//             }
 
-            // Normal texture (slot 1)
-            if (PBR->NormalTexture >= 0 && Model->Textures &&
-                PBR->NormalTexture < (int32_t)ArraySize(Model->Textures)) {
-                AxTexture* Tex = &Model->Textures[PBR->NormalTexture];
-                if (Tex->ID != 0) {
-                    Engine->OpenGLAPI->BindTexture(Tex, 1);
-                }
-            }
+//             // Normal texture (slot 1)
+//             if (PBR->NormalTexture >= 0 && Model->Textures &&
+//                 PBR->NormalTexture < (int32_t)ArraySize(Model->Textures)) {
+//                 AxTexture* Tex = &Model->Textures[PBR->NormalTexture];
+//                 if (Tex->ID != 0) {
+//                     RenderAPI->BindTexture(Tex, 1);
+//                 }
+//             }
 
-            // Metallic-Roughness texture (slot 2)
-            if (PBR->MetallicRoughnessTexture >= 0 && Model->Textures &&
-                PBR->MetallicRoughnessTexture < (int32_t)ArraySize(Model->Textures)) {
-                AxTexture* Tex = &Model->Textures[PBR->MetallicRoughnessTexture];
-                if (Tex->ID != 0) {
-                    Engine->OpenGLAPI->BindTexture(Tex, 2);
-                }
-            }
+//             // Metallic-Roughness texture (slot 2)
+//             if (PBR->MetallicRoughnessTexture >= 0 && Model->Textures &&
+//                 PBR->MetallicRoughnessTexture < (int32_t)ArraySize(Model->Textures)) {
+//                 AxTexture* Tex = &Model->Textures[PBR->MetallicRoughnessTexture];
+//                 if (Tex->ID != 0) {
+//                     RenderAPI->BindTexture(Tex, 2);
+//                 }
+//             }
 
-            // Emissive texture (slot 3)
-            if (PBR->EmissiveTexture >= 0 && Model->Textures &&
-                PBR->EmissiveTexture < (int32_t)ArraySize(Model->Textures)) {
-                AxTexture* Tex = &Model->Textures[PBR->EmissiveTexture];
-                if (Tex->ID != 0) {
-                    Engine->OpenGLAPI->BindTexture(Tex, 3);
-                }
-            }
+//             // Emissive texture (slot 3)
+//             if (PBR->EmissiveTexture >= 0 && Model->Textures &&
+//                 PBR->EmissiveTexture < (int32_t)ArraySize(Model->Textures)) {
+//                 AxTexture* Tex = &Model->Textures[PBR->EmissiveTexture];
+//                 if (Tex->ID != 0) {
+//                     RenderAPI->BindTexture(Tex, 3);
+//                 }
+//             }
 
-            // Occlusion texture (slot 4)
-            if (PBR->OcclusionTexture >= 0 && Model->Textures &&
-                PBR->OcclusionTexture < (int32_t)ArraySize(Model->Textures)) {
-                AxTexture* Tex = &Model->Textures[PBR->OcclusionTexture];
-                if (Tex->ID != 0) {
-                    Engine->OpenGLAPI->BindTexture(Tex, 4);
-                }
-            }
+//             // Occlusion texture (slot 4)
+//             if (PBR->OcclusionTexture >= 0 && Model->Textures &&
+//                 PBR->OcclusionTexture < (int32_t)ArraySize(Model->Textures)) {
+//                 AxTexture* Tex = &Model->Textures[PBR->OcclusionTexture];
+//                 if (Tex->ID != 0) {
+//                     RenderAPI->BindTexture(Tex, 4);
+//                 }
+//             }
 
-            // Set all PBR material uniforms, texture samplers, and lights in one efficient call
-            // This replaces ~25 individual SetUniform calls and eliminates uniform warnings
-            Engine->OpenGLAPI->SetPBRMaterialUniforms(ShaderData, PBR, Engine->LoadedScene->Lights, LightCount);
+//             // Set all PBR material uniforms, texture samplers, and lights in one efficient call
+//             // This replaces ~25 individual SetUniform calls and eliminates uniform warnings
+//             RenderAPI->SetPBRMaterialUniforms(ShaderData, PBR, Scene_->Lights, LightCount);
 
-            // Configure depth and blending based on alpha mode
-            switch (PBR->AlphaMode) {
-                case AX_ALPHA_MODE_OPAQUE:
-                    Engine->OpenGLAPI->EnableBlending(false);
-                    Engine->OpenGLAPI->SetDepthWrite(true);
-                    break;
+//             // Configure depth and blending based on alpha mode
+//             switch (PBR->AlphaMode) {
+//                 case AX_ALPHA_MODE_OPAQUE:
+//                     RenderAPI->EnableBlending(false);
+//                     RenderAPI->SetDepthWrite(true);
+//                     break;
 
-                case AX_ALPHA_MODE_MASK:
-                    Engine->OpenGLAPI->EnableBlending(false);
-                    Engine->OpenGLAPI->SetDepthWrite(true);
-                    break;
+//                 case AX_ALPHA_MODE_MASK:
+//                     RenderAPI->EnableBlending(false);
+//                     RenderAPI->SetDepthWrite(true);
+//                     break;
 
-                case AX_ALPHA_MODE_BLEND:
-                    Engine->OpenGLAPI->EnableBlending(true);
-                    Engine->OpenGLAPI->SetBlendFunction(AX_BLEND_SRC_ALPHA, AX_BLEND_ONE_MINUS_SRC_ALPHA);
-                    Engine->OpenGLAPI->SetDepthWrite(false);
-                    break;
+//                 case AX_ALPHA_MODE_BLEND:
+//                     RenderAPI->EnableBlending(true);
+//                     RenderAPI->SetBlendFunction(AX_BLEND_SRC_ALPHA, AX_BLEND_ONE_MINUS_SRC_ALPHA);
+//                     RenderAPI->SetDepthWrite(false);
+//                     break;
 
-                default:
-                    Engine->OpenGLAPI->EnableBlending(false);
-                    Engine->OpenGLAPI->SetDepthWrite(true);
-                    break;
-            }
+//                 default:
+//                     RenderAPI->EnableBlending(false);
+//                     RenderAPI->SetDepthWrite(true);
+//                     break;
+//             }
 
-            // Double-sided rendering
-            if (PBR->DoubleSided) {
-                Engine->OpenGLAPI->SetCullMode(false);  // Disable backface culling
-            } else {
-                Engine->OpenGLAPI->SetCullMode(true);   // Enable backface culling
-            }
+//             // Double-sided rendering
+//             if (PBR->DoubleSided) {
+//                 RenderAPI->SetCullMode(false);  // Disable backface culling
+//             } else {
+//                 RenderAPI->SetCullMode(true);   // Enable backface culling
+//             }
 
-            // Render this mesh
-            Engine->OpenGLAPI->Render((AxViewport*)Viewport, Mesh, ShaderData);
+//             // Render this mesh
+//             RenderAPI->Render((AxViewport*)Viewport, Mesh, ShaderData);
 
-            // Restore defaults for next mesh
-            Engine->OpenGLAPI->SetDepthWrite(true);
-            Engine->OpenGLAPI->EnableBlending(false);
-            Engine->OpenGLAPI->SetCullMode(true);  // Re-enable culling by default
-        }
-    }
+//             // Restore defaults for next mesh
+//             RenderAPI->SetDepthWrite(true);
+//             RenderAPI->EnableBlending(false);
+//             RenderAPI->SetCullMode(true);  // Re-enable culling by default
+//         }
+//     }
 
-    // Restore blending state
-    Engine->OpenGLAPI->EnableBlending(false);
-}
+//     // Restore blending state
+//     RenderAPI->EnableBlending(false);
+// }
 
 // Helper function to recursively compute node transforms with parent hierarchy
-static void ComputeNodeTransform(
-    cgltf_size NodeIndex,
-    cgltf_data* Data,
-    AxMat4x4* Transforms,
-    bool* Processed
-)
+void ComputeNodeTransform(cgltf_size NodeIndex, cgltf_data* Data, AxMat4x4* Transforms, bool* Processed)
 {
     if (NodeIndex >= Data->nodes_count || Processed[NodeIndex]) {
         return;
@@ -1024,9 +591,9 @@ static void ComputeNodeTransform(
     Processed[NodeIndex] = true;
 }
 
-static bool EngineLoadModel(AxEngineHandle* Engine, const char* Path, AxModel* Model)
+bool AxResource::LoadModel(const char* Path, AxModel* Model)
 {
-    if (!Engine || !Engine->OpenGLAPI || !Path || !Model) {
+    if (!RenderAPI || !Path || !Model) {
         return (false);
     }
 
@@ -1034,7 +601,7 @@ static bool EngineLoadModel(AxEngineHandle* Engine, const char* Path, AxModel* M
     memset(Model, 0, sizeof(AxModel));
 
     // Parse GLTF file
-    cgltf_options Options = {0};
+    cgltf_options Options = {};
     cgltf_data* ModelData = NULL;
     cgltf_result Result = cgltf_parse_file(&Options, Path, &ModelData);
 
@@ -1051,7 +618,7 @@ static bool EngineLoadModel(AxEngineHandle* Engine, const char* Path, AxModel* M
     }
 
     // Get base path for texture loading
-    struct AxPlatformAPI* PlatformAPI = Engine->Registry->Get(AXON_PLATFORM_API_NAME);
+    struct AxPlatformAPI* PlatformAPI = static_cast<AxPlatformAPI *>(APIRegistry->Get(AXON_PLATFORM_API_NAME));
     if (!PlatformAPI || !PlatformAPI->PathAPI) {
         fprintf(stderr, "PlatformAPI not available for path operations\n");
         cgltf_free(ModelData);
@@ -1096,7 +663,7 @@ static bool EngineLoadModel(AxEngineHandle* Engine, const char* Path, AxModel* M
         // Load Base Color Texture (sRGB)
         if (pbr->base_color_texture.texture) {
             AxTexture BaseTexture = {0};
-            if (LoadModelTexture(Engine->OpenGLAPI, &BaseTexture, &pbr->base_color_texture, ModelData, BasePath, true)) {
+            if (LoadModelTexture(RenderAPI, &BaseTexture, &pbr->base_color_texture, ModelData, BasePath, true)) {
                 ArrayPush(Model->Textures, BaseTexture);
                 AxMat.BaseColorTexture = ArraySize(Model->Textures) - 1;
             } else {
@@ -1109,7 +676,7 @@ static bool EngineLoadModel(AxEngineHandle* Engine, const char* Path, AxModel* M
         // Load Normal Texture (linear)
         if (GltfMaterial->normal_texture.texture) {
             AxTexture NormalTexture = {0};
-            if (LoadModelTexture(Engine->OpenGLAPI, &NormalTexture, (cgltf_texture_view*)&GltfMaterial->normal_texture, ModelData, BasePath, false)) {
+            if (LoadModelTexture(RenderAPI, &NormalTexture, (cgltf_texture_view*)&GltfMaterial->normal_texture, ModelData, BasePath, false)) {
                 ArrayPush(Model->Textures, NormalTexture);
                 AxMat.NormalTexture = ArraySize(Model->Textures) - 1;
             } else {
@@ -1122,7 +689,7 @@ static bool EngineLoadModel(AxEngineHandle* Engine, const char* Path, AxModel* M
         // Load Metallic-Roughness Texture (linear)
         if (pbr->metallic_roughness_texture.texture) {
             AxTexture MetallicRoughnessTexture = {0};
-            if (LoadModelTexture(Engine->OpenGLAPI, &MetallicRoughnessTexture, &pbr->metallic_roughness_texture, ModelData, BasePath, false)) {
+            if (LoadModelTexture(RenderAPI, &MetallicRoughnessTexture, &pbr->metallic_roughness_texture, ModelData, BasePath, false)) {
                 ArrayPush(Model->Textures, MetallicRoughnessTexture);
                 AxMat.MetallicRoughnessTexture = ArraySize(Model->Textures) - 1;
             } else {
@@ -1158,7 +725,7 @@ static bool EngineLoadModel(AxEngineHandle* Engine, const char* Path, AxModel* M
         // Load emissive texture if present
         if (GltfMaterial->emissive_texture.texture) {
             AxTexture EmissiveTexture = {0};
-            if (LoadModelTexture(Engine->OpenGLAPI, &EmissiveTexture, (cgltf_texture_view*)&GltfMaterial->emissive_texture, ModelData, BasePath, true)) {
+            if (LoadModelTexture(RenderAPI, &EmissiveTexture, (cgltf_texture_view*)&GltfMaterial->emissive_texture, ModelData, BasePath, true)) {
                 ArrayPush(Model->Textures, EmissiveTexture);
                 MatDesc.PBR.EmissiveTexture = ArraySize(Model->Textures) - 1;
             } else {
@@ -1171,7 +738,7 @@ static bool EngineLoadModel(AxEngineHandle* Engine, const char* Path, AxModel* M
         // Load occlusion texture if present
         if (GltfMaterial->occlusion_texture.texture) {
             AxTexture OcclusionTexture = {0};
-            if (LoadModelTexture(Engine->OpenGLAPI, &OcclusionTexture, (cgltf_texture_view*)&GltfMaterial->occlusion_texture, ModelData, BasePath, false)) {
+            if (LoadModelTexture(RenderAPI, &OcclusionTexture, (cgltf_texture_view*)&GltfMaterial->occlusion_texture, ModelData, BasePath, false)) {
                 ArrayPush(Model->Textures, OcclusionTexture);
                 MatDesc.PBR.OcclusionTexture = ArraySize(Model->Textures) - 1;
             } else {
@@ -1439,7 +1006,7 @@ static bool EngineLoadModel(AxEngineHandle* Engine, const char* Path, AxModel* M
 
             // Create mesh structure
             AxMesh Mesh = {0};
-            Engine->OpenGLAPI->InitMesh(&Mesh, Vertices, Indices, (uint32_t)VertexCount, (uint32_t)IndexCount);
+            RenderAPI->InitMesh(&Mesh, Vertices, Indices, (uint32_t)VertexCount, (uint32_t)IndexCount);
             snprintf(Mesh.Name, sizeof(Mesh.Name), "%s", GltfMesh->name ? GltfMesh->name : "Mesh");
 
             // Assign material index
@@ -1487,36 +1054,225 @@ static bool EngineLoadModel(AxEngineHandle* Engine, const char* Path, AxModel* M
     return (true);
 }
 
-///////////////////////////////////////////////////////////////
-// API Structure and Plugin Interface
-///////////////////////////////////////////////////////////////
-
-static struct AxEngineAPI *EngineAPI = &(struct AxEngineAPI) {
-    .Create = EngineCreate,
-    .Initialize = EngineInitialize,
-    .Update = EngineUpdate,
-    .Destroy = EngineDestroy,
-    .LoadScene = EngineLoadScene,
-    .GetScene = EngineGetScene,
-    .GetSceneCamera = EngineGetSceneCamera,
-    .UpdateSystems = EngineUpdateSystems,
-    .LoadTexture = EngineLoadTexture,
-    .LoadMesh = EngineLoadMesh,
-    .LoadModel = EngineLoadModel,
-    .LoadShader = EngineLoadShader,
-    .RenderScene = EngineRenderScene
-};
-
-AXON_DLL_EXPORT void LoadPlugin(struct AxAPIRegistry* APIRegistry)
+AxCamera* AxResource::GetSceneCamera(uint32_t CameraIndex, AxTransform** OutTransform)
 {
-    if (APIRegistry) {
-        APIRegistry->Set(AX_ENGINE_API_NAME, EngineAPI, sizeof(struct AxEngineAPI));
+    if (!Scene_ || !SceneAPI) {
+        return (nullptr);
     }
+
+    // If scene has cameras, use GetCamera API
+    if (Scene_->CameraCount > 0) {
+        return (SceneAPI->GetCamera(Scene_, CameraIndex, OutTransform));
+    }
+
+    // If no cameras exist in scene, create a default camera using SceneAPI
+    if (Scene_->CameraCount == 0) {
+        // Ensure RenderAPI is available for camera creation
+        if (!RenderAPI) {
+            RenderAPI = static_cast<AxOpenGLAPI *>(APIRegistry->Get(AXON_OPENGL_API_NAME));
+            if (!RenderAPI) {
+                fprintf(stderr, "Engine: RenderAPI not available for camera creation\n");
+                return (nullptr);
+            }
+        }
+
+        // Create default camera and initialize it
+        AxCamera DefaultCamera = {0};
+        RenderAPI->CreateCamera(&DefaultCamera);
+
+        // Create default transform
+        AxTransform DefaultTransform = {
+            .Translation = {0.0f, 2.0f, 5.0f},
+            .Rotation = {0.0f, 0.0f, 0.0f, 1.0f},
+            .Scale = {1.0f, 1.0f, 1.0f},
+            .Up = {0.0f, 1.0f, 0.0f}
+        };
+
+        // Add camera to scene using SceneAPI
+        AxSceneResult Result = SceneAPI->AddCamera(Scene_, &DefaultCamera, &DefaultTransform);
+        if (Result != AX_SCENE_SUCCESS) {
+            fprintf(stderr, "Engine: Failed to add default camera to scene\n");
+            return (NULL);
+        }
+
+        // Now get the camera from the scene
+        return (SceneAPI->GetCamera(Scene_, 0, OutTransform));
+    }
+
+    // Requested index out of bounds
+    fprintf(stderr, "Engine: Camera index %u out of bounds (count: %u)\n", CameraIndex, Scene_->CameraCount);
+    return (NULL);
 }
 
-AXON_DLL_EXPORT void UnloadPlugin(struct AxAPIRegistry* APIRegistry)
+AxScene* AxResource::LoadScene(const char* ScenePath)
 {
-    if (APIRegistry) {
-        APIRegistry->Set(AX_ENGINE_API_NAME, NULL, 0);
+    if (!ScenePath) {
+        return (NULL);
     }
+
+    // Ensure SceneAPI is available
+    if (!SceneAPI) {
+        SceneAPI = (struct AxSceneAPI*)APIRegistry->Get(AXON_SCENE_API_NAME);
+    }
+
+    if (!SceneAPI || !SceneAPI->LoadSceneFromFile) {
+        fprintf(stderr, "AxScene plugin not available or incomplete\n");
+        return (NULL);
+    }
+
+    // Register scene event callbacks before loading
+    AxSceneEvents Events = {};
+    // Events.OnLightParsed = EngineOnLightParsed;
+    // Events.OnMaterialParsed = EngineOnMaterialParsed;
+    // Events.OnObjectParsed = EngineOnObjectParsed;
+    // Events.OnTransformParsed = EngineOnTransformParsed;
+    // Events.OnSceneParsed = EngineOnSceneParsed;
+    Events.UserData = this;  // Pass Engine as UserData so callbacks can access it
+
+    AxSceneResult Result = SceneAPI->RegisterEventHandler(&Events);
+    if (Result != AX_SCENE_SUCCESS) {
+        fprintf(stderr, "Engine: Failed to register scene event handler: %s\n",
+                SceneAPI->GetLastError());
+        return (NULL);
+    }
+
+    // Load scene using AxScene plugin (callbacks will be invoked during parsing)
+    Scene_ = SceneAPI->LoadSceneFromFile(ScenePath);
+
+    // Unregister callbacks after loading
+    SceneAPI->UnregisterEventHandler(&Events);
+
+    if (!Scene_) {
+        const char* Error = SceneAPI->GetLastError ? SceneAPI->GetLastError() : "Unknown error";
+        fprintf(stderr, "Failed to load scene '%s': %s\n", ScenePath, Error);
+        return (NULL);
+    }
+
+    return (Scene_);
 }
+
+///////////////////////////////////////////////////////////////
+// Scene Event Callbacks
+///////////////////////////////////////////////////////////////
+
+// static void EngineOnLightParsed(const AxLight* Light, void* UserData)
+// {
+//     // Lights are automatically added to the scene by SceneAPI
+//     printf("Engine: Light parsed - %s (Type: %d, Intensity: %.2f)\n",
+//            Light->Name, Light->Type, Light->Intensity);
+// }
+
+// static void EngineOnMaterialParsed(const AxMaterial* Material, void* UserData)
+// {
+//     AxResource* Engine = static_cast<AxResource *>(UserData);
+//     printf("Engine: Material parsed - %s (Vertex: %s, Fragment: %s)\n",
+//            Material->Name, Material->VertexShaderPath, Material->FragmentShaderPath);
+
+//     // Load and compile shaders immediately when material is parsed
+//     if (Material->VertexShaderPath[0] == '\0' || Material->FragmentShaderPath[0] == '\0') {
+//         fprintf(stderr, "Engine: Material '%s' has empty shader paths, skipping\n", Material->Name);
+//         return;
+//     }
+
+//     AxShaderHandle ShaderHandle = ShaderManagerAPI->CreateShader(
+//         Material->VertexShaderPath,
+//         Material->FragmentShaderPath
+//     );
+
+//     if (!ShaderManagerAPI->IsValid(ShaderHandle)) {
+//         fprintf(stderr, "Engine: Failed to compile shaders for material '%s'\n", Material->Name);
+//         return;
+//     }
+
+//     // Store compiled shader handle in array
+//     ArrayPush(CompiledShaders, ShaderHandle);
+//     printf("Engine: Shaders compiled for material '%s' (Handle index: %zu)\n",
+//            Material->Name, ArraySize(CompiledShaders) - 1);
+// }
+
+// static void EngineOnObjectParsed(const AxSceneObject* Object, void* UserData)
+// {
+//     AxResource* Engine = static_cast<AxResource *>(UserData);
+//     printf("Engine: Object parsed - %s (Mesh: %s)\n", Object->Name, Object->MeshPath);
+
+//     // Automatically load models for objects with mesh paths
+//     if (Object->MeshPath[0] != '\0') {
+//         AxModel LoadedModel = {0};
+//         if (LoadModel(Engine, Object->MeshPath, &LoadedModel)) {
+//             // Store model in hash table using object name as key
+//             struct AxHashTableAPI* HashTableAPI =
+//                 static_cast<AxHashTable *>(APIRegistry->Get(AXON_HASH_TABLE_API_NAME));
+//             if (HashTableAPI && LoadedModels) {
+//                 // Allocate model on heap to store in hash table
+//                 AxModel* ModelPtr = (AxModel*)malloc(sizeof(AxModel));
+//                 if (ModelPtr) {
+//                     *ModelPtr = LoadedModel;
+//                     HashTableAPI->Set(LoadedModels, Object->Name, ModelPtr);
+//                     printf("Engine: Stored model for object '%s'\n", Object->Name);
+//                 }
+//             }
+//         }
+//     }
+// }
+
+// static void EngineOnTransformParsed(const AxTransform* Transform, void* UserData)
+// {
+//     // Transforms are automatically handled by the scene object hierarchy
+//     printf("Engine: Transform parsed - Position(%.2f, %.2f, %.2f)\n",
+//            Transform->Translation.X, Transform->Translation.Y, Transform->Translation.Z);
+// }
+
+// static void EngineOnSceneParsed(const AxScene* Scene, void* UserData)
+// {
+//     AxResourceHandle* Engine = (AxResourceHandle*)UserData;
+
+//     // Assign compiled shaders to scene materials
+//     size_t ShaderCount = ArraySize(CompiledShaders);
+//     for (size_t i = 0; i < Scene->MaterialCount && i < ShaderCount; i++) {
+//         AxMaterial* Material = &Scene->Materials[i];
+//         AxShaderHandle Handle = CompiledShaders[i];
+
+//         if (ShaderManagerAPI->IsValid(Handle)) {
+//             const AxShaderData* ShaderData = ShaderManagerAPI->GetShaderData(Handle);
+//             uint32_t ShaderProgram = ShaderManagerAPI->GetShaderProgram(Handle);
+
+//             Material->ShaderProgram = ShaderProgram;
+//             Material->ShaderData = (AxShaderData*)ShaderData;
+//         }
+//     }
+
+//     // Apply scene materials to loaded models
+//     struct AxHashTableAPI* HashTableAPI =
+//         (struct AxHashTableAPI*)Registry->Get(AXON_HASH_TABLE_API_NAME);
+//     if (HashTableAPI && LoadedModels) {
+//         for (uint32_t objIdx = 0; objIdx < Scene->ObjectCount; objIdx++) {
+//             AxSceneObject* Object = &Scene->RootObject[objIdx];
+//             if (!Object || Object->MeshPath[0] == '\0') {
+//                 continue;
+//             }
+
+//             // Find loaded model for this object
+//             AxModel* Model = (AxModel*)HashTableAPI->Find(LoadedModels, Object->Name);
+//             if (!Model || !Model->Materials) {
+//                 continue;
+//             }
+
+//             // Find the scene material specified by the object
+//             if (Object->MaterialPath[0] == '\0') {
+//                 continue;
+//             }
+
+//             AxMaterial* SceneMaterial = SceneAPI->FindMaterial(Scene, Object->MaterialPath);
+//             if (!SceneMaterial || !SceneMaterial->ShaderData) {
+//                 continue;
+//             }
+
+//             // Apply scene material to ALL model materials (matches Game.cpp behavior)
+//             for (size_t matIdx = 0; matIdx < ArraySize(Model->Materials); matIdx++) {
+//                 AxMaterial* ModelMat = &Model->Materials[matIdx];
+//                 ModelMat->ShaderData = SceneMaterial->ShaderData;
+//                 ModelMat->ShaderProgram = SceneMaterial->ShaderProgram;
+//             }
+//         }
+//     }
+// }

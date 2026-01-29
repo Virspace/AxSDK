@@ -269,40 +269,40 @@ enum AxWindowStyle
 // MessageBox button flags
 enum AxMessageBoxResponse
 {
-    AX_MESSAGEBOX_RESPONSE_OK           = 1,
-    AX_MESSAGEBOX_RESPONSE_CANCEL       = 2,
-    AX_MESSAGEBOX_RESPONSE_ABORT        = 3,
-    AX_MESSAGEBOX_RESPONSE_RETRY        = 4,
-    AX_MESSAGEBOX_RESPONSE_IGNORE       = 5,
-    AX_MESSAGEBOX_RESPONSE_YES          = 6,
-    AX_MESSAGEBOX_RESPONSE_NO           = 7,
-    AX_MESSAGEBOX_RESPONSE_TRYAGAIN     = 10,
-    AX_MESSAGEBOX_RESPONSE_CONTINUE     = 11
+    AX_MESSAGE_BOX_RESPONSE_OK           = 1,
+    AX_MESSAGE_BOX_RESPONSE_CANCEL       = 2,
+    AX_MESSAGE_BOX_RESPONSE_ABORT        = 3,
+    AX_MESSAGE_BOX_RESPONSE_RETRY        = 4,
+    AX_MESSAGE_BOX_RESPONSE_IGNORE       = 5,
+    AX_MESSAGE_BOX_RESPONSE_YES          = 6,
+    AX_MESSAGE_BOX_RESPONSE_NO           = 7,
+    AX_MESSAGE_BOX_RESPONSE_TRYAGAIN     = 10,
+    AX_MESSAGE_BOX_RESPONSE_CONTINUE     = 11
 };
 
 enum AxMessageBoxFlags
 {
-    AX_MESSAGEBOX_TYPE_ABORTRETRYIGNORE   = 1 << 0,
-    AX_MESSAGEBOX_TYPE_CANCELTRYCONTINUE  = 1 << 1,
-    AX_MESSAGEBOX_TYPE_HELP               = 1 << 2,
-    AX_MESSAGEBOX_TYPE_OK                 = 1 << 3,
-    AX_MESSAGEBOX_TYPE_OKCANCEL           = 1 << 4,
-    AX_MESSAGEBOX_TYPE_RETRYCANCEL        = 1 << 5,
-    AX_MESSAGEBOX_TYPE_YESNO              = 1 << 6,
-    AX_MESSAGEBOX_TYPE_YESNOCANCEL        = 1 << 7,
-    AX_MESSAGEBOX_ICON_EXCLAMATION        = 1 << 8,
-    AX_MESSAGEBOX_ICON_WARNING            = 1 << 9,
-    AX_MESSAGEBOX_ICON_INFORMATION        = 1 << 10,
-    AX_MESSAGEBOX_ICON_QUESTION           = 1 << 11,
-    AX_MESSAGEBOX_ICON_STOP               = 1 << 12,
-    AX_MESSAGEBOX_ICON_ERROR              = 1 << 13,
-    AX_MESSAGEBOX_DEFBUTTON1              = 1 << 14,
-    AX_MESSAGEBOX_DEFBUTTON2              = 1 << 15,
-    AX_MESSAGEBOX_DEFBUTTON3              = 1 << 16,
-    AX_MESSAGEBOX_DEFBUTTON4              = 1 << 17,
-    AX_MESSAGEBOX_APPLMODAL               = 1 << 18,
-    AX_MESSAGEBOX_SYSTEMMODAL             = 1 << 19,
-    AX_MESSAGEBOX_TASKMODAL               = 1 << 20
+    AX_MESSAGE_BOX_TYPE_ABORTRETRYIGNORE   = 1 << 0,
+    AX_MESSAGE_BOX_TYPE_CANCELTRYCONTINUE  = 1 << 1,
+    AX_MESSAGE_BOX_TYPE_HELP               = 1 << 2,
+    AX_MESSAGE_BOX_TYPE_OK                 = 1 << 3,
+    AX_MESSAGE_BOX_TYPE_OKCANCEL           = 1 << 4,
+    AX_MESSAGE_BOX_TYPE_RETRYCANCEL        = 1 << 5,
+    AX_MESSAGE_BOX_TYPE_YESNO              = 1 << 6,
+    AX_MESSAGE_BOX_TYPE_YESNOCANCEL        = 1 << 7,
+    AX_MESSAGE_BOX_ICON_EXCLAMATION        = 1 << 8,
+    AX_MESSAGE_BOX_ICON_WARNING            = 1 << 9,
+    AX_MESSAGE_BOX_ICON_INFORMATION        = 1 << 10,
+    AX_MESSAGE_BOX_ICON_QUESTION           = 1 << 11,
+    AX_MESSAGE_BOX_ICON_STOP               = 1 << 12,
+    AX_MESSAGE_BOX_ICON_ERROR              = 1 << 13,
+    AX_MESSAGE_BOX_DEFBUTTON1              = 1 << 14,
+    AX_MESSAGE_BOX_DEFBUTTON2              = 1 << 15,
+    AX_MESSAGE_BOX_DEFBUTTON3              = 1 << 16,
+    AX_MESSAGE_BOX_DEFBUTTON4              = 1 << 17,
+    AX_MESSAGE_BOX_APPLMODAL               = 1 << 18,
+    AX_MESSAGE_BOX_SYSTEMMODAL             = 1 << 19,
+    AX_MESSAGE_BOX_TASKMODAL               = 1 << 20
 };
 
 // // Key modifer flags
