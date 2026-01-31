@@ -1,6 +1,44 @@
 cmake_minimum_required(VERSION 3.15)
-project(AxResource VERSION 1.0.0 LANGUAGES C)
+project(AxResource VERSION 2.0.0 LANGUAGES C CXX)
 include(CTest)
+
+#
+# Fetch dependencies
+#
+
+include(FetchContent)
+
+# STB for image loading
+FetchContent_Declare(
+    axresource_stb
+    GIT_REPOSITORY https://github.com/nothings/stb.git
+    GIT_TAG master
+)
+
+FetchContent_GetProperties(axresource_stb)
+if(NOT axresource_stb_POPULATED)
+    FetchContent_Populate(axresource_stb)
+    message("Fetching stb for AxResource")
+
+    add_library(axresource_stb INTERFACE)
+    target_include_directories(axresource_stb INTERFACE ${axresource_stb_SOURCE_DIR})
+endif()
+
+# CGLTF for GLTF model loading
+FetchContent_Declare(
+    axresource_cgltf
+    GIT_REPOSITORY https://github.com/jkuhlmann/cgltf.git
+    GIT_TAG master
+)
+
+FetchContent_GetProperties(axresource_cgltf)
+if(NOT axresource_cgltf_POPULATED)
+    FetchContent_Populate(axresource_cgltf)
+    message("Fetching cgltf for AxResource")
+
+    add_library(axresource_cgltf INTERFACE)
+    target_include_directories(axresource_cgltf INTERFACE ${axresource_cgltf_SOURCE_DIR})
+endif()
 
 #
 # Create Target
@@ -14,9 +52,10 @@ add_library(Virspace::AxResource ALIAS AxResource)
 target_sources(AxResource
     PRIVATE
         include/AxResource/AxResource.h
-        include/AxResource/AxShaderManager.h
-        src/AxResource.c
-        src/AxShaderManager.c
+        include/AxResource/AxResourceTypes.h
+        src/ResourceSystem.h
+        src/ResourceSystem.cpp
+        src/AxResource.cpp
 )
 
 #
@@ -24,13 +63,11 @@ target_sources(AxResource
 #
 
 # Add compiler features and definitions
-target_compile_features(AxResource PRIVATE c_std_11)
-# target_compile_definitions(AxResource
-#     PRIVATE
-#         AXON_LINKS_FOUNDATION
-# )
+target_compile_features(AxResource PRIVATE c_std_11 cxx_std_11)
 
+# Get AxOpenGL and AxScene include directories
 include_directories("$<JOIN:$<TARGET_PROPERTY:AxOpenGL,INCLUDE_DIRECTORIES>,;>")
+include_directories("$<JOIN:$<TARGET_PROPERTY:AxScene,INCLUDE_DIRECTORIES>,;>")
 
 # Specify include directories
 target_include_directories(AxResource
@@ -39,11 +76,14 @@ target_include_directories(AxResource
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include/AxResource
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
 target_link_libraries(AxResource
     PRIVATE
         Virspace::Foundation
+        axresource_stb
+        axresource_cgltf
 )
 
 #

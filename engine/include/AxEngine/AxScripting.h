@@ -1,20 +1,13 @@
 #pragma once
 
 #include "Foundation/AxTypes.h"
-
-#ifndef SCRIPTING_API
-#  ifdef SCRIPTINGMODULE
- /* We are building this library */
-#    define SCRIPTING_API __declspec(dllexport)
-#  else
- /* We are using this library */
-#    define SCRIPTING_API __declspec(dllimport)
-#  endif
-#endif
+#include "Foundation/AxPlatform.h"
+#include "AxResource/AxResourceTypes.h"
 
 struct AxAPIRegistry;
-struct AxPlatformAPI;
-struct AxDLLAPI;
+struct AxCamera;
+struct AxInputState;
+struct AxModelData;
 
 typedef void InitF();
 typedef void StartF();
@@ -23,7 +16,7 @@ typedef void TickF(const float Alpha, const float DeltaT);
 typedef void StopF();
 typedef void TermF();
 
-class SCRIPTING_API AxScripting
+class AxScripting
 {
 public:
 	// IModule Interface
@@ -43,6 +36,12 @@ public:
     void Term();
 
     void OnGUI(int64_t *ctx);
+
+    // Set engine state on all scripts (camera, scene)
+    void SetEngineState(AxCamera* Camera, const AxModelData* Scene);
+
+    // Update per-frame state on all scripts (mouse delta)
+    void UpdateFrameState(AxVec2 MouseDelta);
 
 private:
     AxAPIRegistry *APIRegistry_;

@@ -31,6 +31,12 @@ extern "C" {
 #define AXON_DLL_EXPORT __declspec(dllexport)
 #define AXON_DLL_IMPORT __declspec(dllimport)
 
+#ifdef AXENGINE_EXPORTS
+  #define AXENGINE_API AXON_DLL_EXPORT
+#else
+  #define AXENGINE_API AXON_DLL_IMPORT
+#endif
+
 #define AX_PI 3.14159265359f
 
 //#if AXON_SLOW
@@ -55,7 +61,7 @@ extern "C" {
 #define FOURCC(String) (((u32)(String[0]) << 0) | ((u32)(String[1]) << 8) | ((u32)(String[2]) << 16) | ((u32)(String[3]) << 24))
 
 // Forward declarations
-typedef struct AxLinearAllocator AxLinearAllocator;
+typedef struct AxAllocator AxAllocator;
 
 // Opaque renderer-specific types (concrete definitions provided by renderer plugins)
 typedef struct AxTexture AxTexture;
@@ -273,6 +279,7 @@ typedef struct AxLight {
 
 typedef struct AxCamera
 {
+    AxTransform Transform;      // Camera transform (position, rotation, scale)
     bool IsOrthographic;        // Orthographic or projection
     float FieldOfView;          // Field of view for perspective projection
     float ZoomLevel;            // Zoom level for orthographic projection
@@ -299,11 +306,15 @@ typedef struct AxSceneObject {
     struct AxSceneObject* NextSibling;  // Next sibling at same level (NULL if last)
 
     uint32_t ObjectID;                  // Unique object identifier within scene
+
+    // Runtime loaded resource handle (Index=0 means not loaded)
+    uint32_t LoadedModelIndex;          // Resource handle index
+    uint32_t LoadedModelGeneration;     // Resource handle generation
 } AxSceneObject;
 
 /**
  * Scene container holds a hierarchy of scene objects and manages their memory.
- * Each scene uses a linear allocator for efficient bulk allocation/deallocation.
+ * Uses a unified allocator interface for efficient memory management.
  */
 
 typedef struct AxScene {
@@ -320,7 +331,7 @@ typedef struct AxScene {
     uint32_t NextObjectID;              // Next available object ID
 
     // Memory management
-    struct AxLinearAllocator* Allocator; // Scene memory allocator
+    struct AxAllocator* Allocator;      // Scene memory allocator (unified interface)
 } AxScene;
 
 ///////////////////////////////////////////////////////////////

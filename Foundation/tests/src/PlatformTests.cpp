@@ -544,3 +544,76 @@ TEST_F(PlatformTest, BaseName) {
     // Mixed separators
     EXPECT_STREQ(PathAPI->BaseName("C:/temp\\foo.txt"), "foo");
 }
+
+TEST_F(PlatformTest, Normalize_SeparatorConversion) {
+    // Convert backslashes to forward slashes
+    EXPECT_STREQ(PathAPI->Normalize("foo\\bar\\tex.png"), "foo/bar/tex.png");
+    EXPECT_STREQ(PathAPI->Normalize("C:\\Users\\John\\file.txt"), "c:/users/john/file.txt");
+    EXPECT_STREQ(PathAPI->Normalize("a\\b\\c\\d"), "a/b/c/d");
+}
+
+TEST_F(PlatformTest, Normalize_CaseConversion) {
+    // Convert to lowercase
+    EXPECT_STREQ(PathAPI->Normalize("Textures/Diffuse.PNG"), "textures/diffuse.png");
+    EXPECT_STREQ(PathAPI->Normalize("UPPERCASE/PATH/FILE.TXT"), "uppercase/path/file.txt");
+    EXPECT_STREQ(PathAPI->Normalize("MixedCase.Txt"), "mixedcase.txt");
+}
+
+TEST_F(PlatformTest, Normalize_DotResolution) {
+    // Resolve single dot (current directory)
+    EXPECT_STREQ(PathAPI->Normalize("./textures/tex.png"), "textures/tex.png");
+    EXPECT_STREQ(PathAPI->Normalize("textures/./tex.png"), "textures/tex.png");
+    EXPECT_STREQ(PathAPI->Normalize("./a/./b/./c.txt"), "a/b/c.txt");
+
+    // Resolve double dot (parent directory)
+    EXPECT_STREQ(PathAPI->Normalize("models/../textures/tex.png"), "textures/tex.png");
+    EXPECT_STREQ(PathAPI->Normalize("a/b/../c/d"), "a/c/d");
+    EXPECT_STREQ(PathAPI->Normalize("a/b/c/../../d"), "a/d");
+    EXPECT_STREQ(PathAPI->Normalize("a/b/../b/../b/c"), "a/b/c");
+}
+
+TEST_F(PlatformTest, Normalize_MultipleSlashes) {
+    // Collapse multiple consecutive slashes
+    EXPECT_STREQ(PathAPI->Normalize("foo//bar///tex.png"), "foo/bar/tex.png");
+    EXPECT_STREQ(PathAPI->Normalize("a////b"), "a/b");
+    EXPECT_STREQ(PathAPI->Normalize("//a//b//"), "a/b");
+}
+
+TEST_F(PlatformTest, Normalize_TrailingSlashes) {
+    // Remove trailing slashes
+    EXPECT_STREQ(PathAPI->Normalize("textures/"), "textures");
+    EXPECT_STREQ(PathAPI->Normalize("a/b/c/"), "a/b/c");
+    EXPECT_STREQ(PathAPI->Normalize("path///"), "path");
+}
+
+TEST_F(PlatformTest, Normalize_AbsolutePaths) {
+    // Preserve drive letters but lowercase them
+    EXPECT_STREQ(PathAPI->Normalize("C:/Assets/tex.png"), "c:/assets/tex.png");
+    EXPECT_STREQ(PathAPI->Normalize("D:\\Game\\Models\\mesh.obj"), "d:/game/models/mesh.obj");
+}
+
+TEST_F(PlatformTest, Normalize_EdgeCases) {
+    // Empty string
+    EXPECT_STREQ(PathAPI->Normalize(""), "");
+
+    // NULL pointer
+    EXPECT_STREQ(PathAPI->Normalize(NULL), "");
+
+    // Single file name
+    EXPECT_STREQ(PathAPI->Normalize("file.txt"), "file.txt");
+
+    // Just dots
+    EXPECT_STREQ(PathAPI->Normalize("."), "");
+    EXPECT_STREQ(PathAPI->Normalize(".."), "..");
+
+    // Leading parent refs (can't resolve past root)
+    EXPECT_STREQ(PathAPI->Normalize("../a/b"), "../a/b");
+    EXPECT_STREQ(PathAPI->Normalize("../../a"), "../../a");
+}
+
+TEST_F(PlatformTest, Normalize_ComplexPaths) {
+    // Combined normalization
+    EXPECT_STREQ(PathAPI->Normalize("C:\\Users\\..\\Shared\\.\\Data\\file.TXT"), "c:/shared/data/file.txt");
+    EXPECT_STREQ(PathAPI->Normalize("./Models/../Textures//diffuse.PNG"), "textures/diffuse.png");
+    EXPECT_STREQ(PathAPI->Normalize("A\\\\B/./C\\..\\D"), "a/b/d");
+}

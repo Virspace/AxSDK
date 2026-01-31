@@ -1,4 +1,4 @@
-#include "Foundation/AxLinearAllocator.h"
+#include "Foundation/AxAllocatorAPI.h"
 #include "Foundation/AxPlugin.h"
 #include "Foundation/AxAPIRegistry.h"
 #include "Foundation/AxMath.h"
@@ -21,7 +21,7 @@ typedef struct AxSceneParser {
     int CurrentColumn;
     AxToken CurrentToken;
     char ErrorMessage[256];
-    struct AxLinearAllocator* Allocator;
+    struct AxAllocator* Allocator;
 } AxSceneParser;
 
 ///////////////////////////////////////////////////////////////
@@ -39,7 +39,7 @@ static AxSceneEvents g_EventHandlers[MAX_EVENT_HANDLERS];
 static int g_EventHandlerCount = 0;
 
 // API Handles
-struct AxLinearAllocatorAPI *LinearAllocatorAPI;
+struct AxAllocatorAPI *AllocatorAPI;
 struct AxPlatformAPI *PlatformAPI;
 
 ///////////////////////////////////////////////////////////////
@@ -175,8 +175,8 @@ static AxScene* CreateScene(const char* Name, size_t MemorySize)
         return (NULL);
     }
 
-    // Create allocator for this scene
-    AxLinearAllocator* Allocator = LinearAllocatorAPI->Create(Name, MemorySize);
+    // Create linear allocator for this scene using unified API
+    struct AxAllocator* Allocator = AllocatorAPI->CreateLinear(Name, MemorySize);
     if (!Allocator) {
         return (NULL);
     }
@@ -184,7 +184,7 @@ static AxScene* CreateScene(const char* Name, size_t MemorySize)
     // Allocate scene structure from malloc (not from its own allocator to avoid corruption)
     AxScene* Scene = (AxScene*)malloc(sizeof(AxScene));
     if (!Scene) {
-        LinearAllocatorAPI->Destroy(Allocator);
+        Allocator->Destroy(Allocator);
         return (NULL);
     }
 
@@ -213,7 +213,9 @@ static void DestroyScene(AxScene* Scene)
     }
 
     // Destroying the allocator frees all scene memory at once
-    LinearAllocatorAPI->Destroy(Scene->Allocator);
+    if (Scene->Allocator) {
+        Scene->Allocator->Destroy(Scene->Allocator);
+    }
 
     // Free the scene structure itself (allocated with malloc)
     SAFE_FREE(Scene);
@@ -225,13 +227,8 @@ static AxSceneObject* CreateObject(AxScene* Scene, const char* Name, AxSceneObje
         return (NULL);
     }
 
-    // Allocate object from scene's allocator
-    AxSceneObject* Object = (AxSceneObject*)LinearAllocatorAPI->Alloc(
-        Scene->Allocator,
-        sizeof(AxSceneObject),
-        __FILE__,
-        __LINE__
-    );
+    // Allocate object from scene's allocator using unified interface
+    AxSceneObject* Object = (AxSceneObject*)AxAlloc(Scene->Allocator, sizeof(AxSceneObject));
     if (!Object) {
         return (NULL);
     }
@@ -260,6 +257,10 @@ static AxSceneObject* CreateObject(AxScene* Scene, const char* Name, AxSceneObje
     Object->FirstChild = NULL;
     Object->NextSibling = NULL;
     Object->ObjectID = Scene->NextObjectID++;
+
+    // Initialize runtime resource handle (not loaded)
+    Object->LoadedModelIndex = 0;
+    Object->LoadedModelGeneration = 0;
 
     // Link into hierarchy
     if (Parent) {
@@ -405,23 +406,16 @@ static struct AxMaterial* CreateMaterial(AxScene* Scene, const char* Name, const
 
     // Allocate or expand materials array
     if (!Scene->Materials) {
-        Scene->Materials = (struct AxMaterial*)LinearAllocatorAPI->Alloc(
-            Scene->Allocator,
-            sizeof(struct AxMaterial),
-            __FILE__,
-            __LINE__
-        );
+        Scene->Materials = (struct AxMaterial*)AxAlloc(Scene->Allocator, sizeof(struct AxMaterial));
         if (!Scene->Materials) {
             return (NULL);
         }
     } else {
         // For now, we'll use a simple approach and allocate a new array
         // TODO: Implement proper dynamic array growth
-        struct AxMaterial* NewMaterials = (struct AxMaterial*)LinearAllocatorAPI->Alloc(
+        struct AxMaterial* NewMaterials = (struct AxMaterial*)AxAlloc(
             Scene->Allocator,
-            sizeof(struct AxMaterial) * (Scene->MaterialCount + 1),
-            __FILE__,
-            __LINE__
+            sizeof(struct AxMaterial) * (Scene->MaterialCount + 1)
         );
         if (!NewMaterials) {
             return (NULL);
@@ -486,18 +480,11 @@ static AxLight* CreateLight(AxScene* Scene, const char* Name, AxLightType Type)
 
     // Allocate space for new light (expand array if needed)
     if (Scene->Lights == NULL) {
-        Scene->Lights = (AxLight*)LinearAllocatorAPI->Alloc(
-            Scene->Allocator,
-            sizeof(AxLight),
-            __FILE__,
-            __LINE__
-        );
+        Scene->Lights = (AxLight*)AxAlloc(Scene->Allocator, sizeof(AxLight));
     } else {
-        AxLight* NewLights = (AxLight*)LinearAllocatorAPI->Alloc(
+        AxLight* NewLights = (AxLight*)AxAlloc(
             Scene->Allocator,
-            sizeof(AxLight) * (Scene->LightCount + 1),
-            __FILE__,
-            __LINE__
+            sizeof(AxLight) * (Scene->LightCount + 1)
         );
         if (!NewLights) {
             return (NULL);
@@ -544,23 +531,13 @@ static AxSceneResult AddCamera(AxScene* Scene, const AxCamera* Camera, const AxT
 
     // Allocate space for new camera (expand arrays if needed)
     if (Scene->Cameras == NULL) {
-        Scene->Cameras = (AxCamera*)LinearAllocatorAPI->Alloc(
-            Scene->Allocator,
-            sizeof(AxCamera),
-            __FILE__,
-            __LINE__
-        );
-        Scene->CameraTransforms = (AxTransform*)LinearAllocatorAPI->Alloc(
-            Scene->Allocator,
-            sizeof(AxTransform),
-            __FILE__,
-            __LINE__
-        );
+        Scene->Cameras = (AxCamera*)AxAlloc(Scene->Allocator, sizeof(AxCamera));
+        Scene->CameraTransforms = (AxTransform*)AxAlloc(Scene->Allocator, sizeof(AxTransform));
         printf("SceneAPI: Allocated new camera arrays - Cameras=%p, Transforms=%p\n",
                (void*)Scene->Cameras, (void*)Scene->CameraTransforms);
 
         if (!Scene->Cameras || !Scene->CameraTransforms) {
-            printf("SceneAPI: ERROR - LinearAllocator returned NULL!\n");
+            printf("SceneAPI: ERROR - Allocator returned NULL!\n");
             return (AX_SCENE_ERROR_OUT_OF_MEMORY);
         }
 
@@ -569,17 +546,13 @@ static AxSceneResult AddCamera(AxScene* Scene, const AxCamera* Camera, const AxT
         memset(Scene->CameraTransforms, 0, sizeof(AxTransform));
     } else {
         // Allocate new arrays with space for one more camera
-        AxCamera* NewCameras = (AxCamera*)LinearAllocatorAPI->Alloc(
+        AxCamera* NewCameras = (AxCamera*)AxAlloc(
             Scene->Allocator,
-            sizeof(AxCamera) * (Scene->CameraCount + 1),
-            __FILE__,
-            __LINE__
+            sizeof(AxCamera) * (Scene->CameraCount + 1)
         );
-        AxTransform* NewTransforms = (AxTransform*)LinearAllocatorAPI->Alloc(
+        AxTransform* NewTransforms = (AxTransform*)AxAlloc(
             Scene->Allocator,
-            sizeof(AxTransform) * (Scene->CameraCount + 1),
-            __FILE__,
-            __LINE__
+            sizeof(AxTransform) * (Scene->CameraCount + 1)
         );
 
         if (!NewCameras || !NewTransforms) {
@@ -644,7 +617,7 @@ static AxLight* FindLight(AxScene* Scene, const char* Name)
 // Parser Internal Functions
 ///////////////////////////////////////////////////////////////
 
-static void InitParser(AxSceneParser* Parser, const char* Source, AxLinearAllocator* Allocator);
+static void InitParser(AxSceneParser* Parser, const char* Source, struct AxAllocator* Allocator);
 static bool IsAtEnd(AxSceneParser* Parser);
 static char CurrentChar(AxSceneParser* Parser);
 static char PeekChar(AxSceneParser* Parser, int Offset);
@@ -667,7 +640,7 @@ static bool ParseVector3(AxSceneParser* Parser, AxVec3* Vector);
 static bool ParseQuaternion(AxSceneParser* Parser, AxQuat* Quaternion);
 static void CopyTokenString(AxToken* Token, char* Dest, size_t DestSize);
 
-static void InitParser(AxSceneParser* Parser, const char* Source, AxLinearAllocator* Allocator)
+static void InitParser(AxSceneParser* Parser, const char* Source, struct AxAllocator* Allocator)
 {
     Parser->Source = Source;
     Parser->SourceLength = strlen(Source);
@@ -1398,7 +1371,7 @@ static AxLight* ParseLight(AxSceneParser* Parser, AxScene* Scene)
                 SetParserError(Parser, "Expected light type identifier at line %d", Parser->CurrentToken.Line);
                 return (NULL);
             }
-            
+
             if (TokenEquals(&Parser->CurrentToken, "directional")) {
                 LightType = AX_LIGHT_TYPE_DIRECTIONAL;
             } else if (TokenEquals(&Parser->CurrentToken, "point")) {
@@ -1594,9 +1567,6 @@ static AxScene* ParseScene(AxSceneParser* Parser)
         return (NULL);
     }
 
-    // Trigger OnSceneParsed callback
-    InvokeCallbacks(GetSceneCallback, Scene);
-
     return (Scene);
 }
 
@@ -1604,7 +1574,7 @@ static AxScene* ParseScene(AxSceneParser* Parser)
 // High-Level Loading and Parsing Functions
 ///////////////////////////////////////////////////////////////
 
-static AxScene* ParseFromString(const char* Source, AxLinearAllocator* Allocator)
+static AxScene* ParseFromString(const char* Source, struct AxAllocator* Allocator)
 {
     if (!Source || !Allocator) {
         strncpy(g_ParserLastErrorMessage, "Invalid parameters: Source and Allocator cannot be NULL",
@@ -1634,7 +1604,7 @@ static AxScene* ParseFromString(const char* Source, AxLinearAllocator* Allocator
     return (Scene);
 }
 
-static AxScene* ParseFromFile(const char* FilePath, AxLinearAllocator* Allocator)
+static AxScene* ParseFromFile(const char* FilePath, struct AxAllocator* Allocator)
 {
     if (!FilePath || !Allocator) {
         strncpy(g_ParserLastErrorMessage, "Invalid parameters: FilePath and Allocator cannot be NULL",
@@ -1657,7 +1627,7 @@ static AxScene* ParseFromFile(const char* FilePath, AxLinearAllocator* Allocator
         return (NULL);
     }
 
-    char* FileContent = (char*)LinearAllocatorAPI->Alloc(Allocator, FileSize + 1, __FILE__, __LINE__);
+    char* FileContent = (char*)AxAlloc(Allocator, FileSize + 1);
     if (!FileContent) {
         FileAPI->Close(File);
         strncpy(g_ParserLastErrorMessage, "Failed to allocate memory for file content",
@@ -1691,7 +1661,7 @@ static AxScene* LoadSceneFromFile(const char* FilePath)
 
     // Create a PERSISTENT allocator for the Scene (NOT temporary!)
     // The Scene owns this allocator and it will be destroyed when Scene is destroyed
-    AxLinearAllocator* SceneAllocator = LinearAllocatorAPI->Create("ScenePersistent", g_DefaultSceneMemorySize);
+    struct AxAllocator* SceneAllocator = AllocatorAPI->CreateLinear("ScenePersistent", g_DefaultSceneMemorySize);
     if (!SceneAllocator) {
         SetError("Failed to create scene allocator");
         return (NULL);
@@ -1702,7 +1672,7 @@ static AxScene* LoadSceneFromFile(const char* FilePath)
 
     if (!Scene) {
         // If parsing failed, clean up the allocator
-        LinearAllocatorAPI->Destroy(SceneAllocator);
+        SceneAllocator->Destroy(SceneAllocator);
         const char* ParseError = (g_ParserLastErrorMessage[0] != '\0' ? g_ParserLastErrorMessage : NULL);
         SetError("Failed to parse scene file '%s': %s", FilePath, ParseError ? ParseError : "Unknown error");
         return (NULL);
@@ -1721,7 +1691,7 @@ static AxScene* LoadSceneFromString(const char* SceneData)
 
     // Create a PERSISTENT allocator for the Scene (NOT temporary!)
     // The Scene owns this allocator and it will be destroyed when Scene is destroyed
-    AxLinearAllocator* SceneAllocator = LinearAllocatorAPI->Create("ScenePersistent", g_DefaultSceneMemorySize);
+    struct AxAllocator* SceneAllocator = AllocatorAPI->CreateLinear("ScenePersistent", g_DefaultSceneMemorySize);
     if (!SceneAllocator) {
         SetError("Failed to create scene allocator");
         return (NULL);
@@ -1732,7 +1702,7 @@ static AxScene* LoadSceneFromString(const char* SceneData)
 
     if (!Scene) {
         // If parsing failed, clean up the allocator
-        LinearAllocatorAPI->Destroy(SceneAllocator);
+        SceneAllocator->Destroy(SceneAllocator);
         const char* ParseError = (g_ParserLastErrorMessage[0] != '\0' ? g_ParserLastErrorMessage : NULL);
         SetError("Failed to parse scene data: %s", ParseError ? ParseError : "Unknown error");
         return (NULL);
@@ -1810,7 +1780,7 @@ struct AxSceneAPI* SceneAPI = &(struct AxSceneAPI) {
 AXON_DLL_EXPORT void LoadPlugin(struct AxAPIRegistry* APIRegistry, bool Load)
 {
     if (APIRegistry) {
-        LinearAllocatorAPI = (struct AxLinearAllocatorAPI *)APIRegistry->Get(AXON_LINEAR_ALLOCATOR_API_NAME);
+        AllocatorAPI = (struct AxAllocatorAPI *)APIRegistry->Get(AXON_ALLOCATOR_API_NAME);
         PlatformAPI = (struct AxPlatformAPI *)APIRegistry->Get(AXON_PLATFORM_API_NAME);
 
         // Register the Scene API with the API registry

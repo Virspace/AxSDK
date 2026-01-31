@@ -35,6 +35,10 @@ uniform float alphaCutoff;  // Alpha cutoff for mask mode
 // Camera
 uniform vec3 viewPos;
 
+// Simple single-light uniforms (fallback when lightCount is 0)
+uniform vec3 lightPos;
+uniform vec3 lightColor;
+
 // Multiple lights support (max 8 lights)
 #define MAX_LIGHTS 8
 uniform int lightCount;
@@ -160,14 +164,36 @@ void main()
     // Reflectance equation
     vec3 Lo = vec3(0.0);
 
-    for (int i = 0; i < lightCount && i < MAX_LIGHTS; i++) {
-        vec3 lightPos = lightPositions[i];
-        vec3 lightColor = lightColors[i];
-        float lightIntensity = lightIntensities[i];
-        float lightRange = lightRanges[i];
+    // Determine number of lights to process
+    int numLights = lightCount;
+
+    // Fallback: if lightCount is 0, use the simple lightPos/lightColor uniforms
+    if (numLights == 0 && length(lightColor) > 0.0) {
+        numLights = 1;
+    }
+
+    for (int i = 0; i < numLights && i < MAX_LIGHTS; i++) {
+        vec3 currentLightPos;
+        vec3 currentLightColor;
+        float lightIntensity;
+        float lightRange;
+
+        if (lightCount > 0) {
+            // Use array-based lighting
+            currentLightPos = lightPositions[i];
+            currentLightColor = lightColors[i];
+            lightIntensity = lightIntensities[i];
+            lightRange = lightRanges[i];
+        } else {
+            // Use simple single-light uniforms (fallback)
+            currentLightPos = lightPos;
+            currentLightColor = lightColor;
+            lightIntensity = 1.0;
+            lightRange = 0.0; // No range-based attenuation for simple light
+        }
 
         // Calculate per-light radiance
-        vec3 L = lightPos - fragPos;
+        vec3 L = currentLightPos - fragPos;
         float distance = length(L);
         L = normalize(L);
         vec3 H = normalize(V + L);
@@ -179,7 +205,7 @@ void main()
             attenuation = attenuation * attenuation;
         }
 
-        vec3 radiance = lightColor * lightIntensity * attenuation;
+        vec3 radiance = currentLightColor * lightIntensity * attenuation;
 
         // Cook-Torrance BRDF
         float NDF = DistributionGGX(N, H, roughness);
@@ -199,7 +225,7 @@ void main()
         Lo += (kD * baseColor.rgb / PI + specular) * radiance * NdotL;
     }
 
-    // Ambient lighting (simplified)
+    // Ambient lighting - keep low for good light/shadow contrast
     vec3 ambient = vec3(0.03) * baseColor.rgb * ao;
 
     // Final color

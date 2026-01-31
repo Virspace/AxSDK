@@ -192,19 +192,19 @@ struct AxSceneAPI {
      * Parse a scene from a string with custom memory allocator.
      * Provides lower-level control over memory allocation.
      * @param Source Scene file content as string
-     * @param Allocator Memory allocator for scene data
+     * @param Allocator Memory allocator for scene data (unified interface)
      * @return Parsed scene, or NULL on failure
      */
-    AxScene* (*ParseFromString)(const char* Source, AxLinearAllocator* Allocator);
+    AxScene* (*ParseFromString)(const char* Source, struct AxAllocator* Allocator);
 
     /**
      * Parse a scene from a file with custom memory allocator.
      * Provides lower-level control over memory allocation.
      * @param FilePath Path to .ats scene file
-     * @param Allocator Memory allocator for scene data
+     * @param Allocator Memory allocator for scene data (unified interface)
      * @return Parsed scene, or NULL on failure
      */
-    AxScene* (*ParseFromFile)(const char* FilePath, AxLinearAllocator* Allocator);
+    AxScene* (*ParseFromFile)(const char* FilePath, struct AxAllocator* Allocator);
 
     // === Configuration and Error Handling ===
 

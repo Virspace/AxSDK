@@ -1,31 +1,25 @@
-#include "AxEngine/AxEngine.h"
-#include "AxEngine/AxResource.h"
-#include "AxEngine/AxShaderManager.h"
+/**
+ * AxEngine.cpp - Core Engine Implementation
+ *
+ * Engine orchestrates plugins, window, input, scripting, and rendering.
+ * Rendering is delegated to AxRender. Input is managed by AxInput singleton.
+ */
 
-#include "AxOpenGL/AxOpenGL.h"
+#include "AxEngine/AxEngine.h"
+#include "AxEngine/AxInput.h"
+#include "AxEngine/AxRenderer.h"
+#include "AxEngine/AxSceneManager.h"
+#include "AxEngine/AxScripting.h"
+
+#include "AxResource/AxResource.h"
 #include "AxScene/AxScene.h"
-#include "Foundation/AxApplication.h"
 #include "Foundation/AxAPIRegistry.h"
+#include "Foundation/AxAllocatorAPI.h"
 #include "Foundation/AxPlatform.h"
-#include "Foundation/AxMath.h"
-#include "Foundation/AxHashTable.h"
 #include "Foundation/AxPlugin.h"
 #include "AxWindow/AxWindow.h"
 
-#define AXARRAY_IMPLEMENTATION
-#include "Foundation/AxArray.h"
-
-#include <stdlib.h>
-#include <string.h>
 #include <stdio.h>
-
-// STB Image for texture loading
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
-
-// CGLTF for GLTF model loading
-#define CGLTF_IMPLEMENTATION
-#include "cgltf.h"
 
 // Forward declaration of global API registry (defined at end of file)
 static AxAPIRegistry* gAPIRegistry = nullptr;
@@ -33,15 +27,25 @@ static AxAPIRegistry* gAPIRegistry = nullptr;
 static const int32_t DefaultWindowWidth = 1280;
 static const int32_t DefaultWindowHeight = 720;
 
+// Resource allocator for the engine (created during initialization)
+static struct AxAllocator* gResourceAllocator = nullptr;
+
+// Global engine pointer (for static API function implementations)
+static AxEngine* gEngine = nullptr;
+
+//=============================================================================
+// Plugin Loading
+//=============================================================================
+
 bool AxEngine::LoadPlugins()
 {
-    AXON_ASSERT(PluginAPI && "PluginAPI is NULL in AxEngine::LoadPlugins!");
+    AXON_ASSERT(PluginAPI_ && "PluginAPI is NULL in AxEngine::LoadPlugins!");
 
     auto LoadPluginOrFail = [&](const char* PluginName, const char* ErrorMessage) -> bool {
-        if (!PluginAPI->Load(PluginName, false)) {
+        if (!PluginAPI_->Load(PluginName, false)) {
             fprintf(stderr, "Failed to load %s plugin\n", PluginName);
-            WindowAPI->CreateMessageBox(
-                Window,
+            WindowAPI_->CreateMessageBox(
+                Window_,
                 "Error",
                 ErrorMessage,
                 static_cast<AxMessageBoxFlags>(AX_MESSAGE_BOX_ICON_ERROR | AX_MESSAGE_BOX_TYPE_OK)
@@ -58,24 +62,40 @@ bool AxEngine::LoadPlugins()
     }
 
     // Get core APIs
-    RenderAPI = static_cast<AxOpenGLAPI *>(APIRegistry->Get(AXON_OPENGL_API_NAME));
-    SceneAPI = static_cast<AxSceneAPI *>(APIRegistry->Get(AXON_SCENE_API_NAME));
-    PlatformAPI = static_cast<AxPlatformAPI*>(APIRegistry->Get(AXON_PLATFORM_API_NAME));
+    PlatformAPI_ = static_cast<AxPlatformAPI*>(APIRegistry_->Get(AXON_PLATFORM_API_NAME));
+    ResourceAPI_ = static_cast<AxResourceAPI*>(APIRegistry_->Get(AXON_RESOURCE_API_NAME));
 
-    if (!WindowAPI || !RenderAPI || !SceneAPI || !PlatformAPI) {
+    if (!WindowAPI_ || !PlatformAPI_ || !ResourceAPI_) {
+        fprintf(stderr, "Failed to get required APIs from registry\n");
         return (false);
     }
+
+    // Initialize ResourceAPI with an allocator
+    AxAllocatorAPI* AllocatorAPI = static_cast<AxAllocatorAPI*>(APIRegistry_->Get(AXON_ALLOCATOR_API_NAME));
+    if (!AllocatorAPI) {
+        fprintf(stderr, "Failed to get AllocatorAPI from registry\n");
+        return (false);
+    }
+
+    // Create a heap allocator for engine resources (64MB initial, 256MB max)
+    gResourceAllocator = AllocatorAPI->CreateHeap("EngineResources", 64 * 1024 * 1024, 256 * 1024 * 1024);
+    if (!gResourceAllocator) {
+        fprintf(stderr, "Failed to create resource allocator\n");
+        return (false);
+    }
+
+    // Initialize ResourceAPI with our allocator
+    ResourceAPI_->Initialize(APIRegistry_, gResourceAllocator, nullptr);
+    printf("AxEngine: ResourceAPI initialized\n");
 
     return (true);
 }
 
-///////////////////////////////////////////////////////////////
+//=============================================================================
 // Lifecycle Functions
-///////////////////////////////////////////////////////////////
-AxEngine::AxEngine()
-{
-    // APIRegistry will be set in Initialize()
-}
+//=============================================================================
+
+AxEngine::AxEngine() = default;
 
 bool AxEngine::Initialize(const AxEngineConfig* config)
 {
@@ -83,100 +103,145 @@ bool AxEngine::Initialize(const AxEngineConfig* config)
         return (false);
     }
 
+    gEngine = this;
+
     // Use global APIRegistry from LoadPlugin
-    APIRegistry = gAPIRegistry;
-    if (!APIRegistry) {
+    APIRegistry_ = gAPIRegistry;
+    if (!APIRegistry_) {
         fprintf(stderr, "Failed to get API registry - LoadPlugin not called?\n");
         return (false);
     }
 
-    // Get PluginAPI from registry (required for loading plugins)
-    PluginAPI = static_cast<AxPluginAPI*>(APIRegistry->Get(AXON_PLUGIN_API_NAME));
-    if (!PluginAPI) {
+    // Get PluginAPI from registry
+    PluginAPI_ = static_cast<AxPluginAPI*>(APIRegistry_->Get(AXON_PLUGIN_API_NAME));
+    if (!PluginAPI_) {
         fprintf(stderr, "Failed to get PluginAPI from registry\n");
         return (false);
     }
 
     // Load Window plugin
-    if (!PluginAPI->Load("libAxWindow.dll", false)) {
+    if (!PluginAPI_->Load("libAxWindow.dll", false)) {
         fprintf(stderr, "Failed to load AxWindow plugin\n");
-        return false;
+        return (false);
     }
 
-    // Load and initialize Window API
-    WindowAPI = static_cast<AxWindowAPI *>(APIRegistry->Get(AXON_WINDOW_API_NAME));
-    WindowAPI->Init();
+    // Initialize Window API
+    WindowAPI_ = static_cast<AxWindowAPI*>(APIRegistry_->Get(AXON_WINDOW_API_NAME));
+    WindowAPI_->Init();
 
-    // Initialize Window
+    // Create window
     AxWindowConfig WindowConfig = {
-        "AxonSDK OpenGL Example",
-        100,
-        100,
-        DefaultWindowWidth,
-        DefaultWindowHeight,
-        (AxWindowStyle)(AX_WINDOW_STYLE_DECORATED | AX_WINDOW_STYLE_RESIZABLE)
+        "AxonSDK Game",
+        100, 100,
+        DefaultWindowWidth, DefaultWindowHeight,
+        static_cast<AxWindowStyle>(AX_WINDOW_STYLE_DECORATED | AX_WINDOW_STYLE_RESIZABLE)
     };
 
-    enum AxWindowError Error = AX_WINDOW_ERROR_NONE;
-    Window = WindowAPI->CreateWindowWithConfig(&WindowConfig, &Error);
+    AxWindowError Error = AX_WINDOW_ERROR_NONE;
+    Window_ = WindowAPI_->CreateWindowWithConfig(&WindowConfig, &Error);
     if (Error != AX_WINDOW_ERROR_NONE) {
         return (false);
     }
 
-    // Load all engine plugins
+    // Load plugins (OpenGL, Scene, Resource)
     if (!LoadPlugins()) {
         return (false);
     }
 
-    // Initialize Renderer
-    Viewport = new AxViewport();
-    Viewport->Position = { 0.0f, 0.0f };
-    Viewport->Size = { DefaultWindowWidth, DefaultWindowHeight };
-    Viewport->Scale = { 1.0f, 1.0f };
-    Viewport->Depth = { 0.0f, 1.0f };
-    Viewport->IsActive = true;
-    Viewport->ClearColor = { 0.42f, 0.51f, 0.54f, 0.0f };
-
-    AxWindowPlatformData WindowPlatformData = WindowAPI->GetPlatformData(Window);
-    RenderAPI->CreateContext(WindowPlatformData.Win32.Handle);
-
-    // Initialize model storage hash table
-    AxHashTableAPI* HashTableAPI = static_cast<AxHashTableAPI *>(APIRegistry->Get(AXON_HASH_TABLE_API_NAME));
-    if (HashTableAPI) {
-        LoadedModels = HashTableAPI->CreateTable();
+    // Initialize renderer
+    AxWindowPlatformData WindowPlatformData = WindowAPI_->GetPlatformData(Window_);
+    Renderer_ = new AxRenderer();
+    if (!Renderer_->Initialize(APIRegistry_, WindowPlatformData.Win32.Handle, DefaultWindowWidth, DefaultWindowHeight)) {
+        fprintf(stderr, "AxEngine: Failed to initialize renderer\n");
+        return (false);
     }
 
-    WindowAPI->SetWindowVisible(Window, true, NULL);
+    // Set cursor mode to disabled for FPS-style controls
+    WindowAPI_->SetCursorMode(Window_, AX_CURSOR_DISABLED, &Error);
+
+    // Initialize input system
+    AxInput::Get().Initialize(APIRegistry_, Window_);
+
+    // Initialize scene manager
+    AxSceneManager::Get().Initialize(APIRegistry_);
+
+    // Create scripting system
+    Scripting_ = new AxScripting();
+    if (!Scripting_->Create(APIRegistry_)) {
+        fprintf(stderr, "AxEngine: Failed to create scripting system\n");
+        return (false);
+    }
+
+    // Load game script
+    if (Scripting_->LoadScript("libGame.dll")) {
+        printf("AxEngine: Loaded Game script\n");
+    } else {
+        printf("AxEngine: No Game script found (libGame.dll)\n");
+    }
+
+    // Set initial engine state on scripts
+    Scripting_->SetEngineState(Renderer_->GetMainCamera(), nullptr);
+
+    // Initialize scripts
+    Scripting_->Init();
+
+    WindowAPI_->SetWindowVisible(Window_, true, NULL);
     isRunning_ = true;
 
+    printf("AxEngine: Initialization complete\n");
     return (true);
 }
 
 bool AxEngine::Tick()
 {
     // Calculate frame time
-    LastFrameTime = PlatformAPI->TimeAPI->WallTime();
-    AxWallClock CurrentTime = PlatformAPI->TimeAPI->WallTime();
-    float DeltaT = PlatformAPI->TimeAPI->ElapsedWallTime(LastFrameTime, CurrentTime);
-    LastFrameTime = CurrentTime;
+    AxWallClock CurrentTime = PlatformAPI_->TimeAPI->WallTime();
+    float DeltaT = PlatformAPI_->TimeAPI->ElapsedWallTime(LastFrameTime_, CurrentTime);
+    LastFrameTime_ = CurrentTime;
 
     // Poll window events
-    WindowAPI->PollEvents(Window);
-    if (WindowAPI->HasRequestedClose(Window)) {
+    WindowAPI_->PollEvents(Window_);
+    if (WindowAPI_->HasRequestedClose(Window_)) {
         isRunning_ = false;
         return (false);
     }
 
+    // Update input
+    AxInput::Get().Update();
+
+    // Check for ESC to exit
+    if (AxInput::Get().IsKeyPressed(AX_KEY_ESCAPE)) {
+        isRunning_ = false;
+        return (false);
+    }
+
+    // Update scripts
+    if (Scripting_) {
+        Scripting_->UpdateFrameState(AxInput::Get().GetMouseDelta());
+        Scripting_->Tick(0.0, DeltaT);
+    }
+
     // Render
-    RenderAPI->NewFrame();
-    RenderAPI->SetActiveViewport(Viewport);
-    RenderAPI->SwapBuffers();
+    Renderer_->BeginFrame();
+
+    // Get scene from scene manager and render
+    AxScene* Scene = AxSceneManager::Get().GetScene();
+    Renderer_->RenderScene(Scene);
+
+    Renderer_->EndFrame();
+
+    // Process pending resource releases
+    if (ResourceAPI_ && ResourceAPI_->IsInitialized()) {
+        ResourceAPI_->ProcessPendingReleases();
+    }
 
     return (true);
 }
 
 int AxEngine::Run()
 {
+    LastFrameTime_ = PlatformAPI_->TimeAPI->WallTime();
+
     while (isRunning_) {
         if (!Tick()) {
             break;
@@ -190,38 +255,45 @@ void AxEngine::Shutdown()
 {
     isRunning_ = false;
 
-    // Destroy renderer context
-    if (RenderAPI) {
-        RenderAPI->DestroyContext();
+    // Shutdown scripts
+    if (Scripting_) {
+        Scripting_->Term();
+        Scripting_->Destroy();
+        delete Scripting_;
+        Scripting_ = nullptr;
+    }
+
+    // Shutdown input
+    AxInput::Get().Shutdown();
+
+    // Shutdown scene manager
+    AxSceneManager::Get().Shutdown();
+
+    // Shutdown renderer
+    if (Renderer_) {
+        Renderer_->Shutdown();
+        delete Renderer_;
+        Renderer_ = nullptr;
+    }
+
+    // Shutdown ResourceAPI (cleans up all loaded resources)
+    if (ResourceAPI_ && ResourceAPI_->IsInitialized()) {
+        ResourceAPI_->Shutdown();
+    }
+
+    // Destroy resource allocator
+    if (gResourceAllocator) {
+        gResourceAllocator->Destroy(gResourceAllocator);
+        gResourceAllocator = nullptr;
     }
 
     // Destroy window
-    if (Window && WindowAPI) {
-        WindowAPI->DestroyWindow(Window);
+    if (Window_ && WindowAPI_) {
+        WindowAPI_->DestroyWindow(Window_);
+        Window_ = nullptr;
     }
 
-    // Release all shader handles
-    AxShaderManager& ShaderManager = AxShaderManager::GetInstance();
-    if (CompiledShaders)
-    {
-        size_t ShaderCount = ArraySize(CompiledShaders);
-        for (size_t i = 0; i < ShaderCount; i++) {
-            if (ShaderManager.IsValid(CompiledShaders[i])) {
-                ShaderManager.Release(CompiledShaders[i]);
-            }
-        }
-        ArrayFree(CompiledShaders);
-        CompiledShaders = NULL;
-    }
-
-    // Clean up hash table
-    if (LoadedModels && APIRegistry) {
-        struct AxHashTableAPI* HashTableAPI = (struct AxHashTableAPI*)APIRegistry->Get(AXON_HASH_TABLE_API_NAME);
-        if (HashTableAPI) {
-            HashTableAPI->DestroyTable(LoadedModels);
-            LoadedModels = NULL;
-        }
-    }
+    gEngine = nullptr;
 }
 
 AxEngine::~AxEngine()
@@ -231,66 +303,58 @@ AxEngine::~AxEngine()
     }
 }
 
-///////////////////////////////////////////////////////////////
-// Orchestration Functions
-///////////////////////////////////////////////////////////////
+//=============================================================================
+// Static API Functions
+//=============================================================================
 
-AxScene* AxEngine::GetScene()
+static bool Initialize(const AxEngineConfig* cfg)
 {
-    return (Scene_);
+    if (!gEngine) {
+        gEngine = new AxEngine();
+    }
+    return (gEngine->Initialize(cfg));
 }
 
-// Global engine instance for DLL
-static AxEngine* gEngine = nullptr;
+static int Run()
+{
+    if (!gEngine) {
+        return (1);
+    }
+    return (gEngine->Run());
+}
 
-// Plugin load function - called by PluginAPI when DLL is loaded
+static void Shutdown()
+{
+    if (gEngine) {
+        gEngine->Shutdown();
+        delete gEngine;
+        gEngine = nullptr;
+    }
+}
+
+static bool IsRunning()
+{
+    return (gEngine && gEngine->IsRunning());
+}
+
+static AxEngineAPI gEngineAPI = {
+    .Initialize = Initialize,
+    .Run = Run,
+    .Shutdown = Shutdown,
+    .IsRunning = IsRunning
+};
+
 extern "C" AXENGINE_API void LoadPlugin(AxAPIRegistry* Registry, bool Load)
 {
     if (Load) {
-        // Store global registry for engine to use
         gAPIRegistry = Registry;
-
-        // Register AxEngineAPI in the registry
-        // (Host will retrieve it via Registry->Get(AX_ENGINE_API_NAME))
-        if (Registry) {
-            // Note: We don't register GetEngineAPI() directly since the host
-            // will call it via DLL symbol lookup
-        }
-    }  else {
-        // Unload: cleanup global state
+        Registry->Set(AX_ENGINE_API_NAME, &gEngineAPI, sizeof(AxEngineAPI));
+        printf("AxEngine: Plugin loaded and API registered\n");
+    } else {
         if (gEngine) {
             delete gEngine;
             gEngine = nullptr;
         }
         gAPIRegistry = nullptr;
     }
-}
-
-// Exported API for host applications
-extern "C" AXENGINE_API AxEngineAPI* GetEngineAPI() {
-    static AxEngineAPI api = {
-        .Initialize = [](const AxEngineConfig* cfg) -> bool {
-            if (!gEngine) {
-                gEngine = new AxEngine();
-            }
-            return (gEngine->Initialize(cfg));
-        },
-        .Run = []() -> int {
-            if (!gEngine) {
-                return (1);
-            }
-            return (gEngine->Run());
-        },
-        .Shutdown = []() {
-            if (gEngine) {
-                gEngine->Shutdown();
-                delete gEngine;
-                gEngine = nullptr;
-            }
-        },
-        .IsRunning = []() -> bool {
-            return (gEngine && gEngine->IsRunning());
-        }
-    };
-    return (&api);
 }

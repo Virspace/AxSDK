@@ -1,4 +1,7 @@
 {
+    "cmake.debugConfig": {
+        "cwd": "${workspaceFolder}/build/bin"
+    },
     "files.associations": {
         "axhashtable.h": "c",
         "axallocatorregistry.h": "c",

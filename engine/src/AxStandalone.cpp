@@ -1,6 +1,5 @@
 #include "Foundation/AxAPIRegistry.h"
 #include "Foundation/AxPlugin.h"
-#include "Foundation/AxPlatform.h"
 #include "AxEngine/AxEngine.h"
 
 #include <stdio.h>
@@ -29,65 +28,22 @@ int main(int argc, char** argv)
     }
 
     // Load AxEngine.dll
-    printf("Loading AxEngine.dll...\n");
+    printf("Loading libAxEngine.dll...\n");
     uint64_t EngineHandle = PluginAPI->Load("libAxEngine.dll", false);
 
-    if (!EngineHandle || !PluginAPI->IsValid(EngineHandle)) {
-        fprintf(stderr, "ERROR: Failed to load AxEngine.dll\n");
+    if (!PluginAPI->IsValid(EngineHandle)) {
+        fprintf(stderr, "ERROR: Failed to load libAxEngine.dll\n");
         AxonTermGlobalAPIRegistry();
         return (1);
     }
 
-    // Get PlatformAPI to access DLL symbol loading
-    AxPlatformAPI* PlatformAPI = static_cast<AxPlatformAPI*>(
-        AxonGlobalAPIRegistry->Get(AXON_PLATFORM_API_NAME)
+    // Get the engine API from the registry
+    AxEngineAPI* Engine = static_cast<AxEngineAPI*>(
+        AxonGlobalAPIRegistry->Get(AX_ENGINE_API_NAME)
     );
 
-    if (!PlatformAPI || !PlatformAPI->DLLAPI) {
-        fprintf(stderr, "ERROR: Failed to get PlatformAPI or DLLAPI\n");
-        PluginAPI->Unload(EngineHandle);
-        AxonTermGlobalAPIRegistry();
-        return (1);
-    }
-
-    // Get the plugin path to load the DLL handle
-    char* PluginPath = PluginAPI->GetPath(EngineHandle);
-    if (!PluginPath) {
-        fprintf(stderr, "ERROR: Failed to get AxEngine.dll path\n");
-        PluginAPI->Unload(EngineHandle);
-        AxonTermGlobalAPIRegistry();
-        return (1);
-    }
-
-    // Load DLL handle for symbol lookup
-    AxDLL DLLHandle = PlatformAPI->DLLAPI->Load(PluginPath);
-    if (!PlatformAPI->DLLAPI->IsValid(DLLHandle)) {
-        fprintf(stderr, "ERROR: Failed to load DLL handle for AxEngine.dll\n");
-        PluginAPI->Unload(EngineHandle);
-        AxonTermGlobalAPIRegistry();
-        return (1);
-    }
-
-    // Get GetEngineAPI function pointer from DLL
-    typedef AxEngineAPI* (*GetEngineAPIFunc)();
-    GetEngineAPIFunc GetEngineAPI = (GetEngineAPIFunc)PlatformAPI->DLLAPI->Symbol(
-        DLLHandle,
-        "GetEngineAPI"
-    );
-
-    if (!GetEngineAPI) {
-        fprintf(stderr, "ERROR: Failed to get GetEngineAPI symbol from DLL\n");
-        PlatformAPI->DLLAPI->Unload(DLLHandle);
-        PluginAPI->Unload(EngineHandle);
-        AxonTermGlobalAPIRegistry();
-        return (1);
-    }
-
-    // Get the engine API
-    AxEngineAPI* Engine = GetEngineAPI();
     if (!Engine) {
-        fprintf(stderr, "ERROR: GetEngineAPI() returned NULL\n");
-        PlatformAPI->DLLAPI->Unload(DLLHandle);
+        fprintf(stderr, "ERROR: Failed to get AxEngineAPI from registry\n");
         PluginAPI->Unload(EngineHandle);
         AxonTermGlobalAPIRegistry();
         return (1);
@@ -105,7 +61,6 @@ int main(int argc, char** argv)
     if (!Engine->Initialize(&Config)) {
         fprintf(stderr, "ERROR: Engine initialization failed\n");
         Engine->Shutdown();
-        PlatformAPI->DLLAPI->Unload(DLLHandle);
         PluginAPI->Unload(EngineHandle);
         AxonTermGlobalAPIRegistry();
         return (1);
@@ -121,7 +76,6 @@ int main(int argc, char** argv)
     Engine->Shutdown();
 
     // Cleanup
-    PlatformAPI->DLLAPI->Unload(DLLHandle);
     PluginAPI->Unload(EngineHandle);
     AxonTermGlobalAPIRegistry();
 

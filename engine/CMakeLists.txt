@@ -13,12 +13,17 @@ add_library(Virspace::AxEngine ALIAS AxEngine)
 target_sources(AxEngine
     PRIVATE
         include/AxEngine/AxEngine.h
+        include/AxEngine/AxInput.h
+        include/AxEngine/AxRenderer.h
+        include/AxEngine/AxSceneManager.h
         include/AxEngine/AxScript.h
-        include/AxEngine/AxResource.h
-        include/AxEngine/AxShaderManager.h
+        include/AxEngine/AxScripting.h
         src/AxEngine.cpp
-        src/AxShaderManager.cpp
-        src/AxResource.cpp
+        src/AxInput.cpp
+        src/AxRenderer.cpp
+        src/AxSceneManager.cpp
+        src/AxScript.cpp
+        src/AxScripting.cpp
 )
 
 # Add the standalone bootstrap executable
@@ -90,6 +95,7 @@ target_compile_definitions(AxStandalone
 include_directories("$<JOIN:$<TARGET_PROPERTY:AxWindow,INCLUDE_DIRECTORIES>,;>")
 include_directories("$<JOIN:$<TARGET_PROPERTY:AxOpenGL,INCLUDE_DIRECTORIES>,;>")
 include_directories("$<JOIN:$<TARGET_PROPERTY:AxScene,INCLUDE_DIRECTORIES>,;>")
+include_directories("$<JOIN:$<TARGET_PROPERTY:AxResource,INCLUDE_DIRECTORIES>,;>")
 
 # Specify include directories
 target_include_directories(AxEngine
@@ -177,5 +183,3 @@ export(EXPORT AxEngineTargets
     FILE ${CMAKE_CURRENT_BINARY_DIR}/AxEngineTargets.cmake
     NAMESPACE Virspace::
 )
-
-add_subdirectory(examples)

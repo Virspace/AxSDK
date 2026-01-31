@@ -1,10 +1,8 @@
 #include "gtest/gtest.h"
 #include "Foundation/AxTypes.h"
 #include "Foundation/AxAllocUtils.h"
-#include "Foundation/AxAllocatorRegistry.h"
-#include "Foundation/AxAllocationData.h"
-#include "Foundation/AxAllocatorInfo.h"
-#include "Foundation/AxLinearAllocator.h"
+#include "Foundation/AxAllocator.h"
+#include "Foundation/AxAllocatorAPI.h"
 
 #include <vector>
 
@@ -13,17 +11,17 @@
 class SceneLoadingAllocatorTest : public testing::Test
 {
     protected:
-        AxLinearAllocator *SceneAllocator;
+        struct AxAllocator *SceneAllocator;
 
         void SetUp()
         {
             // Create allocator sized for typical scene data (8MB)
-            SceneAllocator = LinearAllocatorAPI->Create("SceneTest", Megabytes(8));
+            SceneAllocator = AllocatorAPI->CreateLinear("SceneTest", Megabytes(8));
         }
 
         void TearDown()
         {
-            LinearAllocatorAPI->Destroy(SceneAllocator);
+            SceneAllocator->Destroy(SceneAllocator);
         }
 };
 
@@ -33,14 +31,14 @@ TEST_F(SceneLoadingAllocatorTest, HierarchicalObjectPattern)
     // This test validates allocator performance for scene graph structures
 
     // Root object (simulating AxSceneObject structure)
-    void *RootObject = LinearAllocatorAPI->Alloc(SceneAllocator, 64, __FILE__, __LINE__);
+    void *RootObject = AxAlloc(SceneAllocator, 64);
     EXPECT_NE(RootObject, nullptr);
     EXPECT_TRUE(IsAligned((uintptr_t)RootObject));
 
     // Child objects with varying sizes to test real-world alignment scenarios
-    void *Child1 = LinearAllocatorAPI->Alloc(SceneAllocator, 64, __FILE__, __LINE__);
-    void *Child2 = LinearAllocatorAPI->Alloc(SceneAllocator, 128, __FILE__, __LINE__);
-    void *Child3 = LinearAllocatorAPI->Alloc(SceneAllocator, 256, __FILE__, __LINE__);
+    void *Child1 = AxAlloc(SceneAllocator, 64);
+    void *Child2 = AxAlloc(SceneAllocator, 128);
+    void *Child3 = AxAlloc(SceneAllocator, 256);
 
     EXPECT_NE(Child1, nullptr);
     EXPECT_NE(Child2, nullptr);
@@ -69,7 +67,7 @@ TEST_F(SceneLoadingAllocatorTest, AssetPathStringPattern)
     // Simulate loading a scene with 50 named objects and asset references
     for (size_t i = 0; i < 50; ++i) {
         size_t StringSize = StringSizes[i % 5];
-        void *StringData = LinearAllocatorAPI->Alloc(SceneAllocator, StringSize, __FILE__, __LINE__);
+        void *StringData = AxAlloc(SceneAllocator, StringSize);
         EXPECT_NE(StringData, nullptr);
         EXPECT_TRUE(IsAligned((uintptr_t)StringData));
         StringAllocs.push_back(StringData);
@@ -88,7 +86,7 @@ TEST_F(SceneLoadingAllocatorTest, CompleteSceneLoadingWorkflow)
     // This represents realistic scene loading: objects, transforms, strings, and metadata
 
     // 1. Allocate scene header (scene name, metadata)
-    void *SceneHeader = LinearAllocatorAPI->Alloc(SceneAllocator, 128, __FILE__, __LINE__);
+    void *SceneHeader = AxAlloc(SceneAllocator, 128);
     EXPECT_NE(SceneHeader, nullptr);
 
     // 2. Allocate scene objects (varying sizes for different object types)
@@ -96,7 +94,7 @@ TEST_F(SceneLoadingAllocatorTest, CompleteSceneLoadingWorkflow)
     for (int i = 0; i < 20; ++i) {
         // Mix of small and large objects (32-512 bytes)
         size_t ObjectSize = (i % 3 == 0) ? 512 : ((i % 2 == 0) ? 128 : 64);
-        void *Object = LinearAllocatorAPI->Alloc(SceneAllocator, ObjectSize, __FILE__, __LINE__);
+        void *Object = AxAlloc(SceneAllocator, ObjectSize);
         EXPECT_NE(Object, nullptr);
         EXPECT_TRUE(IsAligned((uintptr_t)Object));
         SceneObjects.push_back(Object);
@@ -107,7 +105,7 @@ TEST_F(SceneLoadingAllocatorTest, CompleteSceneLoadingWorkflow)
     for (int i = 0; i < 30; ++i) {
         // Asset paths: mesh files, texture files, material files
         size_t PathSize = 256; // Typical max path length
-        void *Path = LinearAllocatorAPI->Alloc(SceneAllocator, PathSize, __FILE__, __LINE__);
+        void *Path = AxAlloc(SceneAllocator, PathSize);
         EXPECT_NE(Path, nullptr);
         EXPECT_TRUE(IsAligned((uintptr_t)Path));
         AssetPaths.push_back(Path);
@@ -118,7 +116,7 @@ TEST_F(SceneLoadingAllocatorTest, CompleteSceneLoadingWorkflow)
     for (int i = 0; i < 25; ++i) {
         // Transform structures (vectors, matrices, quaternions)
         size_t TransformSize = (i % 2 == 0) ? 64 : 128; // Mix of different transform sizes
-        void *Transform = LinearAllocatorAPI->Alloc(SceneAllocator, TransformSize, __FILE__, __LINE__);
+        void *Transform = AxAlloc(SceneAllocator, TransformSize);
         EXPECT_NE(Transform, nullptr);
         EXPECT_TRUE(IsAligned((uintptr_t)Transform));
         Transforms.push_back(Transform);
@@ -144,10 +142,10 @@ TEST_F(SceneLoadingAllocatorTest, CompleteSceneLoadingWorkflow)
     }
 
     // Verify we can reset and reuse the allocator for another scene
-    LinearAllocatorAPI->Free(SceneAllocator, __FILE__, __LINE__);
+    SceneAllocator->Reset(SceneAllocator);
 
     // Should be able to load another scene
-    void *NewSceneHeader = LinearAllocatorAPI->Alloc(SceneAllocator, 128, __FILE__, __LINE__);
+    void *NewSceneHeader = AxAlloc(SceneAllocator, 128);
     EXPECT_NE(NewSceneHeader, nullptr);
     EXPECT_TRUE(IsAligned((uintptr_t)NewSceneHeader));
 }
@@ -163,7 +161,7 @@ TEST_F(SceneLoadingAllocatorTest, LargeSceneCapacity)
 
     // Allocate until we've used most of the available space
     while (TotalAllocated < Megabytes(7)) { // Leave 1MB headroom
-        void *Chunk = LinearAllocatorAPI->Alloc(SceneAllocator, ChunkSize, __FILE__, __LINE__);
+        void *Chunk = AxAlloc(SceneAllocator, ChunkSize);
         if (!Chunk) {
             break; // Out of space
         }
@@ -177,7 +175,7 @@ TEST_F(SceneLoadingAllocatorTest, LargeSceneCapacity)
     EXPECT_GT(TotalAllocated, Megabytes(6));
 
     // Verify we can still allocate small objects (typical for scene metadata)
-    void *SmallObj = LinearAllocatorAPI->Alloc(SceneAllocator, 32, __FILE__, __LINE__);
+    void *SmallObj = AxAlloc(SceneAllocator, 32);
     EXPECT_NE(SmallObj, nullptr);
     EXPECT_TRUE(IsAligned((uintptr_t)SmallObj));
 }

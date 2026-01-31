@@ -51,9 +51,13 @@ endif()
 add_library(OpenGLGame SHARED)
 add_library(Virspace::OpenGLGame ALIAS OpenGLGame)
 
+# Output as libGame.dll (the engine expects this name)
+set_target_properties(OpenGLGame PROPERTIES OUTPUT_NAME "Game")
+
 # Add sources to library target
 target_sources(OpenGLGame
     PRIVATE
+        src/Game.h
         src/Game.cpp
 )
 
@@ -112,6 +116,7 @@ include_directories("$<JOIN:$<TARGET_PROPERTY:AxWindow,INCLUDE_DIRECTORIES>,;>")
 include_directories("$<JOIN:$<TARGET_PROPERTY:AxOpenGL,INCLUDE_DIRECTORIES>,;>")
 include_directories("$<JOIN:$<TARGET_PROPERTY:AxScene,INCLUDE_DIRECTORIES>,;>")
 include_directories("$<JOIN:$<TARGET_PROPERTY:AxResource,INCLUDE_DIRECTORIES>,;>")
+include_directories("$<JOIN:$<TARGET_PROPERTY:AxEngine,INCLUDE_DIRECTORIES>,;>")
 
 # Specify include directories to use when compiling a given target
 target_include_directories(OpenGLGame
@@ -126,8 +131,7 @@ target_include_directories(OpenGLGame
 target_link_libraries(OpenGLGame
     PRIVATE
         Virspace::Foundation
-        cgltf
-        axsdk_stb
+        Virspace::AxEngine
 )
 
 #

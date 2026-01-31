@@ -73,4 +73,5 @@ examples/graphics/scenes/models
 # AI Tools
 .claude
 .agent-os
+agent-os
 CLAUDE.md

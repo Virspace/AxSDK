@@ -33,4 +33,4 @@ set_target_properties(Foundation PROPERTIES FOLDER Foundation)
 
 add_subdirectory(plugins)
 add_subdirectory(engine)
-#add_subdirectory(examples)
+add_subdirectory(examples)

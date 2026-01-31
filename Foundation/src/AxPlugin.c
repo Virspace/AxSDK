@@ -51,6 +51,25 @@ static uint64_t Load(const char *Path, bool HotReload)
     struct AxPlatformDLLAPI *DLLAPI = PlatformAPI->DLLAPI;
     struct AxPlatformFileAPI *FileAPI = PlatformAPI->FileAPI;
 
+    // Read and hash the DLL file BEFORE loading it (file may be locked after load)
+    uint64_t Hash = 0;
+    AxFile DLLFile = FileAPI->OpenForRead(Path);
+    if (FileAPI->IsValid(DLLFile))
+    {
+        size_t DLLFileSize = FileAPI->Size(DLLFile);
+        void *DLLFileBuffer = malloc(DLLFileSize);
+        FileAPI->Read(DLLFile, DLLFileBuffer, DLLFileSize);
+        FileAPI->Close(DLLFile);
+
+        Hash = HashBufferFNV1a(DLLFileBuffer, DLLFileSize, HashVal);
+        free(DLLFileBuffer);
+    }
+
+    if (Hash == 0) {
+        fprintf(stderr, "AxPlugin: Failed to read/hash DLL file: %s\n", Path);
+        return (0);
+    }
+
     AxDLL DLL = DLLAPI->Load(Path);
     if (DLLAPI->IsValid(DLL))
     {
@@ -59,22 +78,6 @@ static uint64_t Load(const char *Path, bool HotReload)
         {
             // Call the plugins LoadPlugin function
             LoadPlugin(AxonGlobalAPIRegistry, true);
-
-            // Read DLL into buffer for hashing
-            uint64_t Hash = 0;
-            AxFile DLLFile = FileAPI->OpenForRead(Path);
-            if (FileAPI->IsValid(DLLFile))
-            {
-                // Read DLL
-                size_t DLLFileSize = FileAPI->Size(DLLFile);
-                void *DLLFileBuffer = malloc(DLLFileSize);
-                FileAPI->Read(DLLFile, DLLFileBuffer, DLLFileSize);
-                FileAPI->Close(DLLFile);
-
-                // Hash the plugin
-                Hash = HashBufferFNV1a(DLLFileBuffer, DLLFileSize, HashVal);
-                free(DLLFileBuffer);
-            }
 
             // Create info
             struct AxPlugin Plugin = {

@@ -880,17 +880,6 @@ static inline void TransformRotateFromMouseDelta(AxTransform *Transform, AxVec2 
     TransformMarkDirty(Transform);
 }
 
-static inline float GetAxis(bool Positive, bool Negative)
-{
-    if (Positive && !Negative) {
-        return (1.0f);
-    }
-    if (Negative && !Positive) {
-        return (-1.0f);
-    }
-    return (0.0f);
-}
-
 static inline float Lerp(float A, float B, float T)
 {
     return (A + T * (B - A));

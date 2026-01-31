@@ -2,27 +2,18 @@
 
 #include "Foundation/AxTypes.h"
 
-// DLL export/import macro
-#ifdef AXENGINE_EXPORTS
-  #define AXENGINE_API AXON_DLL_EXPORT
-#else
-  #define AXENGINE_API AXON_DLL_IMPORT
-#endif
-
 #define AX_ENGINE_API_NAME "AxEngineAPI"
 
 struct AxAPIRegistry;
 struct AxWindowAPI;
-struct AxOpenGLAPI;
-struct AxSceneAPI;
 struct AxResourceAPI;
 struct AxPluginAPI;
 struct AxPlatformAPI;
-struct AxShaderHandle;
 
 struct AxWindow;
-struct AxHashTable;
 struct AxScene;
+class AxScripting;
+class AxRenderer;
 
 // Configuration for engine initialization
 struct AxEngineConfig {
@@ -47,9 +38,12 @@ struct AxEngineAPI {
   bool (*IsRunning)();
 };
 
-// Get engine API (entry point for hosts)
-extern "C" AXENGINE_API AxEngineAPI* GetEngineAPI();
-
+/**
+ * AxEngine - Core engine orchestrator
+ *
+ * Manages plugins, window, input, scripting, and rendering subsystems.
+ * Rendering is delegated to AxRender.
+ */
 class AxEngine
 {
 public:
@@ -61,41 +55,25 @@ public:
     void Shutdown();
     bool IsRunning() const { return (isRunning_); }
 
-    /**
-     * Update engine systems (future: resource streaming, etc.)
-     * @param Engine Engine handle
-     */
     bool Tick();
-
-    /**
-     * Get currently loaded scene
-     * @param Engine Engine handle
-     * @return AxScene pointer or NULL if no scene loaded
-     */
-    AxScene* GetScene();
 
 private:
     bool LoadPlugins();
-    void CreateViewport();
-    bool InitWindow();
-    bool InitRenderer();
-    bool InitializeSubsystems();
-    bool CreateApplication();
 
-    AxAPIRegistry *APIRegistry{nullptr};
-    AxWindowAPI *WindowAPI{nullptr};
-    AxOpenGLAPI *RenderAPI{nullptr};
-    AxSceneAPI *SceneAPI{nullptr};
-    AxResourceAPI *ResourceAPI{nullptr};
-    AxPlatformAPI* PlatformAPI{nullptr};
-    AxPluginAPI* PluginAPI{nullptr};
+    // Core APIs
+    AxAPIRegistry* APIRegistry_{nullptr};
+    AxWindowAPI* WindowAPI_{nullptr};
+    AxResourceAPI* ResourceAPI_{nullptr};
+    AxPlatformAPI* PlatformAPI_{nullptr};
+    AxPluginAPI* PluginAPI_{nullptr};
 
-    AxWindow *Window{nullptr};
-    AxViewport *Viewport{nullptr};
-    AxScene* Scene_{nullptr};
-    AxHashTable* LoadedModels;
-    AxShaderHandle* CompiledShaders{nullptr};
-    AxWallClock LastFrameTime;
+    // Window
+    AxWindow* Window_{nullptr};
+    AxWallClock LastFrameTime_;
+
+    // Subsystems
+    AxRenderer* Renderer_{nullptr};
+    AxScripting* Scripting_{nullptr};
 
     bool isRunning_{false};
 };

@@ -138,6 +138,9 @@ struct AxOpenGLAPI
     void (*SetPBRMaterialUniforms)(struct AxShaderData* ShaderData, const AxPBRMaterial* Material,
                                     const AxLight* Lights, int32_t LightCount);
 
+    // Scene lighting uniform setter - sets all light array uniforms from scene lights
+    void (*SetSceneLights)(struct AxShaderData* ShaderData, const AxLight* Lights, int32_t LightCount);
+
     void (*InitTexture)(AxTexture *Texture, uint8_t *Pixels);
     void (*DestroyTexture)(AxTexture *Texture);
     void (*SetTextureData)(AxTexture *Texture, uint8_t *Pixels);

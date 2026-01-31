@@ -1,8 +1,8 @@
 #include "gtest/gtest.h"
 #include "Foundation/AxTypes.h"
 #include "Foundation/AxMath.h"
-#include "Foundation/AxLinearAllocator.h"
-#include "Foundation/AxAllocatorRegistry.h"
+#include "Foundation/AxAllocatorAPI.h"
+#include "Foundation/AxAllocator.h"
 #include "Foundation/AxAPIRegistry.h"
 #include "Foundation/AxPlugin.h"
 #include "AxScene/AxScene.h"
@@ -14,10 +14,10 @@
 class SceneParserTest : public testing::Test
 {
     protected:
-        AxLinearAllocator *TestAllocator;
+        struct AxAllocator* TestAllocator;
         AxSceneAPI *SceneAPI;
         AxPluginAPI *PluginAPI;
-        struct AxLinearAllocatorAPI *LinearAllocatorAPI;
+        struct AxAllocatorAPI *AllocatorAPI;
 
         void SetUp()
         {
@@ -28,21 +28,21 @@ class SceneParserTest : public testing::Test
             PluginAPI = (AxPluginAPI *)AxonGlobalAPIRegistry->Get(AXON_PLUGIN_API_NAME);
             ASSERT_NE(PluginAPI, nullptr);
 
-            // Initialize LinearAllocatorAPI from the global registry
-            LinearAllocatorAPI = (struct AxLinearAllocatorAPI *)AxonGlobalAPIRegistry->Get(AXON_LINEAR_ALLOCATOR_API_NAME);
-            ASSERT_NE(LinearAllocatorAPI, nullptr);
+            // Initialize AllocatorAPI from the global registry
+            AllocatorAPI = (struct AxAllocatorAPI *)AxonGlobalAPIRegistry->Get(AXON_ALLOCATOR_API_NAME);
+            ASSERT_NE(AllocatorAPI, nullptr);
 
             PluginAPI->Load("libAxScene.dll", false);
 
             SceneAPI = (AxSceneAPI *)AxonGlobalAPIRegistry->Get(AXON_SCENE_API_NAME);
             ASSERT_NE(SceneAPI, nullptr);
 
-            TestAllocator = LinearAllocatorAPI->Create("SceneParserTest", Megabytes(1));
+            TestAllocator = AllocatorAPI->CreateLinear("SceneParserTest", Megabytes(1));
         }
 
         void TearDown()
         {
-            LinearAllocatorAPI->Destroy(TestAllocator);
+            TestAllocator->Destroy(TestAllocator);
         }
 };
 

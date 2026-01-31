@@ -146,6 +146,140 @@ static const char *BaseName(const char *Path)
     return (BaseName);
 }
 
+// Normalizes a path for consistent comparison
+static const char *PathNormalize(const char *Path)
+{
+    static char Normalized[MAX_PATH];
+
+    // Handle NULL or empty path
+    if (!Path || *Path == '\0') {
+        Normalized[0] = '\0';
+        return (Normalized);
+    }
+
+    // First pass: copy and convert separators to forward slashes, lowercase everything
+    char Temp[MAX_PATH];
+    size_t TempLen = 0;
+
+    for (size_t i = 0; Path[i] != '\0' && TempLen < MAX_PATH - 1; i++) {
+        char c = Path[i];
+
+        // Convert backslash to forward slash
+        if (c == '\\') {
+            c = '/';
+        }
+
+        // Convert to lowercase
+        if (c >= 'A' && c <= 'Z') {
+            c = c + ('a' - 'A');
+        }
+
+        // Collapse multiple slashes (skip if previous char was also a slash)
+        if (c == '/' && TempLen > 0 && Temp[TempLen - 1] == '/') {
+            continue;
+        }
+
+        Temp[TempLen++] = c;
+    }
+    Temp[TempLen] = '\0';
+
+    // Check for drive letter prefix (e.g., "c:")
+    bool HasDriveLetter = (TempLen >= 2 && Temp[1] == ':');
+    char DriveLetter = HasDriveLetter ? Temp[0] : '\0';
+
+    // Determine where the path components start (after drive letter if present)
+    const char *Start = Temp;
+    if (HasDriveLetter) {
+        Start = Temp + 2;  // Skip "c:"
+    }
+
+    // Skip leading slashes
+    while (*Start == '/') {
+        Start++;
+    }
+
+    // Second pass: resolve . and .. components
+    // We'll build the result by processing each path component
+    char *Components[128];  // Array of component pointers
+    int ComponentCount = 0;
+
+    char WorkBuffer[MAX_PATH];
+    strncpy(WorkBuffer, Start, MAX_PATH - 1);
+    WorkBuffer[MAX_PATH - 1] = '\0';
+
+    // Tokenize by '/'
+    char *Token = strtok(WorkBuffer, "/");
+    while (Token != NULL) {
+        if (strcmp(Token, ".") == 0) {
+            // Current directory - skip
+        } else if (strcmp(Token, "..") == 0) {
+            // Parent directory - pop if we can
+            if (ComponentCount > 0 && strcmp(Components[ComponentCount - 1], "..") != 0) {
+                ComponentCount--;
+            } else {
+                // Can't go up further, keep the ..
+                Components[ComponentCount++] = "..";
+            }
+        } else {
+            // Normal component
+            Components[ComponentCount++] = Token;
+        }
+        Token = strtok(NULL, "/");
+    }
+
+    // Third pass: rebuild the path
+    size_t OutLen = 0;
+
+    // Add drive letter prefix if present
+    if (HasDriveLetter) {
+        Normalized[OutLen++] = DriveLetter;
+        Normalized[OutLen++] = ':';
+        Normalized[OutLen++] = '/';
+    }
+
+    // Add components
+    for (int i = 0; i < ComponentCount; i++) {
+        if (i > 0) {
+            Normalized[OutLen++] = '/';
+        }
+
+        size_t CompLen = strlen(Components[i]);
+        if (OutLen + CompLen < MAX_PATH - 1) {
+            strcpy(&Normalized[OutLen], Components[i]);
+            OutLen += CompLen;
+        }
+    }
+
+    Normalized[OutLen] = '\0';
+
+    // Remove trailing slash (unless it's just a drive root like "c:/")
+    if (OutLen > 0 && Normalized[OutLen - 1] == '/') {
+        // Keep trailing slash only for drive roots
+        if (!(OutLen == 3 && Normalized[1] == ':')) {
+            Normalized[OutLen - 1] = '\0';
+        }
+    }
+
+    return (Normalized);
+}
+
+// Function to get the file extension from a given path
+const char *FileExtension(const char *Path)
+{
+    AXON_ASSERT(Path);
+
+    // Find the last occurrence of '.' in the path
+    const char *dot = strrchr(Path, '.');
+
+    // Ensure the dot is not the first character and there is a valid extension
+    if (dot && dot != Path && strchr(dot, '/') == NULL && strchr(dot, '\\') == NULL) {
+        return dot + 1; // Return the extension (skip the dot)
+    }
+
+    return NULL; // No valid extension found
+}
+
+
 /* ========================================================================
    Axon File
    ======================================================================== */
@@ -709,6 +843,8 @@ struct AxPlatformAPI *PlatformAPI = &(struct AxPlatformAPI) {
         .BasePath = BasePath,
         .FileName = FileName,
         .BaseName = BaseName,
+        .FileExtension = FileExtension,
+        .Normalize = PathNormalize
     },
     .TimeAPI = &(struct AxTimeAPI) {
         .WallTime = WallTime,

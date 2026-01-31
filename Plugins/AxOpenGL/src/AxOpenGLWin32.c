@@ -719,6 +719,8 @@ static void AxRender(AxViewport *Viewport, struct AxMesh *Mesh, struct AxShaderD
 static void AxSwapBuffers(void)
 {
     AXON_ASSERT(ContextInitialized && "Context not initialized in SwapBuffers()!");
+    // Wait for all GPU commands to complete before swap to prevent flickering
+    glFinish();
     SwapBuffers(wglGetCurrentDC());
 }
 
@@ -975,7 +977,32 @@ static void AxSetUniform(struct AxShaderData *ShaderData, const char *UniformNam
             glProgramUniform1f(ShaderData->ShaderHandle, ShaderData->AttribLocationAlphaCutoff, *(const float*)Value);
         }
     } else {
-        printf("Warning: Unknown uniform '%s' in SetUniform()\n", UniformName);
+        // Dynamic uniform lookup for PBR and other uniforms not pre-cached
+        // Determine the type based on uniform name conventions
+        GLint loc = glGetUniformLocation(ShaderData->ShaderHandle, UniformName);
+        if (loc != -1) {
+            // Texture samplers and usage flags (int uniforms)
+            if (strstr(UniformName, "Texture") != NULL ||
+                strstr(UniformName, "use") == UniformName ||
+                strcmp(UniformName, "alphaMode") == 0 ||
+                strcmp(UniformName, "lightCount") == 0) {
+                glProgramUniform1i(ShaderData->ShaderHandle, loc, *(const int*)Value);
+            }
+            // Float uniforms
+            else if (strcmp(UniformName, "metallicFactor") == 0 ||
+                     strcmp(UniformName, "roughnessFactor") == 0) {
+                glProgramUniform1f(ShaderData->ShaderHandle, loc, *(const float*)Value);
+            }
+            // Vec3 uniforms
+            else if (strcmp(UniformName, "emissiveFactor") == 0) {
+                glProgramUniform3fv(ShaderData->ShaderHandle, loc, 1, (const GLfloat*)Value);
+            }
+            // Default: try as float (safest fallback)
+            else {
+                glProgramUniform1f(ShaderData->ShaderHandle, loc, *(const float*)Value);
+            }
+        }
+        // Silently ignore uniforms that don't exist in shader (may be optimized out)
     }
 
     uint32_t Result = glGetError();
@@ -1093,6 +1120,63 @@ static void AxSetPBRMaterialUniforms(struct AxShaderData* ShaderData, const AxPB
     uint32_t Result = glGetError();
     if (Result != GL_NO_ERROR) {
         printf("OpenGL Error in AxSetPBRMaterialUniforms: %u\n", Result);
+    }
+}
+
+// Scene lighting uniform setter - sets light array uniforms from scene lights
+// This is a lighter-weight alternative to SetPBRMaterialUniforms when only
+// lighting needs to be updated (material already set via other means)
+static void AxSetSceneLights(struct AxShaderData* ShaderData, const AxLight* Lights, int32_t LightCount)
+{
+    AXON_ASSERT(ContextInitialized && "Context not initialized!");
+    AXON_ASSERT(ShaderData && "ShaderData is NULL!");
+
+    uint32_t ShaderHandle = ShaderData->ShaderHandle;
+
+    // Clamp to max 8 lights (shader limit)
+    int32_t ClampedLightCount = (LightCount > 8) ? 8 : LightCount;
+
+    // Set light count uniform
+    GLint loc = glGetUniformLocation(ShaderHandle, "lightCount");
+    if (loc != -1) {
+        glProgramUniform1i(ShaderHandle, loc, ClampedLightCount);
+    }
+
+    // Set light array uniforms
+    if (Lights && ClampedLightCount > 0) {
+        for (int32_t i = 0; i < ClampedLightCount; i++) {
+            char uniformName[64];
+            const AxLight* Light = &Lights[i];
+
+            snprintf(uniformName, sizeof(uniformName), "lightPositions[%d]", i);
+            loc = glGetUniformLocation(ShaderHandle, uniformName);
+            if (loc != -1) {
+                glProgramUniform3fv(ShaderHandle, loc, 1, &Light->Position.X);
+            }
+
+            snprintf(uniformName, sizeof(uniformName), "lightColors[%d]", i);
+            loc = glGetUniformLocation(ShaderHandle, uniformName);
+            if (loc != -1) {
+                glProgramUniform3fv(ShaderHandle, loc, 1, &Light->Color.X);
+            }
+
+            snprintf(uniformName, sizeof(uniformName), "lightIntensities[%d]", i);
+            loc = glGetUniformLocation(ShaderHandle, uniformName);
+            if (loc != -1) {
+                glProgramUniform1f(ShaderHandle, loc, Light->Intensity);
+            }
+
+            snprintf(uniformName, sizeof(uniformName), "lightRanges[%d]", i);
+            loc = glGetUniformLocation(ShaderHandle, uniformName);
+            if (loc != -1) {
+                glProgramUniform1f(ShaderHandle, loc, Light->Range);
+            }
+        }
+    }
+
+    uint32_t Result = glGetError();
+    if (Result != GL_NO_ERROR) {
+        printf("OpenGL Error in AxSetSceneLights: %u\n", Result);
     }
 }
 
@@ -1611,6 +1695,7 @@ struct AxOpenGLAPI *AxOpenGLAPI = &(struct AxOpenGLAPI) {
     .GetAttributeLocations = AxGetAttributeLocations,
     .SetUniform = AxSetUniform,
     .SetPBRMaterialUniforms = AxSetPBRMaterialUniforms,
+    .SetSceneLights = AxSetSceneLights,
     .InitTexture = AxInitTexture,
     .DestroyTexture = AxDestroyTexture,
     .SetTextureData = AxSetTextureData,

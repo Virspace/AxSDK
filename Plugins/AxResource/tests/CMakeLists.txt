@@ -13,7 +13,7 @@ include(FetchContent)
 FetchContent_Declare(
   googletest
   # Specify the commit you depend on and update it regularly.
-  URL https://github.com/google/googletest/archive/refs/tags/release-1.11.0.zip
+  URL https://github.com/google/googletest/releases/download/v1.17.0/googletest-1.17.0.tar.gz
 )
 
 # For Windows: Prevent overriding the parent project's compiler/linker settings
@@ -33,7 +33,7 @@ add_executable(AxResourceTests)
 target_sources(AxResourceTests
     PRIVATE
         src/main.cpp
-        src/ResourceTests.cpp
+        src/ResourceAPITests.cpp
 )
 
 #
@@ -47,11 +47,17 @@ target_compile_definitions(AxResourceTests
         AXON_LINKS_FOUNDATION
 )
 
+# Get AxOpenGL include directories
+target_include_directories(AxResourceTests
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../include
+)
+
 # Link dependencies
 target_link_libraries(AxResourceTests
     PRIVATE
         Virspace::Foundation
-        Virspace::AxScene
+        Virspace::AxResource
         gtest
         gtest_main
 )

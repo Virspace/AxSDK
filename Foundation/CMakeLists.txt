@@ -21,11 +21,10 @@ target_sources(Foundation
         include/Foundation/AxAPIRegistry.h
         include/Foundation/AxAllocUtils.h
         include/Foundation/AxAllocationData.h
-        include/Foundation/AxAllocatorInfo.h
-        include/Foundation/AxAllocatorRegistry.h
+        include/Foundation/AxAllocator.h
+        include/Foundation/AxAllocatorAPI.h
         include/Foundation/AxApplication.h
         include/Foundation/AxArray.h
-        include/Foundation/AxHeap.h
         #include/Foundation/AxStackAllocator.h
         include/Foundation/AxEditorPlugin.h
         include/Foundation/AxHash.h
@@ -38,12 +37,8 @@ target_sources(Foundation
         include/Foundation/AxTypes.h
         include/Foundation/AxLinkedList.h
         src/AxAPIRegistry.c
-        src/AxAllocatorData.h
-        src/AxAllocatorInfo.c
-        src/AxAllocatorRegistry.c
+        src/AxAllocatorAPI.c
         src/AxAllocUtils.c
-        src/AxLinearAllocatorWin32.c
-        src/AxHeapWin32.c
         #src/AxImageLoader.c
         src/AxHash.c
         src/AxHashTable.c
@@ -59,12 +54,10 @@ else()
         PRIVATE
             include/Foundation/AxAPIRegistry.h
             include/Foundation/AxAllocUtils.h
-            include/Foundation/AxAllocatorInfo.h
-            include/Foundation/AxAllocatorRegistry.h
+            include/Foundation/AxAllocator.h
+            include/Foundation/AxAllocatorAPI.h
             include/Foundation/AxApplication.h
             include/Foundation/AxArray.h
-            #include/Foundation/AxHeap.h
-            include/Foundation/AxLinearAllocator.h
             #include/Foundation/AxStackAllocator.h
             include/Foundation/AxEditorPlugin.h
             include/Foundation/AxHash.h
@@ -77,13 +70,9 @@ else()
             include/Foundation/AxTypes.h
             include/Foundation/AxLinkedList.h
             src/AxAPIRegistry.c
-            src/AxAllocatorData.h
-            src/AxAllocatorInfo.c
-            src/AxAllocatorRegistry.c
+            src/AxAllocatorAPI.c
             src/AxAllocUtils.c
-            #src/AxHeapLinux.c
             src/AxIntrinsics.c
-            src/AxLinearAllocatorLinux.c
             #src/AxImageLoader.c
             src/AxHash.c
             src/AxHashTable.c
@@ -185,7 +174,7 @@ export(EXPORT FoundationTargets
 # Testing
 #
 
-# If someone else includes your package, and they use BUILD_TESTING, 
+# If someone else includes your package, and they use BUILD_TESTING,
 # they probably do not want your tests to build
 #if((CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME OR AXON_BUILD_TESTING) AND BUILD_TESTING)
     add_subdirectory(tests)

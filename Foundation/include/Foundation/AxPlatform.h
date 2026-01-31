@@ -58,6 +58,15 @@ struct AxPlatformPathAPI
     const char *(*BasePath)(const char *Path);
     const char *(*FileName)(const char *Path);
     const char *(*BaseName)(const char *Path);
+    const char *(*FileExtension)(const char *Path);
+
+    // Normalizes a path for consistent comparison:
+    // - Converts backslashes to forward slashes
+    // - Converts to lowercase (for case-insensitive matching)
+    // - Resolves . and .. path components
+    // - Collapses multiple consecutive slashes
+    // - Removes trailing slashes
+    const char *(*Normalize)(const char *Path);
 };
 
 // Interface for File I/O
