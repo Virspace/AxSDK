@@ -9,8 +9,9 @@ struct AxViewport;
 struct AxCamera;
 struct AxShaderData;
 struct AxModelData;
-struct AxScene;
-struct AxSceneObject;
+
+class AxScene;
+class Node;
 
 /**
  * AxRender - Handles all rendering operations
@@ -61,7 +62,7 @@ public:
     AxCamera* GetMainCamera() { return MainCamera_; }
 
 private:
-    void RenderSceneObject(AxSceneObject* Obj, const AxMat4x4* ParentTransform);
+    void RenderNode(Node* NodePtr, const AxMat4x4* ParentTransform);
     void RenderModel(const AxModelData* Model, const AxMat4x4* BaseTransform);
 
     AxOpenGLAPI* RenderAPI_{nullptr};

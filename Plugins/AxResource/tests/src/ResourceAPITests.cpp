@@ -412,15 +412,6 @@ TEST_F(ResourceAPITest, LoadMeshFailsWithoutFile)
     EXPECT_FALSE(AX_HANDLE_IS_VALID(Handle));
 }
 
-TEST_F(ResourceAPITest, LoadMeshFailsWithNullPath)
-{
-    API->Initialize(AxonGlobalAPIRegistry, TestAllocator, nullptr);
-
-    // Null path should return invalid handle
-    AxMeshHandle Handle = API->LoadMesh(nullptr, nullptr);
-    EXPECT_FALSE(AX_HANDLE_IS_VALID(Handle));
-}
-
 TEST_F(ResourceAPITest, LoadShaderFailsWithoutFiles)
 {
     API->Initialize(AxonGlobalAPIRegistry, TestAllocator, nullptr);
@@ -428,20 +419,6 @@ TEST_F(ResourceAPITest, LoadShaderFailsWithoutFiles)
     // Without real files or RenderAPI, should return invalid handle
     AxShaderHandle Handle = API->LoadShader("vert.glsl", "frag.glsl", nullptr);
     EXPECT_FALSE(AX_HANDLE_IS_VALID(Handle));
-}
-
-TEST_F(ResourceAPITest, LoadShaderFailsWithNullPaths)
-{
-    API->Initialize(AxonGlobalAPIRegistry, TestAllocator, nullptr);
-
-    // Null paths should return invalid handles
-    AxShaderHandle Handle1 = API->LoadShader(nullptr, "frag.glsl", nullptr);
-    AxShaderHandle Handle2 = API->LoadShader("vert.glsl", nullptr, nullptr);
-    AxShaderHandle Handle3 = API->LoadShader(nullptr, nullptr, nullptr);
-
-    EXPECT_FALSE(AX_HANDLE_IS_VALID(Handle1));
-    EXPECT_FALSE(AX_HANDLE_IS_VALID(Handle2));
-    EXPECT_FALSE(AX_HANDLE_IS_VALID(Handle3));
 }
 
 TEST_F(ResourceAPITest, CreateMaterialWithNullDescFails)

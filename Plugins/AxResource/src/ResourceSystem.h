@@ -30,8 +30,7 @@
 #include "Foundation/AxAllocator.h"
 #include "Foundation/AxAPIRegistry.h"
 
-#include <cstdint>
-#include <cstddef>
+#include <string_view>
 
 //=============================================================================
 // Resource Type Enumeration
@@ -152,8 +151,10 @@ struct AxShaderData;
 struct AxMaterialDesc;
 struct AxVertex;
 struct AxModelData;
-struct AxScene;
-struct AxSceneAPI;
+
+class AxScene;
+
+struct AxSceneParserAPI;
 
 /**
  * ResourceSystem is the main coordinator for all resource management.
@@ -177,7 +178,7 @@ public:
     //=========================================================================
     // Texture Management
     //=========================================================================
-    AxTextureHandle LoadTexture(const char* Path,
+    AxTextureHandle LoadTexture(std::string_view Path,
                                 const struct AxTextureLoadOptions* Options);
     AxTextureHandle CreateTextureSlot();
     bool IsTextureValid(AxTextureHandle Handle) const;
@@ -191,7 +192,7 @@ public:
     //=========================================================================
     // Mesh Management
     //=========================================================================
-    AxMeshHandle LoadMesh(const char* Path,
+    AxMeshHandle LoadMesh(std::string_view Path,
                           const struct AxMeshLoadOptions* Options);
     AxMeshHandle CreateMeshSlot();
     bool IsMeshValid(AxMeshHandle Handle) const;
@@ -205,8 +206,8 @@ public:
     //=========================================================================
     // Shader Management
     //=========================================================================
-    AxShaderHandle LoadShader(const char* VertexPath,
-                               const char* FragmentPath,
+    AxShaderHandle LoadShader(std::string_view VertexPath,
+                               std::string_view FragmentPath,
                                const struct AxShaderLoadOptions* Options);
     AxShaderHandle CreateShaderSlot();
     bool IsShaderValid(AxShaderHandle Handle) const;
@@ -242,7 +243,7 @@ public:
      * @param Path Path to the GLTF file
      * @return Handle to the loaded model, or AX_INVALID_HANDLE on failure
      */
-    AxModelHandle LoadModel(const char* Path);
+    AxModelHandle LoadModel(std::string_view Path);
 
     /**
      * Get model data by handle.
@@ -303,14 +304,14 @@ public:
      * @param Path Path to the scene file
      * @return Handle to the loaded scene, or AX_INVALID_HANDLE on failure
      */
-    AxSceneHandle LoadScene(const char* Path);
+    AxSceneHandle LoadScene(std::string_view Path);
 
     /**
      * Get scene data by handle.
      * @param Handle Scene handle
      * @return Pointer to scene data, or NULL if invalid handle
      */
-    struct AxScene* GetScene(AxSceneHandle Handle);
+    AxScene* GetScene(AxSceneHandle Handle);
 
     /**
      * Check if a scene handle is still valid.
@@ -340,6 +341,13 @@ public:
      */
     uint32_t GetSceneRefCount(AxSceneHandle Handle) const;
 
+    /**
+     * Get the model handle for a node's MeshFilter component.
+     * @param NodePtr Pointer to a Node (void* to avoid exposing C++ Node in C header)
+     * @return AxModelHandle for the node's mesh, or AX_INVALID_HANDLE if none
+     */
+    AxModelHandle GetNodeModelHandle(void* NodePtr) const;
+
     //=========================================================================
     // Deferred Destruction
     //=========================================================================
@@ -365,13 +373,13 @@ private:
     void ProcessDeletion(const PendingDeletion& Deletion);
 
     // Internal helpers for resource loading
-    char* ReadFileToString(const char* Path, uint64_t* OutSize);
-
-    // Helper to extract base path from file path
-    void ExtractBasePath(const char* FilePath, char* OutBasePath, size_t MaxLen);
+    char* ReadFileToString(std::string_view Path, uint64_t* OutSize);
 
     // Internal model loading helper (populates model data)
-    bool LoadModelInternal(const char* Path, struct AxModelData* OutModel);
+    bool LoadModelInternal(std::string_view Path, struct AxModelData* OutModel);
+
+    // Load models for all MeshFilter components in a scene after parsing
+    void LoadSceneModels(AxScene* Scene);
 
     // Dependencies
     struct AxAllocator* m_Allocator;
@@ -387,8 +395,8 @@ private:
     ResourceSlotArray<AxModelData> m_Models;
     ResourceSlotArray<AxScene> m_Scenes;
 
-    // SceneAPI for scene loading
-    struct AxSceneAPI* m_SceneAPI;
+    // SceneParserAPI for scene loading
+    struct AxSceneParserAPI* m_SceneAPI;
 
     // Pending deletion queue
     PendingDeletion* m_PendingDeletions;
@@ -401,9 +409,9 @@ private:
     uint32_t m_TexturePathCacheCount;
 
     // Texture path cache helpers
-    uint32_t HashPath(const char* NormalizedPath) const;
-    AxTextureHandle TexturePathCacheFind(const char* NormalizedPath);
-    void TexturePathCacheInsert(const char* NormalizedPath, AxTextureHandle Handle);
+    uint32_t HashPath(std::string_view NormalizedPath) const;
+    AxTextureHandle TexturePathCacheFind(std::string_view NormalizedPath);
+    void TexturePathCacheInsert(std::string_view NormalizedPath, AxTextureHandle Handle);
     void TexturePathCacheRemove(AxTextureHandle Handle);
 
     bool m_Initialized;

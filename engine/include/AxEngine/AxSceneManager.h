@@ -2,10 +2,12 @@
 
 #include "Foundation/AxTypes.h"
 #include "AxResource/AxResourceTypes.h"
+#include <string_view>
 
 struct AxAPIRegistry;
 struct AxResourceAPI;
-struct AxScene;
+
+class AxScene;
 
 /**
  * AxSceneManager - Centralized scene management
@@ -36,7 +38,7 @@ public:
      * @param Path - Path to scene file (e.g., "scenes/sponza_atrium.ats")
      * @return true if loaded successfully, false on error
      */
-    bool Load(const char* Path);
+    bool Load(std::string_view Path);
 
     /**
      * Unload the current scene and free resources.

@@ -38,7 +38,7 @@ static void Shutdown(void);
 static bool IsInitialized(void);
 
 // Texture
-static AxTextureHandle LoadTexture(const char* Path,
+static AxTextureHandle LoadTexture(std::string_view Path,
                                     const struct AxTextureLoadOptions* Options);
 static const struct AxTexture* GetTexture(AxTextureHandle Handle);
 static bool GetTextureInfo(AxTextureHandle Handle, struct AxTextureInfo* OutInfo);
@@ -47,7 +47,7 @@ static AxTextureHandle AcquireTexture(AxTextureHandle Handle);
 static void ReleaseTexture(AxTextureHandle Handle);
 
 // Mesh
-static AxMeshHandle LoadMesh(const char* Path,
+static AxMeshHandle LoadMesh(std::string_view Path,
                               const struct AxMeshLoadOptions* Options);
 static const struct AxMesh* GetMesh(AxMeshHandle Handle);
 static bool GetMeshInfo(AxMeshHandle Handle, struct AxMeshInfo* OutInfo);
@@ -56,8 +56,8 @@ static AxMeshHandle AcquireMesh(AxMeshHandle Handle);
 static void ReleaseMesh(AxMeshHandle Handle);
 
 // Shader
-static AxShaderHandle LoadShader(const char* VertexPath,
-                                  const char* FragmentPath,
+static AxShaderHandle LoadShader(std::string_view VertexPath,
+                                  std::string_view FragmentPath,
                                   const struct AxShaderLoadOptions* Options);
 static const struct AxShaderData* GetShader(AxShaderHandle Handle);
 static uint32_t GetShaderProgram(AxShaderHandle Handle);
@@ -74,7 +74,7 @@ static AxMaterialHandle AcquireMaterial(AxMaterialHandle Handle);
 static void ReleaseMaterial(AxMaterialHandle Handle);
 
 // Model (Handle-based - Phase 6)
-static AxModelHandle LoadModel(const char* Path);
+static AxModelHandle LoadModel(std::string_view Path);
 static const struct AxModelData* GetModel(AxModelHandle Handle);
 static bool IsModelValid(AxModelHandle Handle);
 static uint32_t GetModelCount(void);
@@ -83,12 +83,13 @@ static AxModelHandle AcquireModel(AxModelHandle Handle);
 static void ReleaseModel(AxModelHandle Handle);
 
 // Scene (Handle-based)
-static AxSceneHandle LoadScene(const char* Path);
+static AxSceneHandle LoadScene(std::string_view Path);
 static struct AxScene* GetScene(AxSceneHandle Handle);
 static bool IsSceneValid(AxSceneHandle Handle);
 static AxSceneHandle AcquireScene(AxSceneHandle Handle);
 static void ReleaseScene(AxSceneHandle Handle);
 static uint32_t GetSceneRefCount(AxSceneHandle Handle);
+static AxModelHandle GetNodeModelHandle(void* NodePtr);
 
 // Deferred Destruction
 static void ProcessPendingReleases(void);
@@ -161,6 +162,7 @@ static struct AxResourceAPI s_ResourceAPI = {
     .AcquireScene = AcquireScene,
     .ReleaseScene = ReleaseScene,
     .GetSceneRefCount = GetSceneRefCount,
+    .GetNodeModelHandle = GetNodeModelHandle,
 
     // Deferred Destruction
     .ProcessPendingReleases = ProcessPendingReleases,
@@ -203,7 +205,7 @@ static bool IsInitialized(void)
 // Texture Implementation
 //=============================================================================
 
-static AxTextureHandle LoadTexture(const char* Path,
+static AxTextureHandle LoadTexture(std::string_view Path,
                                     const struct AxTextureLoadOptions* Options)
 {
     return ResourceSystem::Get().LoadTexture(Path, Options);
@@ -254,7 +256,7 @@ static void ReleaseTexture(AxTextureHandle Handle)
 // Mesh Implementation
 //=============================================================================
 
-static AxMeshHandle LoadMesh(const char* Path,
+static AxMeshHandle LoadMesh(std::string_view Path,
                               const struct AxMeshLoadOptions* Options)
 {
     return ResourceSystem::Get().LoadMesh(Path, Options);
@@ -304,8 +306,8 @@ static void ReleaseMesh(AxMeshHandle Handle)
 // Shader Implementation
 //=============================================================================
 
-static AxShaderHandle LoadShader(const char* VertexPath,
-                                  const char* FragmentPath,
+static AxShaderHandle LoadShader(std::string_view VertexPath,
+                                  std::string_view FragmentPath,
                                   const struct AxShaderLoadOptions* Options)
 {
     return ResourceSystem::Get().LoadShader(VertexPath, FragmentPath, Options);
@@ -389,7 +391,7 @@ static void ReleaseMaterial(AxMaterialHandle Handle)
 // Model Implementation (Handle-based - Phase 6)
 //=============================================================================
 
-static AxModelHandle LoadModel(const char* Path)
+static AxModelHandle LoadModel(std::string_view Path)
 {
     return ResourceSystem::Get().LoadModel(Path);
 }
@@ -428,7 +430,7 @@ static void ReleaseModel(AxModelHandle Handle)
 // Scene Implementation (Handle-based)
 //=============================================================================
 
-static AxSceneHandle LoadScene(const char* Path)
+static AxSceneHandle LoadScene(std::string_view Path)
 {
     return ResourceSystem::Get().LoadScene(Path);
 }
@@ -456,6 +458,11 @@ static void ReleaseScene(AxSceneHandle Handle)
 static uint32_t GetSceneRefCount(AxSceneHandle Handle)
 {
     return ResourceSystem::Get().GetSceneRefCount(Handle);
+}
+
+static AxModelHandle GetNodeModelHandle(void* NodePtr)
+{
+    return ResourceSystem::Get().GetNodeModelHandle(NodePtr);
 }
 
 //=============================================================================

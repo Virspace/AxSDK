@@ -79,7 +79,7 @@ set(OpenGLGame_COMPILE_OPTIONS
     #/Od         # DISABLES all optimizations in the program and speeds compilation.
     #/Oi         # DISABLES the replacement of some function calls with intrinsic or otherwise special forms of the function that help your application run faster.
     /WL         # Appends additional information to an error or warning message.
-    #/WX         # Treats all compiler warnings as errors. 
+    #/WX         # Treats all compiler warnings as errors.
     /W4         # Displays level 1, level 2, and level 3 warnings, and all level 4 (informational) warnings that aren't off by default.
     /wd4201     # nonstandard extension used : nameless struct/union.
     /wd4100     # 'identifier' : unreferenced formal parameter.
@@ -114,7 +114,6 @@ target_compile_definitions(OpenGLGame
 
 include_directories("$<JOIN:$<TARGET_PROPERTY:AxWindow,INCLUDE_DIRECTORIES>,;>")
 include_directories("$<JOIN:$<TARGET_PROPERTY:AxOpenGL,INCLUDE_DIRECTORIES>,;>")
-include_directories("$<JOIN:$<TARGET_PROPERTY:AxScene,INCLUDE_DIRECTORIES>,;>")
 include_directories("$<JOIN:$<TARGET_PROPERTY:AxResource,INCLUDE_DIRECTORIES>,;>")
 include_directories("$<JOIN:$<TARGET_PROPERTY:AxEngine,INCLUDE_DIRECTORIES>,;>")
 

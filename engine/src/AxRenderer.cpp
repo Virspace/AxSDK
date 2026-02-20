@@ -2,13 +2,17 @@
  * AxRender.cpp - Rendering system implementation
  *
  * Handles viewport, camera, shaders, and scene rendering.
+ * Traverses the Node hierarchy via GetFirstChild/GetNextSibling and reads
+ * MeshFilter/MeshRenderer components for model rendering. Lights and cameras
+ * are read directly from the AxScene public members.
  */
 
 #include "AxEngine/AxRenderer.h"
+#include "AxEngine/AxScene.h"
+#include "AxEngine/AxNode.h"
 
 #include "AxOpenGL/AxOpenGL.h"
 #include "AxOpenGL/AxOpenGLTypes.h"
-#include "AxScene/AxScene.h"
 #include "AxResource/AxResource.h"
 #include "Foundation/AxAPIRegistry.h"
 #include "Foundation/AxMath.h"
@@ -135,21 +139,24 @@ void AxRenderer::RenderScene(AxScene* Scene)
     RenderAPI_->SetUniform(ShaderData_, "viewPos", &ViewPos);
     RenderAPI_->SetSceneLights(ShaderData_, Scene->Lights, Scene->LightCount);
 
-    // Render scene objects
-    RenderSceneObject(Scene->RootObject, nullptr);
+    // Render the node hierarchy starting from the root
+    RenderNode(static_cast<Node*>(Scene->GetRootNode()), nullptr);
 }
 
-void AxRenderer::RenderSceneObject(AxSceneObject* Obj, const AxMat4x4* ParentTransform)
+void AxRenderer::RenderNode(Node* NodePtr, const AxMat4x4* ParentTransform)
 {
-    if (!Obj) return;
+    if (!NodePtr) return;
+
+    // Get the node's local transform
+    const AxTransform& Transform = NodePtr->GetTransform();
 
     // Compute local transform matrix (TRS: Translation * Rotation * Scale)
-    AxMat4x4 ScaleMatrix = Mat4x4Scale(Obj->Transform.Scale);
-    AxMat4x4 RotMatrix = QuatToMat4x4(Obj->Transform.Rotation);
+    AxMat4x4 ScaleMatrix = Mat4x4Scale(Transform.Scale);
+    AxMat4x4 RotMatrix = QuatToMat4x4(Transform.Rotation);
     AxMat4x4 LocalTransform = Mat4x4Mul(RotMatrix, ScaleMatrix);
-    LocalTransform.E[3][0] = Obj->Transform.Translation.X;
-    LocalTransform.E[3][1] = Obj->Transform.Translation.Y;
-    LocalTransform.E[3][2] = Obj->Transform.Translation.Z;
+    LocalTransform.E[3][0] = Transform.Translation.X;
+    LocalTransform.E[3][1] = Transform.Translation.Y;
+    LocalTransform.E[3][2] = Transform.Translation.Z;
 
     AxMat4x4 WorldTransform;
     if (ParentTransform) {
@@ -158,23 +165,23 @@ void AxRenderer::RenderSceneObject(AxSceneObject* Obj, const AxMat4x4* ParentTra
         WorldTransform = LocalTransform;
     }
 
-    // Render this object's model if loaded
-    if (Obj->LoadedModelIndex != 0) {
-        AxModelHandle Handle;
-        Handle.Index = Obj->LoadedModelIndex;
-        Handle.Generation = Obj->LoadedModelGeneration;
-
-        const AxModelData* Model = ResourceAPI_->GetModel(Handle);
-        if (Model) {
-            RenderModel(Model, &WorldTransform);
+    // If this node has a MeshFilter with a loaded model, render it
+    if (ResourceAPI_) {
+        AxModelHandle ModelHandle = ResourceAPI_->GetNodeModelHandle(static_cast<void*>(NodePtr));
+        if (AX_HANDLE_IS_VALID(ModelHandle)) {
+            const AxModelData* Model = ResourceAPI_->GetModel(ModelHandle);
+            if (Model) {
+                RenderModel(Model, &WorldTransform);
+            }
         }
     }
 
-    // Render children with this object's world transform as parent
-    RenderSceneObject(Obj->FirstChild, &WorldTransform);
-
-    // Render siblings with the same parent transform
-    RenderSceneObject(Obj->NextSibling, ParentTransform);
+    // Render children with this node's world transform as parent
+    Node* Child = NodePtr->GetFirstChild();
+    while (Child) {
+        RenderNode(Child, &WorldTransform);
+        Child = Child->GetNextSibling();
+    }
 }
 
 void AxRenderer::RenderModel(const AxModelData* Model, const AxMat4x4* BaseTransform)

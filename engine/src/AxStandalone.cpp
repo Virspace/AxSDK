@@ -50,11 +50,12 @@ int main(int argc, char** argv)
     }
 
     // Configure engine
-    AxEngineConfig Config = {0};
-    Config.PluginPath = "./plugins/";  // TODO: Make configurable
-    Config.ConfigPath = nullptr;       // TODO: Load from config file
-    Config.argc = argc;
-    Config.argv = argv;
+    AxEngineConfig Config {
+        .PluginPath = "./plugins/",  // TODO: Make configurable
+        .ConfigPath = "",
+        .argc = argc,
+        .argv = argv
+    };
 
     // Initialize engine
     printf("Initializing engine...\n");

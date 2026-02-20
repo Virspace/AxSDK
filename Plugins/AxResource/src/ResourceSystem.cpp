@@ -19,6 +19,11 @@
 #include "AxOpenGL/AxOpenGL.h"
 #include "AxOpenGL/AxOpenGLTypes.h"
 #include "AxScene/AxScene.h"
+#include "AxEngine/AxScene.h"
+#include "AxEngine/AxNode.h"
+#include "AxEngine/AxComponentFactory.h"
+#include "AxSceneParserInternal.h"
+#include "AxStandardComponents.h"
 
 #include <cstring>
 #include <cstdlib>
@@ -303,7 +308,16 @@ bool ResourceSystem::Initialize(struct AxAPIRegistry* Registry,
     // Get dependencies from registry
     m_RenderAPI = static_cast<struct AxOpenGLAPI*>(Registry->Get(AXON_OPENGL_API_NAME));
     m_PlatformAPI = static_cast<struct AxPlatformAPI*>(Registry->Get(AXON_PLATFORM_API_NAME));
-    m_SceneAPI = static_cast<struct AxSceneAPI*>(Registry->Get(AXON_SCENE_API_NAME));
+    // Initialize the scene parser directly (sources compiled into AxResource).
+    // This avoids the segfault from looking up a registry entry that doesn't
+    // exist because libAxScene.dll is no longer loaded separately.
+    AxSceneParser_Init(Registry);
+    m_SceneAPI = AxSceneParser_GetAPI();
+
+    // Also register the parser API so other systems can find it if needed
+    if (m_SceneAPI) {
+        Registry->Set(AXON_SCENE_PARSER_API_NAME, m_SceneAPI, sizeof(AxSceneParserAPI));
+    }
 
     // Use default capacities if no options provided
     uint32_t TextureCapacity = Options ? Options->InitialTextureCapacity : AX_RESOURCE_DEFAULT_TEXTURE_CAPACITY;
@@ -406,10 +420,7 @@ void ResourceSystem::Shutdown()
     for (uint32_t i = 1; i < m_Scenes.GetCapacity(); ++i) {
         ResourceSlot<AxScene>* Slot = m_Scenes.GetSlotByIndex(i);
         if (Slot && Slot->InUse && Slot->Data) {
-            // Destroy scene using SceneAPI
-            if (m_SceneAPI) {
-                m_SceneAPI->DestroyScene(Slot->Data);
-            }
+            delete Slot->Data;
             Slot->Data = nullptr;
         }
     }
@@ -501,6 +512,8 @@ void ResourceSystem::Shutdown()
 
     m_RenderAPI = nullptr;
     m_PlatformAPI = nullptr;
+    // Terminate the scene parser subsystem
+    AxSceneParser_Term();
     m_SceneAPI = nullptr;
     m_Registry = nullptr;
     m_Allocator = nullptr;
@@ -511,7 +524,7 @@ void ResourceSystem::Shutdown()
 // Internal Helper Functions
 //=============================================================================
 
-char* ResourceSystem::ReadFileToString(const char* Path, uint64_t* OutSize)
+char* ResourceSystem::ReadFileToString(std::string_view Path, uint64_t* OutSize)
 {
     if (!m_PlatformAPI || !m_PlatformAPI->FileAPI) {
         fprintf(stderr, "ResourceSystem: PlatformAPI not available\n");
@@ -520,15 +533,15 @@ char* ResourceSystem::ReadFileToString(const char* Path, uint64_t* OutSize)
 
     struct AxPlatformFileAPI* FileAPI = m_PlatformAPI->FileAPI;
 
-    AxFile File = FileAPI->OpenForRead(Path);
+    AxFile File = FileAPI->OpenForRead(Path.data());
     if (!FileAPI->IsValid(File)) {
-        fprintf(stderr, "ResourceSystem: Failed to open file: %s\n", Path);
+        fprintf(stderr, "ResourceSystem: Failed to open file: %.*s\n", static_cast<int>(Path.size()), Path.data());
         return nullptr;
     }
 
     uint64_t FileSize = FileAPI->Size(File);
     if (FileSize == 0) {
-        fprintf(stderr, "ResourceSystem: File is empty: %s\n", Path);
+        fprintf(stderr, "ResourceSystem: File is empty: %.*s\n", static_cast<int>(Path.size()), Path.data());
         FileAPI->Close(File);
         return nullptr;
     }
@@ -536,7 +549,7 @@ char* ResourceSystem::ReadFileToString(const char* Path, uint64_t* OutSize)
     // Allocate buffer with extra byte for null terminator
     char* Buffer = static_cast<char*>(AxAlloc(m_Allocator, FileSize + 1));
     if (!Buffer) {
-        fprintf(stderr, "ResourceSystem: Failed to allocate buffer for file: %s\n", Path);
+        fprintf(stderr, "ResourceSystem: Failed to allocate buffer for file: %.*s\n", static_cast<int>(Path.size()), Path.data());
         FileAPI->Close(File);
         return nullptr;
     }
@@ -545,7 +558,7 @@ char* ResourceSystem::ReadFileToString(const char* Path, uint64_t* OutSize)
     FileAPI->Close(File);
 
     if (BytesRead != FileSize) {
-        fprintf(stderr, "ResourceSystem: Failed to read file: %s\n", Path);
+        fprintf(stderr, "ResourceSystem: Failed to read file: %.*s\n", static_cast<int>(Path.size()), Path.data());
         AxFree(m_Allocator, Buffer);
         return nullptr;
     }
@@ -560,57 +573,23 @@ char* ResourceSystem::ReadFileToString(const char* Path, uint64_t* OutSize)
     return Buffer;
 }
 
-void ResourceSystem::ExtractBasePath(const char* FilePath, char* OutBasePath, size_t MaxLen)
-{
-    if (!FilePath || !OutBasePath || MaxLen == 0) {
-        if (OutBasePath && MaxLen > 0) {
-            OutBasePath[0] = '\0';
-        }
-        return;
-    }
-
-    // Find last path separator (supports both / and \)
-    size_t PathLen = strlen(FilePath);
-    size_t LastSep = 0;
-    bool FoundSep = false;
-
-    for (size_t i = 0; i < PathLen; ++i) {
-        if (FilePath[i] == '/' || FilePath[i] == '\\') {
-            LastSep = i;
-            FoundSep = true;
-        }
-    }
-
-    if (FoundSep) {
-        // Include the separator in the base path
-        size_t CopyLen = LastSep + 1;
-        if (CopyLen >= MaxLen) {
-            CopyLen = MaxLen - 1;
-        }
-        strncpy(OutBasePath, FilePath, CopyLen);
-        OutBasePath[CopyLen] = '\0';
-    } else {
-        // No path separator found, use empty string (current directory)
-        OutBasePath[0] = '\0';
-    }
-}
 
 //=============================================================================
 // Texture Path Cache (for deduplication)
 //=============================================================================
 
-uint32_t ResourceSystem::HashPath(const char* NormalizedPath) const
+uint32_t ResourceSystem::HashPath(std::string_view NormalizedPath) const
 {
     // FNV-1a hash
     uint32_t Hash = 2166136261u;
-    while (*NormalizedPath) {
-        Hash ^= static_cast<uint32_t>(*NormalizedPath++);
+    for (char c : NormalizedPath) {
+        Hash ^= static_cast<uint32_t>(c);
         Hash *= 16777619u;
     }
     return Hash;
 }
 
-AxTextureHandle ResourceSystem::TexturePathCacheFind(const char* NormalizedPath)
+AxTextureHandle ResourceSystem::TexturePathCacheFind(std::string_view NormalizedPath)
 {
     if (!m_TexturePathCache || m_TexturePathCacheCapacity == 0) {
         return AX_INVALID_HANDLE;
@@ -629,7 +608,7 @@ AxTextureHandle ResourceSystem::TexturePathCacheFind(const char* NormalizedPath)
             return AX_INVALID_HANDLE;
         }
 
-        if (Entry->Hash == Hash && strcmp(Entry->Path, NormalizedPath) == 0) {
+        if (Entry->Hash == Hash && strcmp(Entry->Path, NormalizedPath.data()) == 0) {
             // Found it - verify the handle is still valid
             if (IsTextureValid(Entry->Handle)) {
                 return Entry->Handle;
@@ -648,7 +627,7 @@ AxTextureHandle ResourceSystem::TexturePathCacheFind(const char* NormalizedPath)
     return AX_INVALID_HANDLE;
 }
 
-void ResourceSystem::TexturePathCacheInsert(const char* NormalizedPath, AxTextureHandle Handle)
+void ResourceSystem::TexturePathCacheInsert(std::string_view NormalizedPath, AxTextureHandle Handle)
 {
     if (!m_TexturePathCache || m_TexturePathCacheCapacity == 0) {
         return;
@@ -672,7 +651,7 @@ void ResourceSystem::TexturePathCacheInsert(const char* NormalizedPath, AxTextur
         if (!Entry->InUse) {
             // Found empty slot
             Entry->Hash = Hash;
-            strncpy(Entry->Path, NormalizedPath, sizeof(Entry->Path) - 1);
+            strncpy(Entry->Path, NormalizedPath.data(), sizeof(Entry->Path) - 1);
             Entry->Path[sizeof(Entry->Path) - 1] = '\0';
             Entry->Handle = Handle;
             Entry->InUse = true;
@@ -711,7 +690,7 @@ void ResourceSystem::TexturePathCacheRemove(AxTextureHandle Handle)
 // Texture Loading and Management
 //=============================================================================
 
-AxTextureHandle ResourceSystem::LoadTexture(const char* Path,
+AxTextureHandle ResourceSystem::LoadTexture(std::string_view Path,
                                              const struct AxTextureLoadOptions* Options)
 {
     if (!m_Initialized) {
@@ -719,24 +698,24 @@ AxTextureHandle ResourceSystem::LoadTexture(const char* Path,
         return AX_INVALID_HANDLE;
     }
 
-    if (!Path || Path[0] == '\0') {
+    if (Path.empty()) {
         fprintf(stderr, "ResourceSystem: Invalid texture path\n");
         return AX_INVALID_HANDLE;
     }
 
     // Check if file exists
     if (m_PlatformAPI && m_PlatformAPI->PathAPI) {
-        if (!m_PlatformAPI->PathAPI->FileExists(Path)) {
-            fprintf(stderr, "ResourceSystem: Texture file not found: %s\n", Path);
+        if (!m_PlatformAPI->PathAPI->FileExists(Path.data())) {
+            fprintf(stderr, "ResourceSystem: Texture file not found: %.*s\n", static_cast<int>(Path.size()), Path.data());
             return AX_INVALID_HANDLE;
         }
     }
 
     // Normalize path for cache lookup
-    const char* NormalizedPath = Path;
+    std::string_view NormalizedPath = Path;
     if (m_PlatformAPI && m_PlatformAPI->PathAPI && m_PlatformAPI->PathAPI->Normalize) {
-        NormalizedPath = m_PlatformAPI->PathAPI->Normalize(Path);
-        printf("ResourceSystem: Normalized '%s' -> '%s'\n", Path, NormalizedPath);
+        NormalizedPath = m_PlatformAPI->PathAPI->Normalize(Path.data());
+        printf("ResourceSystem: Normalized '%.*s' -> '%.*s'\n", static_cast<int>(Path.size()), Path.data(), static_cast<int>(NormalizedPath.size()), NormalizedPath.data());
     } else {
         printf("ResourceSystem: WARNING - Normalize function not available, using raw path\n");
     }
@@ -753,10 +732,10 @@ AxTextureHandle ResourceSystem::LoadTexture(const char* Path,
     int Width, Height, Channels;
     int DesiredChannels = 0; // Auto-detect channels
 
-    unsigned char* Pixels = stbi_load(Path, &Width, &Height, &Channels, DesiredChannels);
+    unsigned char* Pixels = stbi_load(Path.data(), &Width, &Height, &Channels, DesiredChannels);
     if (!Pixels) {
-        fprintf(stderr, "ResourceSystem: Failed to load texture: %s - %s\n",
-                Path, stbi_failure_reason());
+        fprintf(stderr, "ResourceSystem: Failed to load texture: %.*s - %s\n",
+                static_cast<int>(Path.size()), Path.data(), stbi_failure_reason());
         return AX_INVALID_HANDLE;
     }
 
@@ -811,8 +790,8 @@ AxTextureHandle ResourceSystem::LoadTexture(const char* Path,
     // Add to path cache for future deduplication
     TexturePathCacheInsert(NormalizedPath, Handle);
 
-    printf("ResourceSystem: Loaded texture [%u:%u] - %s (%dx%d, %d channels)\n",
-           Handle.Index, Handle.Generation, Path, Width, Height, Channels);
+    printf("ResourceSystem: Loaded texture [%u:%u] - %.*s (%dx%d, %d channels)\n",
+           Handle.Index, Handle.Generation, static_cast<int>(Path.size()), Path.data(), Width, Height, Channels);
 
     return Handle;
 }
@@ -876,7 +855,7 @@ uint32_t ResourceSystem::GetTextureCount() const
 // Mesh Loading and Management
 //=============================================================================
 
-AxMeshHandle ResourceSystem::LoadMesh(const char* Path,
+AxMeshHandle ResourceSystem::LoadMesh(std::string_view Path,
                                        const struct AxMeshLoadOptions* Options)
 {
     if (!m_Initialized) {
@@ -884,15 +863,15 @@ AxMeshHandle ResourceSystem::LoadMesh(const char* Path,
         return AX_INVALID_HANDLE;
     }
 
-    if (!Path || Path[0] == '\0') {
+    if (Path.empty()) {
         fprintf(stderr, "ResourceSystem: Invalid mesh path\n");
         return AX_INVALID_HANDLE;
     }
 
     // Check if file exists
     if (m_PlatformAPI && m_PlatformAPI->PathAPI) {
-        if (!m_PlatformAPI->PathAPI->FileExists(Path)) {
-            fprintf(stderr, "ResourceSystem: Mesh file not found: %s\n", Path);
+        if (!m_PlatformAPI->PathAPI->FileExists(Path.data())) {
+            fprintf(stderr, "ResourceSystem: Mesh file not found: %.*s\n", static_cast<int>(Path.size()), Path.data());
             return AX_INVALID_HANDLE;
         }
     }
@@ -902,23 +881,23 @@ AxMeshHandle ResourceSystem::LoadMesh(const char* Path,
     memset(&ParseOptions, 0, sizeof(ParseOptions));
 
     cgltf_data* Data = nullptr;
-    cgltf_result Result = cgltf_parse_file(&ParseOptions, Path, &Data);
+    cgltf_result Result = cgltf_parse_file(&ParseOptions, Path.data(), &Data);
     if (Result != cgltf_result_success) {
-        fprintf(stderr, "ResourceSystem: Failed to parse GLTF: %s\n", Path);
+        fprintf(stderr, "ResourceSystem: Failed to parse GLTF: %.*s\n", static_cast<int>(Path.size()), Path.data());
         return AX_INVALID_HANDLE;
     }
 
     // Load buffers
-    Result = cgltf_load_buffers(&ParseOptions, Data, Path);
+    Result = cgltf_load_buffers(&ParseOptions, Data, Path.data());
     if (Result != cgltf_result_success) {
-        fprintf(stderr, "ResourceSystem: Failed to load GLTF buffers: %s\n", Path);
+        fprintf(stderr, "ResourceSystem: Failed to load GLTF buffers: %.*s\n", static_cast<int>(Path.size()), Path.data());
         cgltf_free(Data);
         return AX_INVALID_HANDLE;
     }
 
     // Check if there's at least one mesh
     if (Data->meshes_count == 0) {
-        fprintf(stderr, "ResourceSystem: No meshes in GLTF file: %s\n", Path);
+        fprintf(stderr, "ResourceSystem: No meshes in GLTF file: %.*s\n", static_cast<int>(Path.size()), Path.data());
         cgltf_free(Data);
         return AX_INVALID_HANDLE;
     }
@@ -926,7 +905,7 @@ AxMeshHandle ResourceSystem::LoadMesh(const char* Path,
     // Get the first mesh's first primitive
     cgltf_mesh* GltfMesh = &Data->meshes[0];
     if (GltfMesh->primitives_count == 0) {
-        fprintf(stderr, "ResourceSystem: No primitives in mesh: %s\n", Path);
+        fprintf(stderr, "ResourceSystem: No primitives in mesh: %.*s\n", static_cast<int>(Path.size()), Path.data());
         cgltf_free(Data);
         return AX_INVALID_HANDLE;
     }
@@ -962,7 +941,7 @@ AxMeshHandle ResourceSystem::LoadMesh(const char* Path,
     }
 
     if (!PositionAccessor) {
-        fprintf(stderr, "ResourceSystem: No position data in mesh: %s\n", Path);
+        fprintf(stderr, "ResourceSystem: No position data in mesh: %.*s\n", static_cast<int>(Path.size()), Path.data());
         cgltf_free(Data);
         return AX_INVALID_HANDLE;
     }
@@ -977,7 +956,7 @@ AxMeshHandle ResourceSystem::LoadMesh(const char* Path,
     uint32_t VertexCount = static_cast<uint32_t>(PositionAccessor->count);
     AxVertex* Vertices = static_cast<AxVertex*>(AxAlloc(m_Allocator, sizeof(AxVertex) * VertexCount));
     if (!Vertices) {
-        fprintf(stderr, "ResourceSystem: Failed to allocate vertices\n");
+        fprintf(stderr, "ResourceSystem: Failed to allocate vertices for mesh: %.*s\n", static_cast<int>(Path.size()), Path.data());
         cgltf_free(Data);
         return AX_INVALID_HANDLE;
     }
@@ -1096,7 +1075,7 @@ AxMeshHandle ResourceSystem::LoadMesh(const char* Path,
     if (GltfMesh->name) {
         strncpy(Mesh->Name, GltfMesh->name, sizeof(Mesh->Name) - 1);
     } else {
-        strncpy(Mesh->Name, Path, sizeof(Mesh->Name) - 1);
+        strncpy(Mesh->Name, Path.data(), sizeof(Mesh->Name) - 1);
     }
 
     // Upload to GPU using RenderAPI
@@ -1116,8 +1095,8 @@ AxMeshHandle ResourceSystem::LoadMesh(const char* Path,
     // Store mesh in slot
     Slot->Data = Mesh;
 
-    printf("ResourceSystem: Loaded mesh [%u:%u] - %s (%u vertices, %u indices)\n",
-           Handle.Index, Handle.Generation, Path, VertexCount, IndexCount);
+    printf("ResourceSystem: Loaded mesh [%u:%u] - %.*s (%u vertices, %u indices)\n",
+           Handle.Index, Handle.Generation, static_cast<int>(Path.size()), Path.data(), VertexCount, IndexCount);
 
     return Handle;
 }
@@ -1180,8 +1159,8 @@ uint32_t ResourceSystem::GetMeshCount() const
 // Shader Loading and Management
 //=============================================================================
 
-AxShaderHandle ResourceSystem::LoadShader(const char* VertexPath,
-                                           const char* FragmentPath,
+AxShaderHandle ResourceSystem::LoadShader(std::string_view VertexPath,
+                                           std::string_view FragmentPath,
                                            const struct AxShaderLoadOptions* Options)
 {
     if (!m_Initialized) {
@@ -1189,12 +1168,12 @@ AxShaderHandle ResourceSystem::LoadShader(const char* VertexPath,
         return AX_INVALID_HANDLE;
     }
 
-    if (!VertexPath || VertexPath[0] == '\0') {
+    if (VertexPath.empty()) {
         fprintf(stderr, "ResourceSystem: Invalid vertex shader path\n");
         return AX_INVALID_HANDLE;
     }
 
-    if (!FragmentPath || FragmentPath[0] == '\0') {
+    if (FragmentPath.empty()) {
         fprintf(stderr, "ResourceSystem: Invalid fragment shader path\n");
         return AX_INVALID_HANDLE;
     }
@@ -1206,12 +1185,12 @@ AxShaderHandle ResourceSystem::LoadShader(const char* VertexPath,
 
     // Check if files exist
     if (m_PlatformAPI && m_PlatformAPI->PathAPI) {
-        if (!m_PlatformAPI->PathAPI->FileExists(VertexPath)) {
-            fprintf(stderr, "ResourceSystem: Vertex shader not found: %s\n", VertexPath);
+        if (!m_PlatformAPI->PathAPI->FileExists(VertexPath.data())) {
+            fprintf(stderr, "ResourceSystem: Vertex shader not found: %.*s\n", static_cast<int>(VertexPath.size()), VertexPath.data());
             return AX_INVALID_HANDLE;
         }
-        if (!m_PlatformAPI->PathAPI->FileExists(FragmentPath)) {
-            fprintf(stderr, "ResourceSystem: Fragment shader not found: %s\n", FragmentPath);
+        if (!m_PlatformAPI->PathAPI->FileExists(FragmentPath.data())) {
+            fprintf(stderr, "ResourceSystem: Fragment shader not found: %.*s\n", static_cast<int>(FragmentPath.size()), FragmentPath.data());
             return AX_INVALID_HANDLE;
         }
     }
@@ -1220,34 +1199,30 @@ AxShaderHandle ResourceSystem::LoadShader(const char* VertexPath,
     uint64_t VertexSize = 0;
     uint64_t FragmentSize = 0;
 
-    char* VertexSource = ReadFileToString(VertexPath, &VertexSize);
-    if (!VertexSource) {
+    std::string_view VertexSource = ReadFileToString(VertexPath, &VertexSize);
+    if (!VertexSource.data() || VertexSource[0] == '\0') {
         return AX_INVALID_HANDLE;
     }
 
-    char* FragmentSource = ReadFileToString(FragmentPath, &FragmentSize);
-    if (!FragmentSource) {
-        AxFree(m_Allocator, VertexSource);
+    std::string_view FragmentSource = ReadFileToString(FragmentPath, &FragmentSize);
+    if (!FragmentSource.data() || FragmentSource[0] == '\0') {
         return AX_INVALID_HANDLE;
     }
 
     // Handle optional defines
-    const char* HeaderCode = "";
+    std::string_view HeaderCode = "";
     if (Options && Options->Defines && Options->Defines[0] != '\0') {
         // TODO: Parse semicolon-separated defines and format as #define statements
         // For now, pass empty header
     }
 
     // Compile shader program
-    uint32_t ShaderProgram = m_RenderAPI->CreateProgram(HeaderCode, VertexSource, FragmentSource);
-
-    // Free source buffers
-    AxFree(m_Allocator, VertexSource);
-    AxFree(m_Allocator, FragmentSource);
+    uint32_t ShaderProgram = m_RenderAPI->CreateProgram(HeaderCode.data(), VertexSource.data(), FragmentSource.data());
 
     if (ShaderProgram == 0) {
-        fprintf(stderr, "ResourceSystem: Failed to compile shader: %s, %s\n",
-                VertexPath, FragmentPath);
+        fprintf(stderr, "ResourceSystem: Failed to compile shader: %.*s, %.*s\n",
+                static_cast<int>(VertexPath.size()), VertexPath.data(),
+                static_cast<int>(FragmentPath.size()), FragmentPath.data());
         return AX_INVALID_HANDLE;
     }
 
@@ -1285,8 +1260,9 @@ AxShaderHandle ResourceSystem::LoadShader(const char* VertexPath,
     // Store shader in slot
     Slot->Data = ShaderData;
 
-    printf("ResourceSystem: Loaded shader [%u:%u] - %s, %s (Program=%u)\n",
-           Handle.Index, Handle.Generation, VertexPath, FragmentPath, ShaderProgram);
+    printf("ResourceSystem: Loaded shader [%u:%u] - %.*s, %.*s (Program=%u)\n",
+           Handle.Index, Handle.Generation, static_cast<int>(VertexPath.size()), VertexPath.data(),
+           static_cast<int>(FragmentPath.size()), FragmentPath.data(), ShaderProgram);
 
     return Handle;
 }
@@ -1468,7 +1444,7 @@ uint32_t ResourceSystem::GetMaterialCount() const
 // Model Loading (Handle-based - Phase 6)
 //=============================================================================
 
-bool ResourceSystem::LoadModelInternal(const char* Path, struct AxModelData* OutModel)
+bool ResourceSystem::LoadModelInternal(std::string_view Path, struct AxModelData* OutModel)
 {
     // Initialize output model to zero
     memset(OutModel, 0, sizeof(AxModelData));
@@ -1480,39 +1456,41 @@ bool ResourceSystem::LoadModelInternal(const char* Path, struct AxModelData* Out
 
     // Check if file exists
     if (m_PlatformAPI && m_PlatformAPI->PathAPI) {
-        if (!m_PlatformAPI->PathAPI->FileExists(Path)) {
-            fprintf(stderr, "ResourceSystem: Model file not found: %s\n", Path);
+        if (!m_PlatformAPI->PathAPI->FileExists(Path.data())) {
+            fprintf(stderr, "ResourceSystem: Model file not found: %.*s\n", static_cast<int>(Path.size()), Path.data());
             return false;
         }
     }
 
-    // Extract base path for resolving relative texture paths
-    ExtractBasePath(Path, OutModel->BasePath, sizeof(OutModel->BasePath));
+    // Extract base path and filename using platform path API
+    if (m_PlatformAPI && m_PlatformAPI->PathAPI) {
+        const char* Base = m_PlatformAPI->PathAPI->BasePath(Path.data());
+        strncpy(OutModel->BasePath, Base ? Base : "", sizeof(OutModel->BasePath) - 1);
+        OutModel->BasePath[sizeof(OutModel->BasePath) - 1] = '\0';
 
-    // Extract model name from path
-    const char* FileName = Path;
-    for (const char* p = Path; *p; ++p) {
-        if (*p == '/' || *p == '\\') {
-            FileName = p + 1;
-        }
+        const char* FN = m_PlatformAPI->PathAPI->FileName(Path.data());
+        strncpy(OutModel->Name, FN ? FN : Path.data(), sizeof(OutModel->Name) - 1);
+    } else {
+        OutModel->BasePath[0] = '\0';
+        strncpy(OutModel->Name, Path.data(), sizeof(OutModel->Name) - 1);
     }
-    strncpy(OutModel->Name, FileName, sizeof(OutModel->Name) - 1);
+    OutModel->Name[sizeof(OutModel->Name) - 1] = '\0';
 
     // Parse GLTF file
     cgltf_options ParseOptions;
     memset(&ParseOptions, 0, sizeof(ParseOptions));
 
     cgltf_data* Data = nullptr;
-    cgltf_result Result = cgltf_parse_file(&ParseOptions, Path, &Data);
+    cgltf_result Result = cgltf_parse_file(&ParseOptions, Path.data(), &Data);
     if (Result != cgltf_result_success) {
-        fprintf(stderr, "ResourceSystem: Failed to parse GLTF: %s\n", Path);
+        fprintf(stderr, "ResourceSystem: Failed to parse GLTF: %.*s\n", static_cast<int>(Path.size()), Path.data());
         return false;
     }
 
     // Load buffers
-    Result = cgltf_load_buffers(&ParseOptions, Data, Path);
+    Result = cgltf_load_buffers(&ParseOptions, Data, Path.data());
     if (Result != cgltf_result_success) {
-        fprintf(stderr, "ResourceSystem: Failed to load GLTF buffers: %s\n", Path);
+        fprintf(stderr, "ResourceSystem: Failed to load GLTF buffers: %.*s\n", static_cast<int>(Path.size()), Path.data());
         cgltf_free(Data);
         return false;
     }
@@ -1577,7 +1555,7 @@ bool ResourceSystem::LoadModelInternal(const char* Path, struct AxModelData* Out
                 CacheImage(Image, TextureIndex);
                 return TextureIndex;
             } else {
-                fprintf(stderr, "ResourceSystem: Failed to load texture: %s\n", TexturePath);
+                fprintf(stderr, "ResourceSystem: Failed to load texture: %.*s\n", static_cast<int>(strlen(TexturePath)), TexturePath);
                 return -1;
             }
         } else if (Image->buffer_view) {
@@ -2064,14 +2042,14 @@ bool ResourceSystem::LoadModelInternal(const char* Path, struct AxModelData* Out
     return (OutModel->MeshCount > 0);
 }
 
-AxModelHandle ResourceSystem::LoadModel(const char* Path)
+AxModelHandle ResourceSystem::LoadModel(std::string_view Path)
 {
     if (!m_Initialized) {
         fprintf(stderr, "ResourceSystem: Not initialized\n");
         return AX_INVALID_HANDLE;
     }
 
-    if (!Path || Path[0] == '\0') {
+    if (Path.empty()) {
         fprintf(stderr, "ResourceSystem: Invalid model path\n");
         return AX_INVALID_HANDLE;
     }
@@ -2099,7 +2077,7 @@ AxModelHandle ResourceSystem::LoadModel(const char* Path)
 
     // Load the model data
     if (!LoadModelInternal(Path, Model)) {
-        fprintf(stderr, "ResourceSystem: Failed to load model: %s\n", Path);
+        fprintf(stderr, "ResourceSystem: Failed to load model: %.*s\n", static_cast<int>(Path.size()), Path.data());
         AxFree(m_Allocator, Model);
         m_Models.Free(Handle.Index);
         return AX_INVALID_HANDLE;
@@ -2231,62 +2209,18 @@ uint32_t ResourceSystem::GetModelRefCount(AxModelHandle Handle) const
 // Scene Management (Handle-based)
 //=============================================================================
 
-// Helper to recursively load models for scene objects
-static void LoadSceneObjectModels(AxSceneObject* Obj, ResourceSystem* ResourceSys, const char* BasePath)
-{
-    if (!Obj) return;
+// Note: Scene model loading via MeshFilter components is handled by the renderer
+// on-demand (see AxRenderer Task 6 work). ResourceSystem stores the scene
+// structure; individual models are loaded when the renderer processes nodes.
 
-    // Load model for this object if it has a MeshPath
-    if (Obj->MeshPath[0] != '\0') {
-        AxModelHandle Handle = AX_INVALID_HANDLE;
-
-        // Try mesh path as-is first (relative to working directory)
-        Handle = ResourceSys->LoadModel(Obj->MeshPath);
-
-        // Try path relative to scene file if direct path failed
-        if (!AX_HANDLE_IS_VALID(Handle) && BasePath[0] != '\0') {
-            char FullMeshPath[768];
-            snprintf(FullMeshPath, sizeof(FullMeshPath), "%s%s", BasePath, Obj->MeshPath);
-            Handle = ResourceSys->LoadModel(FullMeshPath);
-        }
-
-        if (AX_HANDLE_IS_VALID(Handle)) {
-            Obj->LoadedModelIndex = Handle.Index;
-            Obj->LoadedModelGeneration = Handle.Generation;
-        }
-    }
-
-    // Recursively load children and siblings
-    LoadSceneObjectModels(Obj->FirstChild, ResourceSys, BasePath);
-    LoadSceneObjectModels(Obj->NextSibling, ResourceSys, BasePath);
-}
-
-// Helper to recursively release model handles from scene objects
-static void ReleaseSceneObjectModels(AxSceneObject* Obj, ResourceSystem* ResourceSys)
-{
-    if (!Obj) return;
-
-    if (Obj->LoadedModelIndex != 0) {
-        AxModelHandle Handle;
-        Handle.Index = Obj->LoadedModelIndex;
-        Handle.Generation = Obj->LoadedModelGeneration;
-        ResourceSys->ReleaseModel(Handle);
-        Obj->LoadedModelIndex = 0;
-        Obj->LoadedModelGeneration = 0;
-    }
-
-    ReleaseSceneObjectModels(Obj->FirstChild, ResourceSys);
-    ReleaseSceneObjectModels(Obj->NextSibling, ResourceSys);
-}
-
-AxSceneHandle ResourceSystem::LoadScene(const char* Path)
+AxSceneHandle ResourceSystem::LoadScene(std::string_view Path)
 {
     if (!m_Initialized) {
         fprintf(stderr, "ResourceSystem: Not initialized\n");
         return AX_INVALID_HANDLE;
     }
 
-    if (!Path || Path[0] == '\0') {
+    if (Path.empty()) {
         fprintf(stderr, "ResourceSystem: Invalid scene path\n");
         return AX_INVALID_HANDLE;
     }
@@ -2297,9 +2231,9 @@ AxSceneHandle ResourceSystem::LoadScene(const char* Path)
     }
 
     // Load scene file using SceneAPI
-    AxScene* Scene = m_SceneAPI->LoadSceneFromFile(Path);
+    AxScene* Scene = m_SceneAPI->LoadSceneFromFile(Path.data());
     if (!Scene) {
-        fprintf(stderr, "ResourceSystem: Failed to load scene: %s\n", Path);
+        fprintf(stderr, "ResourceSystem: Failed to load scene: %.*s\n", static_cast<int>(Path.size()), Path.data());
         return AX_INVALID_HANDLE;
     }
 
@@ -2307,29 +2241,25 @@ AxSceneHandle ResourceSystem::LoadScene(const char* Path)
     AxSceneHandle Handle = m_Scenes.Allocate();
     if (!AX_HANDLE_IS_VALID(Handle)) {
         fprintf(stderr, "ResourceSystem: Failed to allocate scene slot\n");
-        m_SceneAPI->DestroyScene(Scene);
+        delete Scene;
         return AX_INVALID_HANDLE;
     }
 
     ResourceSlot<AxScene>* Slot = m_Scenes.GetSlot(Handle);
     if (!Slot) {
         fprintf(stderr, "ResourceSystem: Failed to get scene slot\n");
-        m_SceneAPI->DestroyScene(Scene);
+        delete Scene;
         return AX_INVALID_HANDLE;
     }
 
     // Store scene in slot
     Slot->Data = Scene;
 
-    // Extract base path for relative mesh paths
-    char BasePath[512] = "";
-    ExtractBasePath(Path, BasePath, sizeof(BasePath));
+    printf("ResourceSystem: Loaded scene [%u:%u] - %s (%u nodes, %u lights)\n",
+           Handle.Index, Handle.Generation, Scene->Name.data(), Scene->GetNodeCount(), Scene->LightCount);
 
-    // Load models for all scene objects
-    LoadSceneObjectModels(Scene->RootObject, this, BasePath);
-
-    printf("ResourceSystem: Loaded scene [%u:%u] - %s (%u objects, %u lights)\n",
-           Handle.Index, Handle.Generation, Scene->Name, Scene->ObjectCount, Scene->LightCount);
+    // Load models for all MeshFilter components in the scene
+    LoadSceneModels(Scene);
 
     return Handle;
 }
@@ -2362,11 +2292,6 @@ void ResourceSystem::ReleaseScene(AxSceneHandle Handle)
         return;
     }
 
-    // Release references to all loaded models first
-    if (Slot->Data && Slot->Data->RootObject) {
-        ReleaseSceneObjectModels(Slot->Data->RootObject, this);
-    }
-
     // Decrement scene refcount
     Slot->RefCount--;
     if (Slot->RefCount == 0) {
@@ -2379,6 +2304,88 @@ uint32_t ResourceSystem::GetSceneRefCount(AxSceneHandle Handle) const
 {
     const ResourceSlot<AxScene>* Slot = m_Scenes.GetSlot(Handle);
     return Slot ? Slot->RefCount : 0;
+}
+
+void ResourceSystem::LoadSceneModels(AxScene* Scene)
+{
+    if (!Scene) {
+        return;
+    }
+
+    // Get the MeshFilter TypeID from the component factory
+    ComponentFactory* Factory = AxComponentFactory_Get();
+    if (!Factory) {
+        fprintf(stderr, "ResourceSystem: ComponentFactory not available for scene model loading\n");
+        return;
+    }
+
+    const ComponentTypeInfo* Info = Factory->FindType("MeshFilter");
+    if (!Info) {
+        fprintf(stderr, "ResourceSystem: MeshFilter type not registered\n");
+        return;
+    }
+
+    uint32_t MeshFilterTypeID = Info->TypeID;
+
+    // Get all MeshFilter components across the entire scene
+    uint32_t Count = 0;
+    Component** Components = Scene->GetComponentsByType(MeshFilterTypeID, &Count);
+    if (!Components || Count == 0) {
+        return;
+    }
+
+    printf("ResourceSystem: Loading models for %u MeshFilter component(s)\n", Count);
+
+    for (uint32_t i = 0; i < Count; ++i) {
+        MeshFilter* Filter = static_cast<MeshFilter*>(Components[i]);
+        if (!Filter || Filter->MeshPath[0] == '\0') {
+            continue;
+        }
+
+        // Skip if already loaded
+        if (AX_HANDLE_IS_VALID(Filter->ModelHandle)) {
+            continue;
+        }
+
+        AxModelHandle Handle = LoadModel(Filter->MeshPath);
+        if (AX_HANDLE_IS_VALID(Handle)) {
+            Filter->ModelHandle = Handle;
+            printf("ResourceSystem: Loaded model '%s' -> [%u:%u]\n",
+                   Filter->MeshPath, Handle.Index, Handle.Generation);
+        } else {
+            fprintf(stderr, "ResourceSystem: Failed to load model '%s'\n", Filter->MeshPath);
+        }
+    }
+}
+
+AxModelHandle ResourceSystem::GetNodeModelHandle(void* NodePtr) const
+{
+    if (!NodePtr) {
+        return AX_INVALID_HANDLE;
+    }
+
+    // Get the MeshFilter TypeID from the component factory (cached after first lookup)
+    static uint32_t s_MeshFilterTypeID = 0;
+    if (s_MeshFilterTypeID == 0) {
+        ComponentFactory* Factory = AxComponentFactory_Get();
+        if (!Factory) {
+            return AX_INVALID_HANDLE;
+        }
+        const ComponentTypeInfo* Info = Factory->FindType("MeshFilter");
+        if (!Info) {
+            return AX_INVALID_HANDLE;
+        }
+        s_MeshFilterTypeID = Info->TypeID;
+    }
+
+    Node* NodeObject = static_cast<Node*>(NodePtr);
+    Component* Comp = NodeObject->GetComponent(s_MeshFilterTypeID);
+    if (!Comp) {
+        return AX_INVALID_HANDLE;
+    }
+
+    MeshFilter* Filter = static_cast<MeshFilter*>(Comp);
+    return Filter->ModelHandle;
 }
 
 //=============================================================================
@@ -2532,8 +2539,9 @@ void ResourceSystem::ProcessDeletion(const PendingDeletion& Deletion)
             if (Slot && Slot->InUse && Slot->Generation == Deletion.Generation) {
                 // Note: Child resources (models) are already released by ReleaseScene()
                 // before queuing for deletion. We just need to destroy the scene.
-                if (Slot->Data && m_SceneAPI) {
-                    m_SceneAPI->DestroyScene(Slot->Data);
+                if (Slot->Data) {
+                    delete Slot->Data;
+                    Slot->Data = nullptr;
                 }
                 // Free slot
                 m_Scenes.Free(Deletion.SlotIndex);

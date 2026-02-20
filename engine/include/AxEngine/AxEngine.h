@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Foundation/AxTypes.h"
+#include <string>
 
 #define AX_ENGINE_API_NAME "AxEngineAPI"
 
@@ -17,8 +18,8 @@ class AxRenderer;
 
 // Configuration for engine initialization
 struct AxEngineConfig {
-  const char* PluginPath;       // Directory containing plugins
-  const char* ConfigPath;       // Path to engine config file (optional)
+  std::string PluginPath;       // Directory containing plugins
+  std::string ConfigPath;       // Path to engine config file (optional)
   int argc;                     // Command-line argument count
   char** argv;                  // Command-line arguments
 };
@@ -70,6 +71,8 @@ private:
     // Window
     AxWindow* Window_{nullptr};
     AxWallClock LastFrameTime_;
+    float FixedAccumulator_{0.0f};
+    static constexpr float FixedTimestep_ = 1.0f / 60.0f;
 
     // Subsystems
     AxRenderer* Renderer_{nullptr};

@@ -23,12 +23,9 @@
  *   API->Shutdown();
  */
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include "AxResourceTypes.h"
 #include <Foundation/AxAllocator.h>
+#include <string_view>
 
 // Forward declarations
 struct AxAPIRegistry;
@@ -84,7 +81,7 @@ struct AxResourceAPI
      * @param Options Loading options (NULL for defaults)
      * @return Handle to the loaded texture, or AX_INVALID_HANDLE on failure
      */
-    AxTextureHandle (*LoadTexture)(const char* Path,
+    AxTextureHandle (*LoadTexture)(std::string_view Path,
                                     const struct AxTextureLoadOptions* Options);
 
     /**
@@ -134,7 +131,7 @@ struct AxResourceAPI
      * @param Options Loading options (NULL for defaults)
      * @return Handle to the loaded mesh, or AX_INVALID_HANDLE on failure
      */
-    AxMeshHandle (*LoadMesh)(const char* Path,
+    AxMeshHandle (*LoadMesh)(std::string_view Path,
                               const struct AxMeshLoadOptions* Options);
 
     /**
@@ -183,8 +180,8 @@ struct AxResourceAPI
      * @param Options Loading options (NULL for defaults)
      * @return Handle to the shader, or AX_INVALID_HANDLE on failure
      */
-    AxShaderHandle (*LoadShader)(const char* VertexPath,
-                                  const char* FragmentPath,
+    AxShaderHandle (*LoadShader)(std::string_view VertexPath,
+                                  std::string_view FragmentPath,
                                   const struct AxShaderLoadOptions* Options);
 
     /**
@@ -280,7 +277,7 @@ struct AxResourceAPI
      * @param Path Path to the GLTF file
      * @return Handle to the loaded model, or AX_INVALID_HANDLE on failure
      */
-    AxModelHandle (*LoadModel)(const char* Path);
+    AxModelHandle (*LoadModel)(std::string_view Path);
 
     /**
      * Get model data by handle.
@@ -336,7 +333,7 @@ struct AxResourceAPI
      * @param Path Path to the scene file
      * @return Handle to the loaded scene, or AX_INVALID_HANDLE on failure
      */
-    AxSceneHandle (*LoadScene)(const char* Path);
+    AxSceneHandle (*LoadScene)(std::string_view Path);
 
     /**
      * Get scene data by handle.
@@ -372,6 +369,14 @@ struct AxResourceAPI
      * @return Reference count, or 0 if invalid handle
      */
     uint32_t (*GetSceneRefCount)(AxSceneHandle Handle);
+
+    /**
+     * Get the model handle for a node's MeshFilter component.
+     * Returns AX_INVALID_HANDLE if the node has no MeshFilter or no loaded model.
+     * @param NodePtr Pointer to a Node (cast to void* to avoid C++ dependency in header)
+     * @return AxModelHandle for the node's mesh, or AX_INVALID_HANDLE
+     */
+    AxModelHandle (*GetNodeModelHandle)(void* NodePtr);
 
     //=========================================================================
     // Deferred Destruction
@@ -444,8 +449,4 @@ struct AxResourceAPI
 
 #if defined(AXON_LINKS_FOUNDATION)
 extern struct AxResourceAPI* ResourceAPI;
-#endif
-
-#ifdef __cplusplus
-}
 #endif

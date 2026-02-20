@@ -56,6 +56,15 @@ target_sources(AxResource
         src/ResourceSystem.h
         src/ResourceSystem.cpp
         src/AxResource.cpp
+        # AxScene parser compiled directly into AxResource (no separate libAxScene.dll).
+        # Single-file C++ parser — scene, node, component, and prefab all share
+        # one tokenizer; no C-bridge or void*/extern "C" layer required.
+        src/AxScene.cpp
+        src/AxStandardComponents.cpp
+        src/AxCoreSystems.cpp
+        src/AxTransformSystem.cpp
+        src/AxRenderSystem.cpp
+        src/AxScriptSystem.cpp
 )
 
 #
@@ -63,11 +72,10 @@ target_sources(AxResource
 #
 
 # Add compiler features and definitions
-target_compile_features(AxResource PRIVATE c_std_11 cxx_std_11)
+target_compile_features(AxResource PRIVATE c_std_11 cxx_std_23)
 
-# Get AxOpenGL and AxScene include directories
+# Get AxOpenGL include directories
 include_directories("$<JOIN:$<TARGET_PROPERTY:AxOpenGL,INCLUDE_DIRECTORIES>,;>")
-include_directories("$<JOIN:$<TARGET_PROPERTY:AxScene,INCLUDE_DIRECTORIES>,;>")
 
 # Specify include directories
 target_include_directories(AxResource
@@ -77,11 +85,16 @@ target_include_directories(AxResource
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include/AxResource
         ${CMAKE_CURRENT_SOURCE_DIR}/src
+        # AxScene public header (AxScene/AxScene.h with AXON_SCENE_PARSER_API_NAME)
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        # Engine headers (AxEngine/AxScene.h, AxEngine/AxNode.h, etc.)
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../engine/include
 )
 
 target_link_libraries(AxResource
     PRIVATE
         Virspace::Foundation
+        Virspace::AxEngine
         axresource_stb
         axresource_cgltf
 )
@@ -97,7 +110,7 @@ set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/AxResource)
 include(GNUInstallDirs)
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
-# Specify the name of the export set the targets belong to
+# Specify the name of the export set the targets belongs to
 install(TARGETS AxResource
     EXPORT AxResourceTargets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/$<CONFIG>

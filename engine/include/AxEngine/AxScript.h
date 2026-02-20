@@ -104,7 +104,7 @@ protected:
          * @param Path - Path to scene file (e.g., "scenes/sponza_atrium.ats")
          * @return true if loaded successfully, false on error
          */
-        static bool Load(const char* Path) { return AxSceneManager::Get().Load(Path); }
+        static bool Load(std::string_view Path) { return AxSceneManager::Get().Load(Path); }
 
         /** Unload the current scene and free resources. */
         static void Unload() { AxSceneManager::Get().Unload(); }

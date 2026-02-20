@@ -14,14 +14,26 @@ target_sources(AxEngine
     PRIVATE
         include/AxEngine/AxEngine.h
         include/AxEngine/AxInput.h
+        include/AxEngine/AxNode.h
+        include/AxEngine/AxComponent.h
+        include/AxEngine/AxComponentFactory.h
+        include/AxEngine/AxSystem.h
+        include/AxEngine/AxSystemFactory.h
+        include/AxEngine/AxEventBus.h
+        include/AxEngine/AxScene.h
         include/AxEngine/AxRenderer.h
         include/AxEngine/AxSceneManager.h
         include/AxEngine/AxScript.h
         include/AxEngine/AxScripting.h
         src/AxEngine.cpp
         src/AxInput.cpp
+        src/AxNode.cpp
+        src/AxComponentFactory.cpp
+        src/AxSystemFactory.cpp
+        src/AxScene.cpp
         src/AxRenderer.cpp
         src/AxSceneManager.cpp
+        src/AxEventBus.cpp
         src/AxScript.cpp
         src/AxScripting.cpp
 )
@@ -94,7 +106,6 @@ target_compile_definitions(AxStandalone
 
 include_directories("$<JOIN:$<TARGET_PROPERTY:AxWindow,INCLUDE_DIRECTORIES>,;>")
 include_directories("$<JOIN:$<TARGET_PROPERTY:AxOpenGL,INCLUDE_DIRECTORIES>,;>")
-include_directories("$<JOIN:$<TARGET_PROPERTY:AxScene,INCLUDE_DIRECTORIES>,;>")
 include_directories("$<JOIN:$<TARGET_PROPERTY:AxResource,INCLUDE_DIRECTORIES>,;>")
 
 # Specify include directories
@@ -111,6 +122,7 @@ target_link_libraries(AxEngine
         Virspace::Foundation
         axsdk_stb
         cgltf
+        -Wl,--export-all-symbols
 )
 
 # Link AxStandalone with Foundation
@@ -125,6 +137,15 @@ target_include_directories(AxStandalone
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
+
+#
+# Engine Tests
+#
+
+# Add engine tests subdirectory
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt)
+    add_subdirectory(tests)
+endif()
 
 #
 # Install and Export

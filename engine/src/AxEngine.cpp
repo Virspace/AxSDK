@@ -10,16 +10,19 @@
 #include "AxEngine/AxRenderer.h"
 #include "AxEngine/AxSceneManager.h"
 #include "AxEngine/AxScripting.h"
+#include "AxEngine/AxScene.h"
 
 #include "AxResource/AxResource.h"
-#include "AxScene/AxScene.h"
+#include "AxEngine/AxComponentFactory.h"
+#include "AxEngine/AxSystemFactory.h"
 #include "Foundation/AxAPIRegistry.h"
 #include "Foundation/AxAllocatorAPI.h"
 #include "Foundation/AxPlatform.h"
 #include "Foundation/AxPlugin.h"
 #include "AxWindow/AxWindow.h"
 
-#include <stdio.h>
+#include <string>
+#include <string_view>
 
 // Forward declaration of global API registry (defined at end of file)
 static AxAPIRegistry* gAPIRegistry = nullptr;
@@ -40,23 +43,28 @@ static AxEngine* gEngine = nullptr;
 bool AxEngine::LoadPlugins()
 {
     AXON_ASSERT(PluginAPI_ && "PluginAPI is NULL in AxEngine::LoadPlugins!");
+    if (!WindowAPI_ || !Window_) {
+        fprintf(stderr, "WindowAPI or Window is NULL in AxEngine::LoadPlugins!\n");
+        return false;
+    }
 
-    auto LoadPluginOrFail = [&](const char* PluginName, const char* ErrorMessage) -> bool {
-        if (!PluginAPI_->Load(PluginName, false)) {
-            fprintf(stderr, "Failed to load %s plugin\n", PluginName);
-            WindowAPI_->CreateMessageBox(
-                Window_,
-                "Error",
-                ErrorMessage,
-                static_cast<AxMessageBoxFlags>(AX_MESSAGE_BOX_ICON_ERROR | AX_MESSAGE_BOX_TYPE_OK)
-            );
-            return false;
-        }
-        return true;
+    auto ShowPluginLoadError = [&](const char* PluginName, const char* ErrorMessage) {
+        fprintf(stderr, "Failed to load %s plugin\n", PluginName);
+        WindowAPI_->CreateMessageBox(
+            Window_,
+            "Error",
+            ErrorMessage,
+            static_cast<AxMessageBoxFlags>(AX_MESSAGE_BOX_ICON_ERROR | AX_MESSAGE_BOX_TYPE_OK)
+        );
+    };
+
+    auto LoadPluginOrFail = [&](const char* pluginName, const char* errorMessage) {
+        return PluginAPI_->Load(pluginName, false)
+            ? true
+            : (ShowPluginLoadError(pluginName, errorMessage), false);
     };
 
     if (!LoadPluginOrFail("libAxOpenGL.dll", "Failed to load AxOpenGL plugin.") ||
-        !LoadPluginOrFail("libAxScene.dll", "Failed to load AxScene plugin.") ||
         !LoadPluginOrFail("libAxResource.dll", "Failed to load AxResource plugin.")) {
         return false;
     }
@@ -85,8 +93,9 @@ bool AxEngine::LoadPlugins()
     }
 
     // Initialize ResourceAPI with our allocator
+    fprintf(stderr, "[INIT] Calling ResourceAPI->Initialize...\n");
     ResourceAPI_->Initialize(APIRegistry_, gResourceAllocator, nullptr);
-    printf("AxEngine: ResourceAPI initialized\n");
+    fprintf(stderr, "[INIT] ResourceAPI initialized\n");
 
     return (true);
 }
@@ -108,18 +117,19 @@ bool AxEngine::Initialize(const AxEngineConfig* config)
     // Use global APIRegistry from LoadPlugin
     APIRegistry_ = gAPIRegistry;
     if (!APIRegistry_) {
-        fprintf(stderr, "Failed to get API registry - LoadPlugin not called?\n");
+        fprintf(stderr, "[INIT] Failed to get API registry\n");
         return (false);
     }
 
     // Get PluginAPI from registry
     PluginAPI_ = static_cast<AxPluginAPI*>(APIRegistry_->Get(AXON_PLUGIN_API_NAME));
     if (!PluginAPI_) {
-        fprintf(stderr, "Failed to get PluginAPI from registry\n");
+        fprintf(stderr, "[INIT] Failed to get PluginAPI from registry\n");
         return (false);
     }
 
     // Load Window plugin
+    fprintf(stderr, "[INIT] Loading AxWindow\n");
     if (!PluginAPI_->Load("libAxWindow.dll", false)) {
         fprintf(stderr, "Failed to load AxWindow plugin\n");
         return (false);
@@ -127,6 +137,7 @@ bool AxEngine::Initialize(const AxEngineConfig* config)
 
     // Initialize Window API
     WindowAPI_ = static_cast<AxWindowAPI*>(APIRegistry_->Get(AXON_WINDOW_API_NAME));
+    fprintf(stderr, "[INIT] Window API: %s\n", WindowAPI_ ? "OK" : "NULL");
     WindowAPI_->Init();
 
     // Create window
@@ -138,34 +149,44 @@ bool AxEngine::Initialize(const AxEngineConfig* config)
     };
 
     AxWindowError Error = AX_WINDOW_ERROR_NONE;
+    fprintf(stderr, "[INIT] Creating window...\n");
     Window_ = WindowAPI_->CreateWindowWithConfig(&WindowConfig, &Error);
     if (Error != AX_WINDOW_ERROR_NONE) {
+        fprintf(stderr, "[INIT] Window creation failed (error %d)\n", (int)Error);
         return (false);
     }
+    fprintf(stderr, "[INIT] Window created\n");
 
     // Load plugins (OpenGL, Scene, Resource)
+    fprintf(stderr, "[INIT] Loading plugins...\n");
     if (!LoadPlugins()) {
         return (false);
     }
+    fprintf(stderr, "[INIT] Plugins loaded\n");
 
     // Initialize renderer
     AxWindowPlatformData WindowPlatformData = WindowAPI_->GetPlatformData(Window_);
+    fprintf(stderr, "[INIT] Initializing renderer...\n");
     Renderer_ = new AxRenderer();
     if (!Renderer_->Initialize(APIRegistry_, WindowPlatformData.Win32.Handle, DefaultWindowWidth, DefaultWindowHeight)) {
         fprintf(stderr, "AxEngine: Failed to initialize renderer\n");
         return (false);
     }
+    fprintf(stderr, "[INIT] Renderer initialized\n");
 
     // Set cursor mode to disabled for FPS-style controls
     WindowAPI_->SetCursorMode(Window_, AX_CURSOR_DISABLED, &Error);
 
     // Initialize input system
+    fprintf(stderr, "[INIT] Initializing input...\n");
     AxInput::Get().Initialize(APIRegistry_, Window_);
 
     // Initialize scene manager
+    fprintf(stderr, "[INIT] Initializing scene manager...\n");
     AxSceneManager::Get().Initialize(APIRegistry_);
 
     // Create scripting system
+    fprintf(stderr, "[INIT] Creating scripting system...\n");
     Scripting_ = new AxScripting();
     if (!Scripting_->Create(APIRegistry_)) {
         fprintf(stderr, "AxEngine: Failed to create scripting system\n");
@@ -173,21 +194,26 @@ bool AxEngine::Initialize(const AxEngineConfig* config)
     }
 
     // Load game script
+    fprintf(stderr, "[INIT] Loading game script...\n");
     if (Scripting_->LoadScript("libGame.dll")) {
-        printf("AxEngine: Loaded Game script\n");
+        fprintf(stderr, "[INIT] Game script loaded\n");
     } else {
-        printf("AxEngine: No Game script found (libGame.dll)\n");
+        fprintf(stderr, "[INIT] No game script found (libGame.dll)\n");
     }
 
     // Set initial engine state on scripts
+    fprintf(stderr, "[INIT] Setting engine state...\n");
     Scripting_->SetEngineState(Renderer_->GetMainCamera(), nullptr);
 
     // Initialize scripts
+    fprintf(stderr, "[INIT] Running script Init...\n");
     Scripting_->Init();
 
+    fprintf(stderr, "[INIT] Showing window...\n");
     WindowAPI_->SetWindowVisible(Window_, true, NULL);
     isRunning_ = true;
 
+    fprintf(stderr, "[INIT] Done\n");
     printf("AxEngine: Initialization complete\n");
     return (true);
 }
@@ -215,17 +241,33 @@ bool AxEngine::Tick()
         return (false);
     }
 
-    // Update scripts
+    // Fixed-timestep update
+    AxScene* Scene = AxSceneManager::Get().GetScene();
+    FixedAccumulator_ += DeltaT;
+    while (FixedAccumulator_ >= FixedTimestep_) {
+        if (Scene) {
+            Scene->FixedUpdateSystems(FixedTimestep_);
+        }
+        if (Scripting_) {
+            Scripting_->FixedTick(FixedTimestep_);
+        }
+        FixedAccumulator_ -= FixedTimestep_;
+    }
+
+    // Variable-rate update
     if (Scripting_) {
         Scripting_->UpdateFrameState(AxInput::Get().GetMouseDelta());
         Scripting_->Tick(0.0, DeltaT);
     }
 
+    // Run scene systems (EarlyUpdate → Update → LateUpdate → Render phase)
+    if (Scene) {
+        Scene->UpdateSystems(DeltaT);
+    }
+
     // Render
     Renderer_->BeginFrame();
 
-    // Get scene from scene manager and render
-    AxScene* Scene = AxSceneManager::Get().GetScene();
     Renderer_->RenderScene(Scene);
 
     Renderer_->EndFrame();

@@ -1,5 +1,6 @@
 #include "Game.h"
 
+#include "AxEngine/AxSceneTypes.h"
 #include "Foundation/AxMath.h"
 #include "AxWindow/AxWindow.h"
 
