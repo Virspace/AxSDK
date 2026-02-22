@@ -1,16 +1,14 @@
 #pragma once
 
 /**
- * AxEventBus.h - EventBus for Inter-Component Communication
+ * AxEventBus.h - Scene-Scoped Publish/Subscribe Event System
  *
  * Provides a scene-scoped publish/subscribe event system for decoupled
- * communication between components. Each scene owns its own EventBus
- * instance, ensuring events are scoped to a single scene.
+ * communication between nodes. Each scene owns its own EventBus instance,
+ * ensuring events are scoped to a single scene.
  *
- * Built-in event types fire automatically during node/component lifecycle
- * operations. User-defined event types start from AX_EVENT_USER_BASE.
- *
- * Follows the existing AxSceneEvents callback pattern for extensibility.
+ * Built-in event types fire automatically during node lifecycle operations.
+ * User-defined event types start from AX_EVENT_USER_BASE.
  *
  * This is engine-level code (C++).
  */
@@ -28,11 +26,9 @@ class Node;
 /** Event type identifier. */
 typedef uint32_t AxEventType;
 
-/** Built-in event types for node/component lifecycle. */
+/** Built-in event types for node lifecycle. */
 #define AX_EVENT_NODE_CREATED        1
 #define AX_EVENT_NODE_DESTROYED      2
-#define AX_EVENT_COMPONENT_ADDED     3
-#define AX_EVENT_COMPONENT_REMOVED   4
 
 /** Starting value for user-defined event IDs. */
 #define AX_EVENT_USER_BASE           1000

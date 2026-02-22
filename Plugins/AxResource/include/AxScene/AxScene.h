@@ -3,12 +3,12 @@
 #include "Foundation/AxTypes.h"
 #include "AxEngine/AxSceneTypes.h"
 
-// Forward declaration for the C++ AxScene class.
-// In C++ code, include "AxEngine/AxScene.h" for the full definition.
+// Forward declaration for the C++ SceneTree class.
+// In C++ code, include "AxEngine/AxSceneTree.h" for the full definition.
 #ifndef __cplusplus
-typedef struct AxScene AxScene;
+typedef struct SceneTree SceneTree;
 #else
-class AxScene;
+class SceneTree;
 #endif
 
 #ifdef __cplusplus
@@ -39,7 +39,7 @@ typedef struct AxSceneEvents {
     void (*OnLightParsed)(const AxLight* Light, void* UserData);
 
     // Scene structure callback
-    void (*OnSceneParsed)(const AxScene* Scene, void* UserData);
+    void (*OnSceneParsed)(const SceneTree* Scene, void* UserData);
 
     // User data for adapter-specific state
     void* UserData;
@@ -64,8 +64,8 @@ typedef struct AxSceneEvents {
 
 /**
  * Scene Parser API provides .ats file loading, parsing, and event management.
- * Scene creation uses the C++ AxScene class internally.
- * Callers receive AxScene* which is the new C++ class.
+ * Scene creation uses the C++ SceneTree class internally.
+ * Callers receive SceneTree* which is the runtime scene container.
  */
 struct AxSceneParserAPI {
     // === File Loading and Parsing ===
@@ -76,7 +76,7 @@ struct AxSceneParserAPI {
      * @param Allocator Memory allocator for scene data (unified interface)
      * @return Parsed scene, or NULL on failure
      */
-    AxScene* (*ParseFromString)(const char* Source, struct AxAllocator* Allocator);
+    SceneTree* (*ParseFromString)(const char* Source, struct AxAllocator* Allocator);
 
     /**
      * Parse a scene from a file with custom memory allocator.
@@ -84,7 +84,7 @@ struct AxSceneParserAPI {
      * @param Allocator Memory allocator for scene data (unified interface)
      * @return Parsed scene, or NULL on failure
      */
-    AxScene* (*ParseFromFile)(const char* FilePath, struct AxAllocator* Allocator);
+    SceneTree* (*ParseFromFile)(const char* FilePath, struct AxAllocator* Allocator);
 
     /**
      * Load a scene from a .ats file with automatic memory management.
@@ -92,7 +92,7 @@ struct AxSceneParserAPI {
      * @param FilePath Path to the .ats scene file
      * @return Loaded scene, or NULL on failure
      */
-    AxScene* (*LoadSceneFromFile)(const char* FilePath);
+    SceneTree* (*LoadSceneFromFile)(const char* FilePath);
 
     /**
      * Load a scene from a string containing .ats format data.
@@ -100,7 +100,7 @@ struct AxSceneParserAPI {
      * @param SceneData Scene file content as string
      * @return Loaded scene, or NULL on failure
      */
-    AxScene* (*LoadSceneFromString)(const char* SceneData);
+    SceneTree* (*LoadSceneFromString)(const char* SceneData);
 
     // === Configuration and Error Handling ===
 

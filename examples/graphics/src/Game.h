@@ -1,12 +1,12 @@
 #pragma once
 
-#include "AxEngine/AxScript.h"
+#include "AxEngine/AxScriptBase.h"
 
-class Game : public AxScript
+class Game : public ScriptBase
 {
 public:
-    void Init() override;
-    void Tick(float Alpha, float DeltaT) override;
+    void OnInit() override;
+    void OnUpdate(float DeltaT) override;
 };
 
-CREATE_SCRIPT(Game, "Game")
+extern "C" __declspec(dllexport) ScriptBase* CreateNodeScript();

@@ -33,25 +33,20 @@ target_sources(AxEngineTests
     PRIVATE
         src/main.cpp
         src/AxNodeTests.cpp
-        src/AxComponentFactoryTests.cpp
+        src/AxTypedNodeTests.cpp
+        src/AxScriptBaseTests.cpp
+        src/AxScriptSystemTests.cpp
+        src/AxSceneTreeTests.cpp
         src/AxSceneExTests.cpp
         src/AxSceneClassTests.cpp
-        src/AxStandardComponentTests.cpp
-        src/AxCoreSystemTests.cpp
         src/AxEventBusTests.cpp
         src/AxParserExTests.cpp
         src/AxIntegrationTests.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxNode.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxComponentFactory.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxSystemFactory.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxScene.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../../Plugins/AxResource/src/AxStandardComponents.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxTypedNodes.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxSceneTree.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxEventBus.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../../Plugins/AxResource/src/AxTransformSystem.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../../Plugins/AxResource/src/AxRenderSystem.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../../Plugins/AxResource/src/AxScriptSystem.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../../Plugins/AxResource/src/AxScene.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../../Plugins/AxResource/src/AxCoreSystems.cpp
 )
 
 #

@@ -7,8 +7,6 @@
  * - Unsubscribe stops delivery
  * - Scene-scoped isolation
  * - Safe no-op on publish with no subscribers
- *
- * Migrated from AxSceneExtension pattern to direct AxScene class usage.
  */
 
 #include "gtest/gtest.h"
@@ -19,7 +17,6 @@
 #include "Foundation/AxAPIRegistry.h"
 #include "AxEngine/AxEventBus.h"
 #include "AxEngine/AxNode.h"
-#include "AxEngine/AxScene.h"
 
 #include <cstring>
 

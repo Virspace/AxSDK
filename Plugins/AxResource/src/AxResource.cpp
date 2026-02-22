@@ -14,6 +14,9 @@
  * - Added GetModel, IsModelValid, GetModelCount, GetModelByIndex
  * - Added AcquireModel/ReleaseModel for reference counting
  * - Added GetModelRefCount for debugging
+ *
+ * Scene loading delegates to ResourceSystem.
+
  */
 
 #include "AxResource/AxResource.h"
@@ -84,7 +87,7 @@ static void ReleaseModel(AxModelHandle Handle);
 
 // Scene (Handle-based)
 static AxSceneHandle LoadScene(std::string_view Path);
-static struct AxScene* GetScene(AxSceneHandle Handle);
+static struct SceneTree* GetScene(AxSceneHandle Handle);
 static bool IsSceneValid(AxSceneHandle Handle);
 static AxSceneHandle AcquireScene(AxSceneHandle Handle);
 static void ReleaseScene(AxSceneHandle Handle);
@@ -432,10 +435,11 @@ static void ReleaseModel(AxModelHandle Handle)
 
 static AxSceneHandle LoadScene(std::string_view Path)
 {
-    return ResourceSystem::Get().LoadScene(Path);
+    AxSceneHandle Handle = ResourceSystem::Get().LoadScene(Path);
+    return (Handle);
 }
 
-static struct AxScene* GetScene(AxSceneHandle Handle)
+static struct SceneTree* GetScene(AxSceneHandle Handle)
 {
     return ResourceSystem::Get().GetScene(Handle);
 }

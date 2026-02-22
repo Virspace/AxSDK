@@ -1,12 +1,15 @@
 /**
- * AxIntegrationTests.cpp - End-to-End Integration Tests for Node/Component/System
+ * AxIntegrationTests.cpp - End-to-End Integration Tests for Typed Node Pipeline
  *
  * Cross-cutting tests that verify the full pipeline works end-to-end:
- * parse .ats -> build scene -> run systems -> collect renderables.
- * Also tests backward compatibility, scene destruction, multiple scenes,
- * hot-reload, and EventBus lifecycle integration.
+ * parse .ats -> build scene -> typed nodes -> collect renderables.
+ * Also tests scene destruction, multiple scenes, EventBus lifecycle
+ * integration, and transform propagation with typed nodes.
  *
- * Migrated from AxSceneExtension pattern to direct AxScene class usage.
+ * Migrated from Component-based architecture to Godot-style typed nodes.
+ * All component references (ComponentFactory, AddComponent, GetComponentsByType)
+ * have been replaced with typed node operations (CreateNode with NodeType,
+ * GetNodesByType, static_cast to typed node subclass).
  */
 
 #include "gtest/gtest.h"
@@ -17,16 +20,11 @@
 #include "Foundation/AxAPIRegistry.h"
 #include "Foundation/AxMath.h"
 #include "AxEngine/AxNode.h"
-#include "AxEngine/AxComponent.h"
-#include "AxEngine/AxComponentFactory.h"
-#include "AxEngine/AxSystem.h"
-#include "AxEngine/AxScene.h"
+#include "AxEngine/AxTypedNodes.h"
+#include "AxEngine/AxSceneTree.h"
 #include "AxEngine/AxEventBus.h"
 #include "AxScene/AxScene.h"
 #include "AxSceneParserInternal.h"
-#include "AxTransformSystem.h"
-#include "AxRenderSystem.h"
-#include "AxStandardComponents.h"
 
 #include <cstring>
 #include <cstdlib>
@@ -48,8 +46,6 @@ struct IntegrationEventTracker
 {
   int NodeCreatedCount;
   int NodeDestroyedCount;
-  int ComponentAddedCount;
-  int ComponentRemovedCount;
   Node* LastNodeSender;
 };
 
@@ -65,18 +61,6 @@ static void TrackNodeDestroyed(const AxEvent* Event, void* UserData)
   IntegrationEventTracker* T = static_cast<IntegrationEventTracker*>(UserData);
   T->NodeDestroyedCount++;
   T->LastNodeSender = Event->Sender;
-}
-
-static void TrackComponentAdded(const AxEvent* Event, void* UserData)
-{
-  IntegrationEventTracker* T = static_cast<IntegrationEventTracker*>(UserData);
-  T->ComponentAddedCount++;
-}
-
-static void TrackComponentRemoved(const AxEvent* Event, void* UserData)
-{
-  IntegrationEventTracker* T = static_cast<IntegrationEventTracker*>(UserData);
-  T->ComponentRemovedCount++;
 }
 
 //=============================================================================
@@ -102,13 +86,6 @@ protected:
     Allocator_ = AllocatorAPI_->CreateHeap("IntegrationTestAlloc", 256 * 1024, 2 * 1024 * 1024);
     ASSERT_NE(Allocator_, nullptr) << "Failed to create test allocator";
 
-    // Get the global ComponentFactory (static object, always available)
-    Factory_ = AxComponentFactory_Get();
-    ASSERT_NE(Factory_, nullptr) << "Failed to get ComponentFactory";
-
-    // Register standard components
-    RegisterStandardComponents(Factory_);
-
     // Initialize the scene parser
     AxSceneParser_Init(AxonGlobalAPIRegistry);
     ParserAPI_ = AxSceneParser_GetAPI();
@@ -128,109 +105,92 @@ protected:
   }
 
   /**
-   * Helper: Create an AxScene for testing.
+   * Helper: Create a SceneTree for testing.
    */
-  AxScene* CreateTestScene(const char* Name)
+  SceneTree* CreateTestScene(const char* Name)
   {
-    AxScene* Scene = new AxScene(TableAPI_);
-    if (Scene) {
-      Scene->Name = Name;
-      Scene->Allocator = Allocator_;
+    SceneTree* Tree = new SceneTree(TableAPI_, nullptr);
+    if (Tree) {
+      Tree->Name = Name;
+      Tree->Allocator = Allocator_;
     }
-    return (Scene);
+    return (Tree);
   }
 
-  void DestroyTestScene(AxScene* Scene)
+  void DestroyTestScene(SceneTree* Tree)
   {
-    delete Scene;
+    delete Tree;
   }
 
   AxHashTableAPI*   TableAPI_{nullptr};
   AxAllocatorAPI*   AllocatorAPI_{nullptr};
   AxAllocator*      Allocator_{nullptr};
-  ComponentFactory* Factory_{nullptr};
   AxSceneParserAPI* ParserAPI_{nullptr};
 };
 
 //=============================================================================
-// Test 1: Full Pipeline - Parse .ats -> TransformSystem -> RenderSystem
+// Test 1: Full Pipeline - Parse .ats -> SceneTree -> Verify Transform
 //=============================================================================
-TEST_F(IntegrationTest, FullPipelineParseTransformRender)
+TEST_F(IntegrationTest, FullPipelineParseAndVerifyTransform)
 {
   const char* SceneSource = R"(scene "PipelineTest" {
-    node "Player" {
+    node "Player" MeshInstance {
       transform {
         translation: 10.0, 0.0, 0.0
       }
-      component MeshFilter {
-        mesh: "res://meshes/player.glb"
-      }
-      component MeshRenderer {
-        material: "DefaultMat"
-        renderLayer: 0
-      }
-      node "Weapon" {
+      mesh: "res://meshes/player.glb"
+      material: "DefaultMat"
+      node "Weapon" MeshInstance {
         transform {
           translation: 0.0, 1.0, 0.0
         }
-        component MeshFilter {
-          mesh: "res://meshes/sword.glb"
-        }
-        component MeshRenderer {
-          material: "WeaponMat"
-          renderLayer: 1
-        }
+        mesh: "res://meshes/sword.glb"
+        material: "WeaponMat"
+        renderLayer: 1
       }
     }
   })";
 
-  AxScene* Scene = ParserAPI_->ParseFromString(SceneSource, Allocator_);
-  ASSERT_NE(Scene, nullptr);
+  SceneTree* Tree = ParserAPI_->ParseFromString(SceneSource, Allocator_);
+  ASSERT_NE(Tree, nullptr);
 
-  Node* PlayerNode = Scene->GetRootNode()->GetFirstChild();
+  Node* PlayerNode = Tree->GetRootNode()->GetFirstChild();
   ASSERT_NE(PlayerNode, nullptr);
   EXPECT_EQ(PlayerNode->GetName(), "Player");
+  EXPECT_EQ(PlayerNode->GetType(), NodeType::MeshInstance);
 
   Node* WeaponNode = PlayerNode->GetFirstChild();
   ASSERT_NE(WeaponNode, nullptr);
   EXPECT_EQ(WeaponNode->GetName(), "Weapon");
+  EXPECT_EQ(WeaponNode->GetType(), NodeType::MeshInstance);
 
-  // Run TransformSystem to compute world matrices
-  TransformSystem TfSys;
-  TfSys.SetScene(Scene);
-  TfSys.Update(0.016f, nullptr, 0);
+  // Run SceneTree::Update to compute world matrices via UpdateNodeTransforms
+  Tree->Update(0.016f);
 
   // Verify Player world position is (10, 0, 0)
-  const AxMat4x4& PlayerWorld = PlayerNode->GetTransform().CachedForwardMatrix;
+  const AxMat4x4& PlayerWorld = PlayerNode->GetWorldTransform();
   EXPECT_TRUE(FloatNear(PlayerWorld.E[3][0], 10.0f));
   EXPECT_TRUE(FloatNear(PlayerWorld.E[3][1], 0.0f));
 
   // Verify Weapon world position is (10, 1, 0) = parent (10,0,0) + local (0,1,0)
-  const AxMat4x4& WeaponWorld = WeaponNode->GetTransform().CachedForwardMatrix;
+  const AxMat4x4& WeaponWorld = WeaponNode->GetWorldTransform();
   EXPECT_TRUE(FloatNear(WeaponWorld.E[3][0], 10.0f));
   EXPECT_TRUE(FloatNear(WeaponWorld.E[3][1], 1.0f));
 
-  // Run RenderSystem to collect renderables
-  const ComponentTypeInfo* MFInfo = Factory_->FindType("MeshFilter");
-  const ComponentTypeInfo* MRInfo = Factory_->FindType("MeshRenderer");
-  ASSERT_NE(MFInfo, nullptr);
-  ASSERT_NE(MRInfo, nullptr);
+  // Verify MeshInstance nodes are in the typed tracking list
+  uint32_t MeshCount = 0;
+  Node** MeshNodes = Tree->GetNodesByType(NodeType::MeshInstance, &MeshCount);
+  ASSERT_NE(MeshNodes, nullptr);
+  ASSERT_EQ(MeshCount, 2u);
 
-  RenderSystem RndSys;
-  RndSys.SetMeshFilterTypeID(MFInfo->TypeID);
+  // Verify mesh data on typed nodes
+  MeshInstance* PlayerMI = static_cast<MeshInstance*>(MeshNodes[0]);
+  EXPECT_STREQ(PlayerMI->MeshPath, "res://meshes/player.glb");
 
-  uint32_t MRCount = 0;
-  Component** MRList = Scene->GetComponentsByType(MRInfo->TypeID, &MRCount);
-  ASSERT_NE(MRList, nullptr);
-  ASSERT_EQ(MRCount, 2u);
+  MeshInstance* WeaponMI = static_cast<MeshInstance*>(MeshNodes[1]);
+  EXPECT_STREQ(WeaponMI->MeshPath, "res://meshes/sword.glb");
 
-  RndSys.Update(0.016f, MRList, MRCount);
-
-  uint32_t RenderableCount = 0;
-  const RenderableEntry* Renderables = RndSys.GetRenderables(&RenderableCount);
-  EXPECT_EQ(RenderableCount, 2u);
-
-  delete Scene;
+  delete Tree;
 }
 
 //=============================================================================
@@ -238,156 +198,131 @@ TEST_F(IntegrationTest, FullPipelineParseTransformRender)
 //=============================================================================
 TEST_F(IntegrationTest, ProgrammaticSceneCreation)
 {
-  AxScene* Scene = CreateTestScene("ProgrammaticTest");
-  ASSERT_NE(Scene, nullptr);
+  SceneTree* Tree = CreateTestScene("ProgrammaticTest");
+  ASSERT_NE(Tree, nullptr);
 
-  // Create nodes programmatically
-  Node* CameraNode = Scene->CreateNode("Camera", NodeType::Node3D, nullptr);
-  Node* LightNode = Scene->CreateNode("Light", NodeType::Node3D, nullptr);
-  Node* MeshNode = Scene->CreateNode("Cube", NodeType::Node3D, nullptr);
-  ASSERT_NE(CameraNode, nullptr);
-  ASSERT_NE(LightNode, nullptr);
-  ASSERT_NE(MeshNode, nullptr);
+  // Create typed nodes programmatically
+  Node* CamNode = Tree->CreateNode("Camera", NodeType::Camera, nullptr);
+  Node* LightNodePtr = Tree->CreateNode("Light", NodeType::Light, nullptr);
+  Node* MeshNodePtr = Tree->CreateNode("Cube", NodeType::MeshInstance, nullptr);
+  ASSERT_NE(CamNode, nullptr);
+  ASSERT_NE(LightNodePtr, nullptr);
+  ASSERT_NE(MeshNodePtr, nullptr);
 
-  // Add components via factory
-  Component* CamComp = Factory_->CreateComponent("CameraComponent", Allocator_);
-  Component* LitComp = Factory_->CreateComponent("LightComponent", Allocator_);
-  Component* FilterComp = Factory_->CreateComponent("MeshFilter", Allocator_);
-  Component* RendererComp = Factory_->CreateComponent("MeshRenderer", Allocator_);
-  ASSERT_NE(CamComp, nullptr);
-  ASSERT_NE(LitComp, nullptr);
-  ASSERT_NE(FilterComp, nullptr);
-  ASSERT_NE(RendererComp, nullptr);
+  // Set data on typed nodes
+  CameraNode* Cam = static_cast<CameraNode*>(CamNode);
+  Cam->SetFOV(60.0f);
+  Cam->SetNear(0.1f);
+  Cam->SetFar(500.0f);
 
-  EXPECT_TRUE(Scene->AddComponent(CameraNode, CamComp));
-  EXPECT_TRUE(Scene->AddComponent(LightNode, LitComp));
-  EXPECT_TRUE(Scene->AddComponent(MeshNode, FilterComp));
-  EXPECT_TRUE(Scene->AddComponent(MeshNode, RendererComp));
+  LightNode* LN = static_cast<LightNode*>(LightNodePtr);
+  LN->SetLightType(AX_LIGHT_TYPE_DIRECTIONAL);
+  LN->SetIntensity(2.0f);
+
+  MeshInstance* MI = static_cast<MeshInstance*>(MeshNodePtr);
+  MI->SetMeshPath("models/cube.gltf");
 
   // Set transform on mesh node
-  MeshNode->GetTransform().Translation = {5.0f, 0.0f, 0.0f};
-  MeshNode->GetTransform().ForwardMatrixDirty = true;
+  MeshNodePtr->GetTransform().Translation = {5.0f, 0.0f, 0.0f};
+  MeshNodePtr->GetTransform().ForwardMatrixDirty = true;
 
-  // Register and run TransformSystem
-  TransformSystem TfSys;
-  TfSys.SetScene(Scene);
-  Scene->RegisterSystem(&TfSys);
-
-  Scene->UpdateSystems(0.016f);
+  // Run SceneTree::Update to compute world matrices
+  Tree->Update(0.016f);
 
   // Verify world matrix was computed
-  EXPECT_TRUE(FloatNear(MeshNode->GetTransform().CachedForwardMatrix.E[3][0], 5.0f));
+  EXPECT_TRUE(FloatNear(MeshNodePtr->GetWorldTransform().E[3][0], 5.0f));
 
-  // Verify component queries work
-  const ComponentTypeInfo* MFInfo = Factory_->FindType("MeshFilter");
-  ASSERT_NE(MFInfo, nullptr);
-  uint32_t MFCount = 0;
-  Component** MFComps = Scene->GetComponentsByType(MFInfo->TypeID, &MFCount);
-  EXPECT_EQ(MFCount, 1u);
-  EXPECT_EQ(MFComps[0], FilterComp);
+  // Verify typed node queries work
+  uint32_t MeshCount = 0;
+  Node** MeshNodes = Tree->GetNodesByType(NodeType::MeshInstance, &MeshCount);
+  EXPECT_EQ(MeshCount, 1u);
+  EXPECT_EQ(MeshNodes[0], MeshNodePtr);
 
-  // Clean up
-  Scene->UnregisterSystem(&TfSys);
-  Scene->RemoveComponent(CameraNode, CamComp->GetTypeID());
-  Scene->RemoveComponent(LightNode, LitComp->GetTypeID());
-  Scene->RemoveComponent(MeshNode, FilterComp->GetTypeID());
-  Scene->RemoveComponent(MeshNode, RendererComp->GetTypeID());
-  Factory_->DestroyComponent(CamComp, Allocator_);
-  Factory_->DestroyComponent(LitComp, Allocator_);
-  Factory_->DestroyComponent(FilterComp, Allocator_);
-  Factory_->DestroyComponent(RendererComp, Allocator_);
+  uint32_t LightCount = 0;
+  Node** Lights = Tree->GetNodesByType(NodeType::Light, &LightCount);
+  EXPECT_EQ(LightCount, 1u);
+  EXPECT_EQ(Lights[0], LightNodePtr);
 
-  DestroyTestScene(Scene);
+  uint32_t CamCount = 0;
+  Node** Cameras = Tree->GetNodesByType(NodeType::Camera, &CamCount);
+  EXPECT_EQ(CamCount, 1u);
+  EXPECT_EQ(Cameras[0], CamNode);
+
+  DestroyTestScene(Tree);
 }
 
 //=============================================================================
-// Test 3: Destroying a Node Removes Components From Global Lists and Fires Events
+// Test 3: Destroying a Node Removes Typed Nodes From Tracking and Fires Events
 //=============================================================================
-TEST_F(IntegrationTest, DestroyNodeRemovesComponentsAndFiresEvents)
+TEST_F(IntegrationTest, DestroyNodeRemovesTypedNodesAndFiresEvents)
 {
-  AxScene* Scene = CreateTestScene("DestroyTest");
-  ASSERT_NE(Scene, nullptr);
+  SceneTree* Tree = CreateTestScene("DestroyTest");
+  ASSERT_NE(Tree, nullptr);
 
   // Subscribe to lifecycle events
-  IntegrationEventTracker Tracker = {0, 0, 0, 0, nullptr};
-  Scene->GetEventBus()->Subscribe(AX_EVENT_NODE_CREATED, TrackNodeCreated, &Tracker);
-  Scene->GetEventBus()->Subscribe(AX_EVENT_NODE_DESTROYED, TrackNodeDestroyed, &Tracker);
-  Scene->GetEventBus()->Subscribe(AX_EVENT_COMPONENT_ADDED, TrackComponentAdded, &Tracker);
-  Scene->GetEventBus()->Subscribe(AX_EVENT_COMPONENT_REMOVED, TrackComponentRemoved, &Tracker);
+  IntegrationEventTracker Tracker = {0, 0, nullptr};
+  Tree->GetEventBus()->Subscribe(AX_EVENT_NODE_CREATED, TrackNodeCreated, &Tracker);
+  Tree->GetEventBus()->Subscribe(AX_EVENT_NODE_DESTROYED, TrackNodeDestroyed, &Tracker);
 
-  // Create a parent with a child, each having a component
-  Node* Parent = Scene->CreateNode("Parent", NodeType::Node3D, nullptr);
+  // Create a parent MeshInstance with a child MeshInstance
+  Node* Parent = Tree->CreateNode("Parent", NodeType::MeshInstance, nullptr);
   ASSERT_NE(Parent, nullptr);
   EXPECT_EQ(Tracker.NodeCreatedCount, 1);
 
-  Node* Child = Scene->CreateNode("Child", NodeType::Node3D, Parent);
+  Node* Child = Tree->CreateNode("Child", NodeType::MeshInstance, Parent);
   ASSERT_NE(Child, nullptr);
   EXPECT_EQ(Tracker.NodeCreatedCount, 2);
 
-  // Add components
-  MeshFilter ParentFilter;
-  ParentFilter.TypeID_ = 700;
-  ParentFilter.TypeName_ = "MeshFilter";
-  MeshFilter ChildFilter;
-  ChildFilter.TypeID_ = 700;
-  ChildFilter.TypeName_ = "MeshFilter";
-
-  EXPECT_TRUE(Scene->AddComponent(Parent, &ParentFilter));
-  EXPECT_TRUE(Scene->AddComponent(Child, &ChildFilter));
-  EXPECT_EQ(Tracker.ComponentAddedCount, 2);
-
-  // Verify both components are in global list
+  // Verify both are in typed tracking
   uint32_t Count = 0;
-  Scene->GetComponentsByType(700, &Count);
+  Tree->GetNodesByType(NodeType::MeshInstance, &Count);
   EXPECT_EQ(Count, 2u);
 
   // Record node count before destruction
-  uint32_t NodeCountBefore = Scene->GetNodeCount();
+  uint32_t NodeCountBefore = Tree->GetNodeCount();
 
-  // Destroy the parent (should recursively destroy child, remove all components)
-  Scene->DestroyNode(Parent);
+  // Destroy the parent (should recursively destroy child)
+  Tree->DestroyNode(Parent);
 
   // Verify node destroyed events fired
   EXPECT_GE(Tracker.NodeDestroyedCount, 1);
 
-  // Verify components removed from global list
+  // Verify typed nodes removed from tracking
   uint32_t CountAfter = 0;
-  Component** ListAfter = Scene->GetComponentsByType(700, &CountAfter);
+  Node** ListAfter = Tree->GetNodesByType(NodeType::MeshInstance, &CountAfter);
   EXPECT_EQ(CountAfter, 0u);
+  EXPECT_EQ(ListAfter, nullptr);
 
   // Verify node count decreased
-  EXPECT_LT(Scene->GetNodeCount(), NodeCountBefore);
+  EXPECT_LT(Tree->GetNodeCount(), NodeCountBefore);
 
-  DestroyTestScene(Scene);
+  DestroyTestScene(Tree);
 }
 
 //=============================================================================
-// Test 4: Prefab Instantiation Integrates With System Processing
+// Test 4: Prefab Instantiation Integrates With Transform Propagation
 //=============================================================================
-TEST_F(IntegrationTest, PrefabInstantiationIntegratesWithSystems)
+TEST_F(IntegrationTest, PrefabInstantiationIntegratesWithTransformPropagation)
 {
-  AxScene* Scene = CreateTestScene("PrefabSystemTest");
-  ASSERT_NE(Scene, nullptr);
+  SceneTree* Tree = CreateTestScene("PrefabSystemTest");
+  ASSERT_NE(Tree, nullptr);
 
-  // Parse a prefab
-  const char* PrefabData = R"(node "Obstacle" {
+  // Parse a prefab with typed nodes
+  const char* PrefabData = R"(node "Obstacle" MeshInstance {
     transform {
       translation: 0.0, 0.0, 0.0
     }
-    component MeshFilter {
-      mesh: "res://obstacle.glb"
-    }
-    component MeshRenderer {
-      material: "ObstacleMat"
-    }
+    mesh: "res://obstacle.glb"
+    material: "ObstacleMat"
   })";
 
-  Node* PrefabRoot = ParsePrefab(PrefabData, Scene);
+  Node* PrefabRoot = ParsePrefab(PrefabData, Tree);
   ASSERT_NE(PrefabRoot, nullptr);
+  EXPECT_EQ(PrefabRoot->GetType(), NodeType::MeshInstance);
 
   // Instantiate two copies at different positions
-  Node* Copy1 = InstantiatePrefab(Scene, PrefabRoot, nullptr, Allocator_);
-  Node* Copy2 = InstantiatePrefab(Scene, PrefabRoot, nullptr, Allocator_);
+  Node* Copy1 = InstantiatePrefab(Tree, PrefabRoot, nullptr, Allocator_);
+  Node* Copy2 = InstantiatePrefab(Tree, PrefabRoot, nullptr, Allocator_);
   ASSERT_NE(Copy1, nullptr);
   ASSERT_NE(Copy2, nullptr);
 
@@ -397,268 +332,168 @@ TEST_F(IntegrationTest, PrefabInstantiationIntegratesWithSystems)
   Copy2->GetTransform().Translation = {-5.0f, 0.0f, 0.0f};
   Copy2->GetTransform().ForwardMatrixDirty = true;
 
-  // Run TransformSystem on the scene
-  TransformSystem TfSys;
-  TfSys.SetScene(Scene);
-  TfSys.Update(0.016f, nullptr, 0);
+  // Run SceneTree::Update to compute world matrices
+  Tree->Update(0.016f);
 
   // Verify copies have correct world positions
-  EXPECT_TRUE(FloatNear(Copy1->GetTransform().CachedForwardMatrix.E[3][0], 5.0f));
-  EXPECT_TRUE(FloatNear(Copy2->GetTransform().CachedForwardMatrix.E[3][0], -5.0f));
+  EXPECT_TRUE(FloatNear(Copy1->GetWorldTransform().E[3][0], 5.0f));
+  EXPECT_TRUE(FloatNear(Copy2->GetWorldTransform().E[3][0], -5.0f));
 
-  // Verify MeshRenderer components are in the global list
-  const ComponentTypeInfo* MRInfo = Factory_->FindType("MeshRenderer");
-  ASSERT_NE(MRInfo, nullptr);
-  uint32_t MRCount = 0;
-  Component** MRComps = Scene->GetComponentsByType(MRInfo->TypeID, &MRCount);
-  // At least 2 MeshRenderers from the two instantiated copies
-  EXPECT_GE(MRCount, 2u);
+  // Verify MeshInstance nodes are in the typed tracking list
+  // Prefab original + 2 copies = 3 MeshInstance nodes
+  uint32_t MeshCount = 0;
+  Node** MeshNodes = Tree->GetNodesByType(NodeType::MeshInstance, &MeshCount);
+  EXPECT_GE(MeshCount, 2u);
+  ASSERT_NE(MeshNodes, nullptr);
 
-  DestroyTestScene(Scene);
+  DestroyTestScene(Tree);
 }
 
 //=============================================================================
-// Test 5: Hot-Reload Scenario - Unregister/Re-Register Component Type
-//=============================================================================
-TEST_F(IntegrationTest, HotReloadUnregisterReregisterComponentType)
-{
-  // The hot-reload pattern: unregister a type, then re-register it
-  // This simulates a plugin being unloaded and reloaded
-
-  // Create a dedicated factory for this test (separate from the global one)
-  ComponentFactory HotReloadFactory;
-
-  // Define create/destroy functions for a custom component
-  struct CustomComp : public Component
-  {
-    int Value;
-    CustomComp() : Value(42) { TypeName_ = "CustomComp"; }
-    size_t GetSize() const override { return (sizeof(CustomComp)); }
-  };
-
-  auto CreateCustom = [](void* Memory) -> Component* {
-    return (new (Memory) CustomComp());
-  };
-  auto DestroyCustom = [](Component* Comp) {
-    static_cast<CustomComp*>(Comp)->~CustomComp();
-  };
-
-  // Register the custom type
-  bool Reg1 = HotReloadFactory.RegisterType("CustomComp", CreateCustom, DestroyCustom, sizeof(CustomComp));
-  EXPECT_TRUE(Reg1);
-
-  // Create an instance
-  Component* Inst1 = HotReloadFactory.CreateComponent("CustomComp", Allocator_);
-  ASSERT_NE(Inst1, nullptr);
-  uint32_t OrigTypeID = Inst1->GetTypeID();
-  EXPECT_EQ(Inst1->GetTypeName(), "CustomComp");
-
-  // Destroy the instance
-  HotReloadFactory.DestroyComponent(Inst1, Allocator_);
-
-  // Unregister the type (simulating plugin unload)
-  bool Unreg = HotReloadFactory.UnregisterType("CustomComp");
-  EXPECT_TRUE(Unreg);
-
-  // Verify it is gone
-  const ComponentTypeInfo* Gone = HotReloadFactory.FindType("CustomComp");
-  EXPECT_EQ(Gone, nullptr);
-
-  // Cannot create after unregister
-  Component* Fail = HotReloadFactory.CreateComponent("CustomComp", Allocator_);
-  EXPECT_EQ(Fail, nullptr);
-
-  // Re-register (simulating plugin reload)
-  bool Reg2 = HotReloadFactory.RegisterType("CustomComp", CreateCustom, DestroyCustom, sizeof(CustomComp));
-  EXPECT_TRUE(Reg2);
-
-  // Create a new instance after re-registration
-  Component* Inst2 = HotReloadFactory.CreateComponent("CustomComp", Allocator_);
-  ASSERT_NE(Inst2, nullptr);
-  EXPECT_EQ(Inst2->GetTypeName(), "CustomComp");
-
-  // The TypeID may differ from the original since IDs are auto-assigned
-  EXPECT_GT(Inst2->GetTypeID(), 0u);
-
-  HotReloadFactory.DestroyComponent(Inst2, Allocator_);
-}
-
-//=============================================================================
-// Test 6: ComponentFactory + AxSceneAPI Integration Through AxAPIRegistry
-//=============================================================================
-TEST_F(IntegrationTest, ComponentFactoryAPIRegistryIntegration)
-{
-  // The global ComponentFactory is a static object; access it directly.
-  ComponentFactory* FactoryAPI = AxComponentFactory_Get();
-  ASSERT_NE(FactoryAPI, nullptr) << "ComponentFactory not available";
-
-  // Verify we can look up a standard component type
-  const ComponentTypeInfo* MFInfo = FactoryAPI->FindType("MeshFilter");
-  ASSERT_NE(MFInfo, nullptr);
-  EXPECT_EQ(MFInfo->TypeName, "MeshFilter");
-  EXPECT_GT(MFInfo->TypeID, 0u);
-
-  // Verify we can create a component through the API
-  Component* Comp = FactoryAPI->CreateComponent("MeshFilter", Allocator_);
-  ASSERT_NE(Comp, nullptr);
-  EXPECT_EQ(Comp->GetTypeName(), "MeshFilter");
-  EXPECT_EQ(Comp->GetTypeID(), MFInfo->TypeID);
-
-  // Verify GetTypeCount is consistent
-  uint32_t Count = FactoryAPI->GetTypeCount();
-  EXPECT_GT(Count, 0u);
-
-  // Clean up
-  FactoryAPI->DestroyComponent(Comp, Allocator_);
-}
-
-//=============================================================================
-// Test 7: Scene Destruction Cleans Up All Resources
+// Test 5: Scene Destruction Cleans Up All Resources
 //=============================================================================
 TEST_F(IntegrationTest, SceneDestructionCleansUpAllResources)
 {
-  AxScene* Scene = CreateTestScene("DestructionTest");
-  ASSERT_NE(Scene, nullptr);
+  SceneTree* Tree = CreateTestScene("DestructionTest");
+  ASSERT_NE(Tree, nullptr);
 
-  // Build up a scene with nodes, components, systems, and event subscriptions
-  Node* NodeA = Scene->CreateNode("NodeA", NodeType::Node3D, nullptr);
-  Node* NodeB = Scene->CreateNode("NodeB", NodeType::Node3D, NodeA);
+  // Build up a scene with typed nodes and event subscriptions
+  Node* NodeA = Tree->CreateNode("NodeA", NodeType::MeshInstance, nullptr);
+  Node* NodeB = Tree->CreateNode("NodeB", NodeType::MeshInstance, NodeA);
   ASSERT_NE(NodeA, nullptr);
   ASSERT_NE(NodeB, nullptr);
 
-  // Add stack-allocated test components (not factory-created, just for tracking)
-  MeshFilter FilterA;
-  FilterA.TypeID_ = 800;
-  FilterA.TypeName_ = "MeshFilter";
-  MeshFilter FilterB;
-  FilterB.TypeID_ = 800;
-  FilterB.TypeName_ = "MeshFilter";
-
-  EXPECT_TRUE(Scene->AddComponent(NodeA, &FilterA));
-  EXPECT_TRUE(Scene->AddComponent(NodeB, &FilterB));
+  // Set mesh data on typed nodes
+  MeshInstance* MIA = static_cast<MeshInstance*>(NodeA);
+  MIA->SetMeshPath("models/a.glb");
+  MeshInstance* MIB = static_cast<MeshInstance*>(NodeB);
+  MIB->SetMeshPath("models/b.glb");
 
   // Subscribe to an event
-  IntegrationEventTracker Tracker = {0, 0, 0, 0, nullptr};
-  Scene->GetEventBus()->Subscribe(AX_EVENT_USER_BASE, TrackNodeCreated, &Tracker);
-
-  // Register a system
-  TransformSystem TfSys;
-  TfSys.SetScene(Scene);
-  Scene->RegisterSystem(&TfSys);
+  IntegrationEventTracker Tracker = {0, 0, nullptr};
+  Tree->GetEventBus()->Subscribe(AX_EVENT_USER_BASE, TrackNodeCreated, &Tracker);
 
   // Verify scene has content
-  EXPECT_GE(Scene->GetNodeCount(), 3u); // Root + NodeA + NodeB
-  EXPECT_GE(Scene->GetSystemCount(), 1u);
-
-  // Now unregister the system before destruction to avoid dangling pointer
-  Scene->UnregisterSystem(&TfSys);
+  EXPECT_GE(Tree->GetNodeCount(), 3u); // Root + NodeA + NodeB
 
   // Destroy the scene - delete cleans up everything
-  DestroyTestScene(Scene);
+  DestroyTestScene(Tree);
 
   // After deletion, the scene object is gone. No lookup needed.
   // The destructor handles all cleanup internally.
 }
 
 //=============================================================================
-// Test 8: Multiple Scenes Operate Independently
+// Test 6: Multiple Scenes Operate Independently
 //=============================================================================
 TEST_F(IntegrationTest, MultipleScenesOperateIndependently)
 {
   // Create two independent scenes
-  AxScene* SceneA = CreateTestScene("SceneA");
-  AxScene* SceneB = CreateTestScene("SceneB");
-  ASSERT_NE(SceneA, nullptr);
-  ASSERT_NE(SceneB, nullptr);
+  SceneTree* TreeA = CreateTestScene("SceneA");
+  SceneTree* TreeB = CreateTestScene("SceneB");
+  ASSERT_NE(TreeA, nullptr);
+  ASSERT_NE(TreeB, nullptr);
 
   // Subscribe to events on each scene's EventBus independently
-  IntegrationEventTracker TrackerA = {0, 0, 0, 0, nullptr};
-  IntegrationEventTracker TrackerB = {0, 0, 0, 0, nullptr};
-  SceneA->GetEventBus()->Subscribe(AX_EVENT_NODE_CREATED, TrackNodeCreated, &TrackerA);
-  SceneB->GetEventBus()->Subscribe(AX_EVENT_NODE_CREATED, TrackNodeCreated, &TrackerB);
+  IntegrationEventTracker TrackerA = {0, 0, nullptr};
+  IntegrationEventTracker TrackerB = {0, 0, nullptr};
+  TreeA->GetEventBus()->Subscribe(AX_EVENT_NODE_CREATED, TrackNodeCreated, &TrackerA);
+  TreeB->GetEventBus()->Subscribe(AX_EVENT_NODE_CREATED, TrackNodeCreated, &TrackerB);
 
-  // Add nodes to SceneA only
-  Node* NodeA1 = SceneA->CreateNode("A1", NodeType::Node3D, nullptr);
-  Node* NodeA2 = SceneA->CreateNode("A2", NodeType::Node3D, nullptr);
+  // Add typed nodes to SceneA only
+  Node* NodeA1 = TreeA->CreateNode("A1", NodeType::MeshInstance, nullptr);
+  Node* NodeA2 = TreeA->CreateNode("A2", NodeType::Light, nullptr);
   ASSERT_NE(NodeA1, nullptr);
   ASSERT_NE(NodeA2, nullptr);
 
-  // Add a node to SceneB only
-  Node* NodeB1 = SceneB->CreateNode("B1", NodeType::Node3D, nullptr);
+  // Add a typed node to SceneB only
+  Node* NodeB1 = TreeB->CreateNode("B1", NodeType::MeshInstance, nullptr);
   ASSERT_NE(NodeB1, nullptr);
 
   // Verify events are scene-scoped
   EXPECT_EQ(TrackerA.NodeCreatedCount, 2); // A1 and A2
   EXPECT_EQ(TrackerB.NodeCreatedCount, 1); // B1 only
 
-  // Add a component to SceneA
-  MeshFilter FilterA;
-  FilterA.TypeID_ = 900;
-  FilterA.TypeName_ = "MeshFilter";
-  EXPECT_TRUE(SceneA->AddComponent(NodeA1, &FilterA));
-
-  // Verify SceneB does not see SceneA's component
+  // Verify SceneB does not see SceneA's MeshInstance nodes
   uint32_t CountA = 0;
   uint32_t CountB = 0;
-  SceneA->GetComponentsByType(900, &CountA);
-  SceneB->GetComponentsByType(900, &CountB);
+  TreeA->GetNodesByType(NodeType::MeshInstance, &CountA);
+  TreeB->GetNodesByType(NodeType::MeshInstance, &CountB);
   EXPECT_EQ(CountA, 1u);
-  EXPECT_EQ(CountB, 0u);
+  EXPECT_EQ(CountB, 1u);
 
   // Verify node counts are independent
   // SceneA: Root + A1 + A2 = 3
-  EXPECT_EQ(SceneA->GetNodeCount(), 3u);
+  EXPECT_EQ(TreeA->GetNodeCount(), 3u);
   // SceneB: Root + B1 = 2
-  EXPECT_EQ(SceneB->GetNodeCount(), 2u);
+  EXPECT_EQ(TreeB->GetNodeCount(), 2u);
 
-  // Clean up component before scene destruction
-  SceneA->RemoveComponent(NodeA1, 900);
-
-  DestroyTestScene(SceneA);
-  DestroyTestScene(SceneB);
+  DestroyTestScene(TreeA);
+  DestroyTestScene(TreeB);
 }
 
 //=============================================================================
-// Test 9: EventBus Lifecycle Integration - Node and Component Events
+// Test 7: EventBus Lifecycle Integration - Node Events
 //=============================================================================
 TEST_F(IntegrationTest, EventBusLifecycleIntegration)
 {
-  AxScene* Scene = CreateTestScene("EventLifecycleTest");
-  ASSERT_NE(Scene, nullptr);
+  SceneTree* Tree = CreateTestScene("EventLifecycleTest");
+  ASSERT_NE(Tree, nullptr);
 
-  // Subscribe to all lifecycle events
-  IntegrationEventTracker Tracker = {0, 0, 0, 0, nullptr};
-  Scene->GetEventBus()->Subscribe(AX_EVENT_NODE_CREATED, TrackNodeCreated, &Tracker);
-  Scene->GetEventBus()->Subscribe(AX_EVENT_NODE_DESTROYED, TrackNodeDestroyed, &Tracker);
-  Scene->GetEventBus()->Subscribe(AX_EVENT_COMPONENT_ADDED, TrackComponentAdded, &Tracker);
-  Scene->GetEventBus()->Subscribe(AX_EVENT_COMPONENT_REMOVED, TrackComponentRemoved, &Tracker);
+  // Subscribe to node lifecycle events
+  IntegrationEventTracker Tracker = {0, 0, nullptr};
+  Tree->GetEventBus()->Subscribe(AX_EVENT_NODE_CREATED, TrackNodeCreated, &Tracker);
+  Tree->GetEventBus()->Subscribe(AX_EVENT_NODE_DESTROYED, TrackNodeDestroyed, &Tracker);
 
   // Create a node -> should fire NODE_CREATED
-  Node* TestNode = Scene->CreateNode("EventTest", NodeType::Node3D, nullptr);
+  Node* TestNode = Tree->CreateNode("EventTest", NodeType::MeshInstance, nullptr);
   ASSERT_NE(TestNode, nullptr);
   EXPECT_EQ(Tracker.NodeCreatedCount, 1);
   EXPECT_EQ(Tracker.LastNodeSender, TestNode);
 
-  // Add a component -> should fire COMPONENT_ADDED
-  MeshFilter Filter;
-  Filter.TypeID_ = 950;
-  Filter.TypeName_ = "MeshFilter";
-  EXPECT_TRUE(Scene->AddComponent(TestNode, &Filter));
-  EXPECT_EQ(Tracker.ComponentAddedCount, 1);
-
-  // Remove the component -> should fire COMPONENT_REMOVED
-  EXPECT_TRUE(Scene->RemoveComponent(TestNode, 950));
-  EXPECT_EQ(Tracker.ComponentRemovedCount, 1);
-
   // Destroy the node -> should fire NODE_DESTROYED
-  Scene->DestroyNode(TestNode);
+  Tree->DestroyNode(TestNode);
   EXPECT_EQ(Tracker.NodeDestroyedCount, 1);
 
   // Verify final counts
   EXPECT_EQ(Tracker.NodeCreatedCount, 1);
   EXPECT_EQ(Tracker.NodeDestroyedCount, 1);
-  EXPECT_EQ(Tracker.ComponentAddedCount, 1);
-  EXPECT_EQ(Tracker.ComponentRemovedCount, 1);
 
-  DestroyTestScene(Scene);
+  DestroyTestScene(Tree);
+}
+
+//=============================================================================
+// Test 8: Typed nodes with transforms propagate correctly through hierarchy
+//=============================================================================
+TEST_F(IntegrationTest, TypedNodeTransformPropagation)
+{
+  SceneTree* Tree = CreateTestScene("TransformTest");
+  ASSERT_NE(Tree, nullptr);
+
+  // Create a hierarchy: Root -> Light (at 0,10,0) -> MeshInstance (at 5,0,0)
+  Node* LightNodePtr = Tree->CreateNode("WorldLight", NodeType::Light, nullptr);
+  ASSERT_NE(LightNodePtr, nullptr);
+  LightNodePtr->GetTransform().Translation = {0.0f, 10.0f, 0.0f};
+  LightNodePtr->GetTransform().ForwardMatrixDirty = true;
+
+  Node* MeshNodePtr = Tree->CreateNode("ChildMesh", NodeType::MeshInstance, LightNodePtr);
+  ASSERT_NE(MeshNodePtr, nullptr);
+  MeshNodePtr->GetTransform().Translation = {5.0f, 0.0f, 0.0f};
+  MeshNodePtr->GetTransform().ForwardMatrixDirty = true;
+
+  // Run update to propagate transforms
+  Tree->Update(0.016f);
+
+  // MeshInstance world position should be (5, 10, 0) = parent (0,10,0) + local (5,0,0)
+  const AxMat4x4& MeshWorld = MeshNodePtr->GetWorldTransform();
+  EXPECT_TRUE(FloatNear(MeshWorld.E[3][0], 5.0f));
+  EXPECT_TRUE(FloatNear(MeshWorld.E[3][1], 10.0f));
+  EXPECT_TRUE(FloatNear(MeshWorld.E[3][2], 0.0f));
+
+  // Light world position should be (0, 10, 0)
+  const AxMat4x4& LightWorld = LightNodePtr->GetWorldTransform();
+  EXPECT_TRUE(FloatNear(LightWorld.E[3][0], 0.0f));
+  EXPECT_TRUE(FloatNear(LightWorld.E[3][1], 10.0f));
+
+  DestroyTestScene(Tree);
 }

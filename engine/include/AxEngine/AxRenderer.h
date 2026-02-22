@@ -10,7 +10,7 @@ struct AxCamera;
 struct AxShaderData;
 struct AxModelData;
 
-class AxScene;
+class SceneTree;
 class Node;
 
 /**
@@ -52,9 +52,9 @@ public:
 
     /**
      * Render a scene using the main camera.
-     * @param Scene Scene to render (can be nullptr)
+     * @param Scene SceneTree to render (can be nullptr)
      */
-    void RenderScene(AxScene* Scene);
+    void RenderScene(SceneTree* Scene);
 
     /**
      * Get the main camera for script access.

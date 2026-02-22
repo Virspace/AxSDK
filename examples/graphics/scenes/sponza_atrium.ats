@@ -3,7 +3,7 @@
 
 scene "SponzaAtrium" {
     # Main light source positioned above the atrium
-    light "MainLight" {
+    node "MainLight" Light {
         type: point
         position: 50.0, 80.0, 30.0
         color: 1.0, 1.0, 0.9
@@ -12,7 +12,7 @@ scene "SponzaAtrium" {
     }
 
     # Secondary warm light for atmosphere
-    light "AtmosphereLight" {
+    node "AtmosphereLight" Light {
         type: point
         position: -30.0, 60.0, -20.0
         color: 1.0, 0.8, 0.6
@@ -20,21 +20,17 @@ scene "SponzaAtrium" {
         range: 150.0
     }
 
-    node "MainEnvironment" {
+    node "MainEnvironment" MeshInstance {
         transform {
             translation: 0.0, 0.0, 0.0
             rotation: 0.0, 0.0, 0.0, 1.0
             scale: 1.0, 1.0, 1.0
         }
-        component MeshFilter {
-            mesh: "examples/graphics/scenes/models/atrium.glb"
-        }
-        component MeshRenderer {
-            material: "DefaultMaterial"
-        }
+        mesh: "examples/graphics/scenes/models/atrium.glb"
+        material: "DefaultMaterial"
     }
 
-    node "DefaultCamera" {
+    node "DefaultCamera" Camera {
         transform {
             translation: 11.12, 1.7, 1.83
             rotation: -0.064447, 0.381751, 0.026695, 0.921629

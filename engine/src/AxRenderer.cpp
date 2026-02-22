@@ -2,14 +2,15 @@
  * AxRender.cpp - Rendering system implementation
  *
  * Handles viewport, camera, shaders, and scene rendering.
- * Traverses the Node hierarchy via GetFirstChild/GetNextSibling and reads
- * MeshFilter/MeshRenderer components for model rendering. Lights and cameras
- * are read directly from the AxScene public members.
+ * Traverses the Node hierarchy via GetFirstChild/GetNextSibling and checks
+ * NodeType::MeshInstance for model rendering. Lights are collected from
+ * LightNode typed nodes via SceneTree::GetNodesByType().
  */
 
 #include "AxEngine/AxRenderer.h"
-#include "AxEngine/AxScene.h"
+#include "AxEngine/AxSceneTree.h"
 #include "AxEngine/AxNode.h"
+#include "AxEngine/AxTypedNodes.h"
 
 #include "AxOpenGL/AxOpenGL.h"
 #include "AxOpenGL/AxOpenGLTypes.h"
@@ -70,8 +71,8 @@ bool AxRenderer::Initialize(AxAPIRegistry* Registry, uint64_t WindowHandle, int3
 
     // Load default shaders
     AxShaderHandle ShaderHandle = ResourceAPI_->LoadShader(
-        "scenes/shaders/vert.glsl",
-        "scenes/shaders/frag.glsl",
+        "examples/graphics/scenes/shaders/vert.glsl",
+        "examples/graphics/scenes/shaders/frag.glsl",
         nullptr);
     if (AX_HANDLE_IS_VALID(ShaderHandle)) {
         ShaderData_ = const_cast<AxShaderData*>(ResourceAPI_->GetShader(ShaderHandle));
@@ -122,7 +123,7 @@ void AxRenderer::EndFrame()
     RenderAPI_->SwapBuffers();
 }
 
-void AxRenderer::RenderScene(AxScene* Scene)
+void AxRenderer::RenderScene(SceneTree* Scene)
 {
     if (!Scene || !ShaderData_) {
         return;
@@ -134,10 +135,33 @@ void AxRenderer::RenderScene(AxScene* Scene)
     RenderAPI_->SetUniform(ShaderData_, "view", &ViewMatrix);
     RenderAPI_->SetUniform(ShaderData_, "projection", &ProjectionMatrix);
 
-    // Set lighting uniforms from scene lights
+    // Set lighting uniforms from scene's LightNode typed nodes
     AxVec3 ViewPos = MainCamera_->Transform.Translation;
     RenderAPI_->SetUniform(ShaderData_, "viewPos", &ViewPos);
-    RenderAPI_->SetSceneLights(ShaderData_, Scene->Lights, Scene->LightCount);
+
+    // Collect lights from typed LightNode nodes into a flat AxLight array
+    uint32_t LightNodeCount = 0;
+    Node** LightNodes = Scene->GetNodesByType(NodeType::Light, &LightNodeCount);
+
+    if (LightNodes && LightNodeCount > 0) {
+        // Build a temporary AxLight array for the OpenGL API
+        AxLight TempLights[AX_SCENE_TREE_MAX_TYPED_NODES];
+        uint32_t Count = (LightNodeCount < AX_SCENE_TREE_MAX_TYPED_NODES)
+                       ? LightNodeCount : AX_SCENE_TREE_MAX_TYPED_NODES;
+
+        for (uint32_t i = 0; i < Count; ++i) {
+            LightNode* LN = static_cast<LightNode*>(LightNodes[i]);
+            TempLights[i] = LN->Light;
+
+            // Copy the node's world position into the light's position
+            const AxMat4x4& WorldMat = LN->GetWorldTransform();
+            TempLights[i].Position = {WorldMat.E[3][0], WorldMat.E[3][1], WorldMat.E[3][2]};
+        }
+
+        RenderAPI_->SetSceneLights(ShaderData_, TempLights, static_cast<int32_t>(Count));
+    } else {
+        RenderAPI_->SetSceneLights(ShaderData_, nullptr, 0);
+    }
 
     // Render the node hierarchy starting from the root
     RenderNode(static_cast<Node*>(Scene->GetRootNode()), nullptr);
@@ -165,11 +189,11 @@ void AxRenderer::RenderNode(Node* NodePtr, const AxMat4x4* ParentTransform)
         WorldTransform = LocalTransform;
     }
 
-    // If this node has a MeshFilter with a loaded model, render it
-    if (ResourceAPI_) {
-        AxModelHandle ModelHandle = ResourceAPI_->GetNodeModelHandle(static_cast<void*>(NodePtr));
-        if (AX_HANDLE_IS_VALID(ModelHandle)) {
-            const AxModelData* Model = ResourceAPI_->GetModel(ModelHandle);
+    // If this node is a MeshInstance with a loaded model, render it
+    if (NodePtr->GetType() == NodeType::MeshInstance) {
+        MeshInstance* MI = static_cast<MeshInstance*>(NodePtr);
+        if (AX_HANDLE_IS_VALID(MI->ModelHandle)) {
+            const AxModelData* Model = ResourceAPI_->GetModel(MI->ModelHandle);
             if (Model) {
                 RenderModel(Model, &WorldTransform);
             }

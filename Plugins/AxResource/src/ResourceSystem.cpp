@@ -19,11 +19,10 @@
 #include "AxOpenGL/AxOpenGL.h"
 #include "AxOpenGL/AxOpenGLTypes.h"
 #include "AxScene/AxScene.h"
-#include "AxEngine/AxScene.h"
+#include "AxEngine/AxSceneTree.h"
 #include "AxEngine/AxNode.h"
-#include "AxEngine/AxComponentFactory.h"
+#include "AxEngine/AxTypedNodes.h"
 #include "AxSceneParserInternal.h"
-#include "AxStandardComponents.h"
 
 #include <cstring>
 #include <cstdlib>
@@ -255,7 +254,7 @@ template class ResourceSlotArray<AxMesh>;
 template class ResourceSlotArray<AxShaderData>;
 template class ResourceSlotArray<AxMaterialDesc>;
 template class ResourceSlotArray<AxModelData>;
-template class ResourceSlotArray<AxScene>;
+template class ResourceSlotArray<SceneTree>;
 
 //=============================================================================
 // ResourceSystem Implementation
@@ -418,7 +417,7 @@ void ResourceSystem::Shutdown()
     // Clean up any remaining resources in slots (force destroy)
     // Scenes (must be first - they reference models)
     for (uint32_t i = 1; i < m_Scenes.GetCapacity(); ++i) {
-        ResourceSlot<AxScene>* Slot = m_Scenes.GetSlotByIndex(i);
+        ResourceSlot<SceneTree>* Slot = m_Scenes.GetSlotByIndex(i);
         if (Slot && Slot->InUse && Slot->Data) {
             delete Slot->Data;
             Slot->Data = nullptr;
@@ -1696,6 +1695,9 @@ bool ResourceSystem::LoadModelInternal(std::string_view Path, struct AxModelData
             case cgltf_alpha_mode_blend:
                 MatDesc.PBR.AlphaMode = AX_ALPHA_MODE_BLEND;
                 break;
+            default:
+                MatDesc.PBR.AlphaMode = AX_ALPHA_MODE_OPAQUE;
+                break;
         }
 
         // Debug output for material texture indices
@@ -2209,9 +2211,9 @@ uint32_t ResourceSystem::GetModelRefCount(AxModelHandle Handle) const
 // Scene Management (Handle-based)
 //=============================================================================
 
-// Note: Scene model loading via MeshFilter components is handled by the renderer
-// on-demand (see AxRenderer Task 6 work). ResourceSystem stores the scene
-// structure; individual models are loaded when the renderer processes nodes.
+// Note: Scene model loading via MeshInstance typed nodes is handled after
+// scene parsing. ResourceSystem stores the scene structure; individual models
+// are loaded when LoadSceneModels() iterates MeshInstance nodes.
 
 AxSceneHandle ResourceSystem::LoadScene(std::string_view Path)
 {
@@ -2231,7 +2233,7 @@ AxSceneHandle ResourceSystem::LoadScene(std::string_view Path)
     }
 
     // Load scene file using SceneAPI
-    AxScene* Scene = m_SceneAPI->LoadSceneFromFile(Path.data());
+    SceneTree* Scene = m_SceneAPI->LoadSceneFromFile(Path.data());
     if (!Scene) {
         fprintf(stderr, "ResourceSystem: Failed to load scene: %.*s\n", static_cast<int>(Path.size()), Path.data());
         return AX_INVALID_HANDLE;
@@ -2245,7 +2247,7 @@ AxSceneHandle ResourceSystem::LoadScene(std::string_view Path)
         return AX_INVALID_HANDLE;
     }
 
-    ResourceSlot<AxScene>* Slot = m_Scenes.GetSlot(Handle);
+    ResourceSlot<SceneTree>* Slot = m_Scenes.GetSlot(Handle);
     if (!Slot) {
         fprintf(stderr, "ResourceSystem: Failed to get scene slot\n");
         delete Scene;
@@ -2255,18 +2257,22 @@ AxSceneHandle ResourceSystem::LoadScene(std::string_view Path)
     // Store scene in slot
     Slot->Data = Scene;
 
-    printf("ResourceSystem: Loaded scene [%u:%u] - %s (%u nodes, %u lights)\n",
-           Handle.Index, Handle.Generation, Scene->Name.data(), Scene->GetNodeCount(), Scene->LightCount);
+    // Query light count from typed-node tracking for the log message
+    uint32_t LightCount = 0;
+    Scene->GetNodesByType(NodeType::Light, &LightCount);
 
-    // Load models for all MeshFilter components in the scene
+    printf("ResourceSystem: Loaded scene [%u:%u] - %s (%u nodes, %u lights)\n",
+           Handle.Index, Handle.Generation, Scene->Name.data(), Scene->GetNodeCount(), LightCount);
+
+    // Load models for all MeshInstance typed nodes in the scene
     LoadSceneModels(Scene);
 
     return Handle;
 }
 
-struct AxScene* ResourceSystem::GetScene(AxSceneHandle Handle)
+SceneTree* ResourceSystem::GetScene(AxSceneHandle Handle)
 {
-    ResourceSlot<AxScene>* Slot = m_Scenes.GetSlot(Handle);
+    ResourceSlot<SceneTree>* Slot = m_Scenes.GetSlot(Handle);
     return Slot ? Slot->Data : nullptr;
 }
 
@@ -2277,7 +2283,7 @@ bool ResourceSystem::IsSceneValid(AxSceneHandle Handle) const
 
 AxSceneHandle ResourceSystem::AcquireScene(AxSceneHandle Handle)
 {
-    ResourceSlot<AxScene>* Slot = m_Scenes.GetSlot(Handle);
+    ResourceSlot<SceneTree>* Slot = m_Scenes.GetSlot(Handle);
     if (!Slot) {
         return AX_INVALID_HANDLE;
     }
@@ -2287,7 +2293,7 @@ AxSceneHandle ResourceSystem::AcquireScene(AxSceneHandle Handle)
 
 void ResourceSystem::ReleaseScene(AxSceneHandle Handle)
 {
-    ResourceSlot<AxScene>* Slot = m_Scenes.GetSlot(Handle);
+    ResourceSlot<SceneTree>* Slot = m_Scenes.GetSlot(Handle);
     if (!Slot || Slot->RefCount == 0) {
         return;
     }
@@ -2302,58 +2308,43 @@ void ResourceSystem::ReleaseScene(AxSceneHandle Handle)
 
 uint32_t ResourceSystem::GetSceneRefCount(AxSceneHandle Handle) const
 {
-    const ResourceSlot<AxScene>* Slot = m_Scenes.GetSlot(Handle);
+    const ResourceSlot<SceneTree>* Slot = m_Scenes.GetSlot(Handle);
     return Slot ? Slot->RefCount : 0;
 }
 
-void ResourceSystem::LoadSceneModels(AxScene* Scene)
+void ResourceSystem::LoadSceneModels(SceneTree* Scene)
 {
     if (!Scene) {
         return;
     }
 
-    // Get the MeshFilter TypeID from the component factory
-    ComponentFactory* Factory = AxComponentFactory_Get();
-    if (!Factory) {
-        fprintf(stderr, "ResourceSystem: ComponentFactory not available for scene model loading\n");
-        return;
-    }
-
-    const ComponentTypeInfo* Info = Factory->FindType("MeshFilter");
-    if (!Info) {
-        fprintf(stderr, "ResourceSystem: MeshFilter type not registered\n");
-        return;
-    }
-
-    uint32_t MeshFilterTypeID = Info->TypeID;
-
-    // Get all MeshFilter components across the entire scene
+    // Get all MeshInstance typed nodes from the scene tree
     uint32_t Count = 0;
-    Component** Components = Scene->GetComponentsByType(MeshFilterTypeID, &Count);
-    if (!Components || Count == 0) {
+    Node** MeshNodes = Scene->GetNodesByType(NodeType::MeshInstance, &Count);
+    if (!MeshNodes || Count == 0) {
         return;
     }
 
-    printf("ResourceSystem: Loading models for %u MeshFilter component(s)\n", Count);
+    printf("ResourceSystem: Loading models for %u MeshInstance node(s)\n", Count);
 
     for (uint32_t i = 0; i < Count; ++i) {
-        MeshFilter* Filter = static_cast<MeshFilter*>(Components[i]);
-        if (!Filter || Filter->MeshPath[0] == '\0') {
+        MeshInstance* MI = static_cast<MeshInstance*>(MeshNodes[i]);
+        if (!MI || MI->MeshPath[0] == '\0') {
             continue;
         }
 
         // Skip if already loaded
-        if (AX_HANDLE_IS_VALID(Filter->ModelHandle)) {
+        if (AX_HANDLE_IS_VALID(MI->ModelHandle)) {
             continue;
         }
 
-        AxModelHandle Handle = LoadModel(Filter->MeshPath);
+        AxModelHandle Handle = LoadModel(MI->MeshPath);
         if (AX_HANDLE_IS_VALID(Handle)) {
-            Filter->ModelHandle = Handle;
+            MI->ModelHandle = Handle;
             printf("ResourceSystem: Loaded model '%s' -> [%u:%u]\n",
-                   Filter->MeshPath, Handle.Index, Handle.Generation);
+                   MI->MeshPath, Handle.Index, Handle.Generation);
         } else {
-            fprintf(stderr, "ResourceSystem: Failed to load model '%s'\n", Filter->MeshPath);
+            fprintf(stderr, "ResourceSystem: Failed to load model '%s'\n", MI->MeshPath);
         }
     }
 }
@@ -2364,28 +2355,13 @@ AxModelHandle ResourceSystem::GetNodeModelHandle(void* NodePtr) const
         return AX_INVALID_HANDLE;
     }
 
-    // Get the MeshFilter TypeID from the component factory (cached after first lookup)
-    static uint32_t s_MeshFilterTypeID = 0;
-    if (s_MeshFilterTypeID == 0) {
-        ComponentFactory* Factory = AxComponentFactory_Get();
-        if (!Factory) {
-            return AX_INVALID_HANDLE;
-        }
-        const ComponentTypeInfo* Info = Factory->FindType("MeshFilter");
-        if (!Info) {
-            return AX_INVALID_HANDLE;
-        }
-        s_MeshFilterTypeID = Info->TypeID;
-    }
-
     Node* NodeObject = static_cast<Node*>(NodePtr);
-    Component* Comp = NodeObject->GetComponent(s_MeshFilterTypeID);
-    if (!Comp) {
+    if (NodeObject->GetType() != NodeType::MeshInstance) {
         return AX_INVALID_HANDLE;
     }
 
-    MeshFilter* Filter = static_cast<MeshFilter*>(Comp);
-    return Filter->ModelHandle;
+    MeshInstance* MI = static_cast<MeshInstance*>(NodeObject);
+    return (MI->ModelHandle);
 }
 
 //=============================================================================
@@ -2535,7 +2511,7 @@ void ResourceSystem::ProcessDeletion(const PendingDeletion& Deletion)
             break;
         }
         case ResourceType::Scene: {
-            ResourceSlot<AxScene>* Slot = m_Scenes.GetSlotByIndex(Deletion.SlotIndex);
+            ResourceSlot<SceneTree>* Slot = m_Scenes.GetSlotByIndex(Deletion.SlotIndex);
             if (Slot && Slot->InUse && Slot->Generation == Deletion.Generation) {
                 // Note: Child resources (models) are already released by ReleaseScene()
                 // before queuing for deletion. We just need to destroy the scene.

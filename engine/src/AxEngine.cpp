@@ -8,13 +8,11 @@
 #include "AxEngine/AxEngine.h"
 #include "AxEngine/AxInput.h"
 #include "AxEngine/AxRenderer.h"
-#include "AxEngine/AxSceneManager.h"
-#include "AxEngine/AxScripting.h"
-#include "AxEngine/AxScene.h"
+#include "AxEngine/AxSceneTree.h"
+#include "AxEngine/AxScriptBase.h"
+#include "AxEngine/AxNode.h"
 
 #include "AxResource/AxResource.h"
-#include "AxEngine/AxComponentFactory.h"
-#include "AxEngine/AxSystemFactory.h"
 #include "Foundation/AxAPIRegistry.h"
 #include "Foundation/AxAllocatorAPI.h"
 #include "Foundation/AxPlatform.h"
@@ -181,33 +179,38 @@ bool AxEngine::Initialize(const AxEngineConfig* config)
     fprintf(stderr, "[INIT] Initializing input...\n");
     AxInput::Get().Initialize(APIRegistry_, Window_);
 
-    // Initialize scene manager
-    fprintf(stderr, "[INIT] Initializing scene manager...\n");
-    AxSceneManager::Get().Initialize(APIRegistry_);
-
-    // Create scripting system
-    fprintf(stderr, "[INIT] Creating scripting system...\n");
-    Scripting_ = new AxScripting();
-    if (!Scripting_->Create(APIRegistry_)) {
-        fprintf(stderr, "AxEngine: Failed to create scripting system\n");
+    // Load the default scene (ResourceAPI creates and owns the SceneTree)
+    fprintf(stderr, "[INIT] Loading scene...\n");
+    SceneHandle_ = ResourceAPI_->LoadScene("examples/graphics/scenes/sponza_atrium.ats");
+    if (!AX_HANDLE_IS_VALID(SceneHandle_)) {
+        fprintf(stderr, "AxEngine: Failed to load scene\n");
         return (false);
     }
+    SceneTree_ = ResourceAPI_->GetScene(SceneHandle_);
 
-    // Load game script
-    fprintf(stderr, "[INIT] Loading game script...\n");
-    if (Scripting_->LoadScript("libGame.dll")) {
-        fprintf(stderr, "[INIT] Game script loaded\n");
+    // Provide engine state to SceneTree for script propagation
+    SceneTree_->SetMainCamera(Renderer_->GetMainCamera());
+
+    // Load Game DLL and attach script to root node
+    fprintf(stderr, "[INIT] Loading Game DLL...\n");
+    AxPlatformDLLAPI* DLLAPI = PlatformAPI_->DLLAPI;
+    GameDLL_ = DLLAPI->Load("libGame.dll");
+    if (DLLAPI->IsValid(GameDLL_)) {
+        typedef ScriptBase* (*CreateNodeScriptFn)();
+        auto CreateNodeScript = reinterpret_cast<CreateNodeScriptFn>(
+            DLLAPI->Symbol(GameDLL_, "CreateNodeScript"));
+        if (CreateNodeScript) {
+            ScriptBase* GameScript = CreateNodeScript();
+            if (GameScript) {
+                SceneTree_->GetRootNode()->AttachScript(GameScript);
+                fprintf(stderr, "[INIT] Game script attached to root node\n");
+            }
+        } else {
+            fprintf(stderr, "[INIT] Warning: CreateNodeScript symbol not found in Game DLL\n");
+        }
     } else {
-        fprintf(stderr, "[INIT] No game script found (libGame.dll)\n");
+        fprintf(stderr, "[INIT] Warning: Failed to load Game DLL\n");
     }
-
-    // Set initial engine state on scripts
-    fprintf(stderr, "[INIT] Setting engine state...\n");
-    Scripting_->SetEngineState(Renderer_->GetMainCamera(), nullptr);
-
-    // Initialize scripts
-    fprintf(stderr, "[INIT] Running script Init...\n");
-    Scripting_->Init();
 
     fprintf(stderr, "[INIT] Showing window...\n");
     WindowAPI_->SetWindowVisible(Window_, true, NULL);
@@ -241,35 +244,24 @@ bool AxEngine::Tick()
         return (false);
     }
 
+    // Propagate mouse delta to SceneTree for script access
+    SceneTree_->UpdateMouseDelta(AxInput::Get().GetMouseDelta());
+
     // Fixed-timestep update
-    AxScene* Scene = AxSceneManager::Get().GetScene();
     FixedAccumulator_ += DeltaT;
     while (FixedAccumulator_ >= FixedTimestep_) {
-        if (Scene) {
-            Scene->FixedUpdateSystems(FixedTimestep_);
-        }
-        if (Scripting_) {
-            Scripting_->FixedTick(FixedTimestep_);
-        }
+        // PhysicsServer::Tick — stub placeholder (runs BEFORE scripts, Godot ordering)
+        SceneTree_->FixedUpdate(FixedTimestep_);
         FixedAccumulator_ -= FixedTimestep_;
     }
 
     // Variable-rate update
-    if (Scripting_) {
-        Scripting_->UpdateFrameState(AxInput::Get().GetMouseDelta());
-        Scripting_->Tick(0.0, DeltaT);
-    }
-
-    // Run scene systems (EarlyUpdate → Update → LateUpdate → Render phase)
-    if (Scene) {
-        Scene->UpdateSystems(DeltaT);
-    }
+    SceneTree_->Update(DeltaT);
+    SceneTree_->LateUpdate(DeltaT);
 
     // Render
     Renderer_->BeginFrame();
-
-    Renderer_->RenderScene(Scene);
-
+    Renderer_->RenderScene(SceneTree_);
     Renderer_->EndFrame();
 
     // Process pending resource releases
@@ -297,19 +289,28 @@ void AxEngine::Shutdown()
 {
     isRunning_ = false;
 
-    // Shutdown scripts
-    if (Scripting_) {
-        Scripting_->Term();
-        Scripting_->Destroy();
-        delete Scripting_;
-        Scripting_ = nullptr;
-    }
-
     // Shutdown input
     AxInput::Get().Shutdown();
 
-    // Shutdown scene manager
-    AxSceneManager::Get().Shutdown();
+    // Detach and destroy the game script while Game DLL is still loaded
+    // (the script's vtable lives in Game.dll, so it must be deleted before unload)
+    if (SceneTree_ && SceneTree_->GetRootNode()) {
+        ScriptBase* Script = SceneTree_->GetRootNode()->DetachScript();
+        delete Script;
+    }
+
+    // Unload Game DLL (script is already destroyed)
+    if (PlatformAPI_ && PlatformAPI_->DLLAPI && PlatformAPI_->DLLAPI->IsValid(GameDLL_)) {
+        PlatformAPI_->DLLAPI->Unload(GameDLL_);
+        GameDLL_ = {};
+    }
+
+    // Release scene handle (queues SceneTree for deferred destruction by ResourceAPI)
+    if (ResourceAPI_ && AX_HANDLE_IS_VALID(SceneHandle_)) {
+        ResourceAPI_->ReleaseScene(SceneHandle_);
+        SceneHandle_ = AX_INVALID_HANDLE;
+    }
+    SceneTree_ = nullptr;
 
     // Shutdown renderer
     if (Renderer_) {

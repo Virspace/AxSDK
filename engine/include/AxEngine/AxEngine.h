@@ -1,6 +1,8 @@
 #pragma once
 
 #include "Foundation/AxTypes.h"
+#include "Foundation/AxPlatform.h"
+#include "AxResource/AxResourceTypes.h"
 #include <string>
 
 #define AX_ENGINE_API_NAME "AxEngineAPI"
@@ -12,8 +14,7 @@ struct AxPluginAPI;
 struct AxPlatformAPI;
 
 struct AxWindow;
-struct AxScene;
-class AxScripting;
+class SceneTree;
 class AxRenderer;
 
 // Configuration for engine initialization
@@ -40,10 +41,9 @@ struct AxEngineAPI {
 };
 
 /**
- * AxEngine - Core engine orchestrator
+ * AxEngine - Core engine
  *
  * Manages plugins, window, input, scripting, and rendering subsystems.
- * Rendering is delegated to AxRender.
  */
 class AxEngine
 {
@@ -76,7 +76,11 @@ private:
 
     // Subsystems
     AxRenderer* Renderer_{nullptr};
-    AxScripting* Scripting_{nullptr};
+    SceneTree* SceneTree_{nullptr};
+    AxSceneHandle SceneHandle_;
+
+    // Game script DLL
+    AxDLL GameDLL_;
 
     bool isRunning_{false};
 };

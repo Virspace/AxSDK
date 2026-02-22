@@ -57,14 +57,9 @@ target_sources(AxResource
         src/ResourceSystem.cpp
         src/AxResource.cpp
         # AxScene parser compiled directly into AxResource (no separate libAxScene.dll).
-        # Single-file C++ parser — scene, node, component, and prefab all share
+        # Single-file C++ parser -- scene, node, and prefab all share
         # one tokenizer; no C-bridge or void*/extern "C" layer required.
         src/AxScene.cpp
-        src/AxStandardComponents.cpp
-        src/AxCoreSystems.cpp
-        src/AxTransformSystem.cpp
-        src/AxRenderSystem.cpp
-        src/AxScriptSystem.cpp
 )
 
 #
@@ -87,7 +82,7 @@ target_include_directories(AxResource
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         # AxScene public header (AxScene/AxScene.h with AXON_SCENE_PARSER_API_NAME)
         ${CMAKE_CURRENT_SOURCE_DIR}/include
-        # Engine headers (AxEngine/AxScene.h, AxEngine/AxNode.h, etc.)
+        # Engine headers (AxEngine/AxSceneTree.h, AxEngine/AxNode.h, etc.)
         ${CMAKE_CURRENT_SOURCE_DIR}/../../engine/include
 )
 

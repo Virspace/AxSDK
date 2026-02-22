@@ -1,8 +1,11 @@
 /**
- * AxNodeTests.cpp - Tests for Node hierarchy operations
+ * AxNodeTests.cpp - Tests for Node hierarchy operations and script slot
  *
  * Tests the Node base class: creation, parent-child linking,
  * sibling order, reparenting, recursive child count, and removal.
+ *
+ * Also tests the Node script slot: AttachScript, DetachScript,
+ * active-state integration, and ownership/destruction semantics.
  */
 
 #include "gtest/gtest.h"
@@ -11,39 +14,11 @@
 #include "Foundation/AxAPIRegistry.h"
 #include "Foundation/AxMath.h"
 #include "AxEngine/AxNode.h"
-#include "AxEngine/AxComponent.h"
+#include "AxEngine/AxScriptBase.h"
 
 #include <cstring>
-
-/**
- * A minimal mock Component for testing component operations on Node.
- * Extends the real Component base class now that Task Group 2 is implemented.
- */
-struct MockComponent : public Component
-{
-  static constexpr uint32_t TypeIDValue = 42;
-
-  MockComponent()
-  {
-    TypeID_ = TypeIDValue;
-    TypeName_ = "MockComponent";
-  }
-
-  size_t GetSize() const override { return (sizeof(MockComponent)); }
-};
-
-struct MockComponent2 : public Component
-{
-  static constexpr uint32_t TypeIDValue = 99;
-
-  MockComponent2()
-  {
-    TypeID_ = TypeIDValue;
-    TypeName_ = "MockComponent2";
-  }
-
-  size_t GetSize() const override { return (sizeof(MockComponent2)); }
-};
+#include <vector>
+#include <string>
 
 /**
  * Test fixture that initializes Foundation APIs required by Node.
@@ -296,3 +271,175 @@ TEST_F(NodeTest, RemovalCleansUpSiblingLinks)
   EXPECT_EQ(parent.GetFirstChild(), nullptr);
   EXPECT_EQ(childC.GetParent(), nullptr);
 }
+
+//=============================================================================
+// Script Slot Tests
+//=============================================================================
+
+/**
+ * TrackingScript - Records callback invocation order and counts.
+ * Used to verify lifecycle ordering guarantees.
+ */
+struct TrackingScript : public ScriptBase
+{
+  std::vector<std::string>& Log;
+  std::string Id;
+
+  bool* DestroyedFlag = nullptr;  // Points to a stack bool; safe to write on destruction
+
+  int AttachCount      = 0;
+  int InitCount        = 0;
+  int EnableCount      = 0;
+  int DisableCount     = 0;
+  int DetachCount      = 0;
+  int UpdateCount      = 0;
+  int FixedUpdateCount = 0;
+  int LateUpdateCount  = 0;
+
+  TrackingScript(std::string_view ScriptId, std::vector<std::string>& EventLog)
+    : Log(EventLog)
+    , Id(ScriptId)
+  {}
+
+  ~TrackingScript() override
+  {
+    if (DestroyedFlag) {
+      *DestroyedFlag = true;
+    }
+  }
+
+  void OnAttach()  override { ++AttachCount;  Log.push_back(Id + ":OnAttach"); }
+  void OnInit()    override { ++InitCount;    Log.push_back(Id + ":OnInit"); }
+  void OnEnable()  override { ++EnableCount;  Log.push_back(Id + ":OnEnable"); }
+  void OnDisable() override { ++DisableCount; Log.push_back(Id + ":OnDisable"); }
+  void OnDetach()  override { ++DetachCount;  Log.push_back(Id + ":OnDetach"); }
+
+  void OnUpdate(float DeltaT)      override { (void)DeltaT; ++UpdateCount; }
+  void OnFixedUpdate(float DeltaT) override { (void)DeltaT; ++FixedUpdateCount; }
+  void OnLateUpdate(float DeltaT)  override { (void)DeltaT; ++LateUpdateCount; }
+};
+
+//=============================================================================
+// Script Test 1: AttachScript sets owner and fires OnAttach
+//=============================================================================
+TEST_F(NodeTest, AttachScript_SetsOwnerAndFiresOnAttach)
+{
+  // Log must outlive node so that node's destructor (which calls OnDetach)
+  // can safely write into the log. Declare Log before node so that
+  // node is destroyed first (C++ destroys locals in reverse declaration order).
+  std::vector<std::string> Log;
+  Node node("TestNode", NodeType::Node3D, TableAPI_);
+
+  auto* Script = new TrackingScript("S", Log);
+  node.AttachScript(Script);
+
+  EXPECT_EQ(Script->GetOwner(), &node)
+    << "Script owner should be set to the node after AttachScript";
+
+  EXPECT_EQ(Script->AttachCount, 1)
+    << "OnAttach should fire exactly once on attachment";
+
+  EXPECT_EQ(Log.size(), 1u);
+  EXPECT_EQ(Log[0], "S:OnAttach");
+
+  // GetScript should return the attached script
+  EXPECT_EQ(node.GetScript(), Script);
+}
+
+
+
+
+//=============================================================================
+// Script Test 5: DetachScript when node has no script is a safe no-op
+//=============================================================================
+TEST_F(NodeTest, DetachScript_NoScript_IsNoOp)
+{
+  Node node("TestNode", NodeType::Node3D, TableAPI_);
+
+  // Should not crash and should return nullptr
+  EXPECT_NO_FATAL_FAILURE({
+    ScriptBase* Result = node.DetachScript();
+    EXPECT_EQ(Result, nullptr);
+  });
+}
+
+
+//=============================================================================
+// Script Test 7: Node destructor destroys the attached script.
+//
+// The destroyed flag is a stack bool pointer passed to the script before
+// attaching. When the node destructor deletes the script, the script
+// destructor sets *DestroyedFlag = true via the stored pointer.
+// The stack bool outlives the node scope, so there is no use-after-free.
+//=============================================================================
+TEST_F(NodeTest, NodeDestructor_DestroysAttachedScript)
+{
+  // Log and Destroyed are declared outside the node scope so they outlive it.
+  std::vector<std::string> Log;
+  bool Destroyed = false;
+
+  {
+    Node node("TestNode", NodeType::Node3D, TableAPI_);
+    auto* Script = new TrackingScript("S", Log);
+    Script->DestroyedFlag = &Destroyed;
+    node.AttachScript(Script);
+    // Script is owned by node; node destroys it when it goes out of scope
+  }
+
+  // After the node destructor ran, the script's destructor was called
+  EXPECT_TRUE(Destroyed)
+    << "Script should have been destroyed when the node was destroyed";
+}
+
+
+
+//=============================================================================
+// Script Test 10: SetActive does NOT fire OnDisable/OnEnable on an
+//                 uninitialized script
+//=============================================================================
+TEST_F(NodeTest, SetActive_UninitializedScript_NoCallbacks)
+{
+  std::vector<std::string> Log;
+  Node node("TestNode", NodeType::Node3D, TableAPI_);
+
+  auto* Script = new TrackingScript("S", Log);
+  node.AttachScript(Script);
+
+  // Script is attached but NOT yet initialized (IsInitialized_ == false)
+  ASSERT_FALSE(Script->IsInitialized());
+
+  Log.clear();
+
+  // Deactivate -- should not fire OnDisable because script is not initialized
+  node.SetActive(false);
+  EXPECT_EQ(Script->DisableCount, 0)
+    << "OnDisable should not fire when script is not yet initialized";
+  EXPECT_TRUE(Log.empty());
+
+  // Reactivate -- should not fire OnEnable because script is not initialized
+  node.SetActive(true);
+  EXPECT_EQ(Script->EnableCount, 0)
+    << "OnEnable should not fire when script is not yet initialized";
+  EXPECT_TRUE(Log.empty());
+}
+
+//=============================================================================
+// Script Test 11: Detached script has null owner
+//=============================================================================
+TEST_F(NodeTest, DetachScript_ClearsOwner)
+{
+  std::vector<std::string> Log;
+  Node node("TestNode", NodeType::Node3D, TableAPI_);
+
+  auto* Script = new TrackingScript("S", Log);
+  node.AttachScript(Script);
+
+  EXPECT_EQ(Script->GetOwner(), &node);
+
+  ScriptBase* Returned = node.DetachScript();
+  EXPECT_EQ(Returned->GetOwner(), nullptr)
+    << "DetachScript should clear the script's owner pointer";
+
+  delete Returned;
+}
+

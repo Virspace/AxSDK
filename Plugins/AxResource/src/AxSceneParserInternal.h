@@ -16,13 +16,12 @@
 struct AxAPIRegistry;
 struct AxSceneParserAPI;
 struct AxAllocator;
-class AxScene;
+class SceneTree;
 class Node;
 
 /**
  * Initialize the scene parser subsystem.
- * Sets up the AllocatorAPI, PlatformAPI, HashTableAPI, ComponentFactory,
- * and registers all core systems.
+ * Sets up the AllocatorAPI, PlatformAPI, and HashTableAPI.
  *
  * Called by ResourceSystem::Initialize() instead of relying on a separate
  * AxScene DLL being loaded.
@@ -33,7 +32,7 @@ void AxSceneParser_Init(struct AxAPIRegistry* Registry);
 
 /**
  * Terminate the scene parser subsystem.
- * Unregisters all core systems and cleans up state.
+ * Cleans up state.
  *
  * Called by ResourceSystem::Shutdown().
  */
@@ -52,12 +51,11 @@ struct AxSceneParserAPI* AxSceneParser_GetAPI(void);
  * Prefab format: a single top-level "node" block with no scene wrapper.
  * Exposed for direct use from test code and prefab-loading tools.
  */
-Node* ParsePrefab(const char* PrefabData, AxScene* Scene);
+Node* ParsePrefab(const char* PrefabData, SceneTree* Scene);
 
 /**
- * Deep-copy a prefab node subtree into Scene, creating new independent nodes
- * and re-registering all components in the scene's global component lists.
- * Uses the global ComponentFactory (initialized via AxSceneParser_Init).
+ * Deep-copy a prefab node subtree into Scene, creating new independent nodes.
+ * Creates new typed node instances via Scene->CreateNode and copies data fields.
  */
-Node* InstantiatePrefab(AxScene* Scene, Node* PrefabRoot,
+Node* InstantiatePrefab(SceneTree* Scene, Node* PrefabRoot,
                          Node* Parent, struct AxAllocator* Allocator);

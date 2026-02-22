@@ -15,27 +15,18 @@ target_sources(AxEngine
         include/AxEngine/AxEngine.h
         include/AxEngine/AxInput.h
         include/AxEngine/AxNode.h
-        include/AxEngine/AxComponent.h
-        include/AxEngine/AxComponentFactory.h
-        include/AxEngine/AxSystem.h
-        include/AxEngine/AxSystemFactory.h
+        include/AxEngine/AxTypedNodes.h
         include/AxEngine/AxEventBus.h
-        include/AxEngine/AxScene.h
+        include/AxEngine/AxSceneTree.h
+        include/AxEngine/AxRenderTypes.h
         include/AxEngine/AxRenderer.h
-        include/AxEngine/AxSceneManager.h
-        include/AxEngine/AxScript.h
-        include/AxEngine/AxScripting.h
         src/AxEngine.cpp
         src/AxInput.cpp
         src/AxNode.cpp
-        src/AxComponentFactory.cpp
-        src/AxSystemFactory.cpp
-        src/AxScene.cpp
+        src/AxTypedNodes.cpp
+        src/AxSceneTree.cpp
         src/AxRenderer.cpp
-        src/AxSceneManager.cpp
         src/AxEventBus.cpp
-        src/AxScript.cpp
-        src/AxScripting.cpp
 )
 
 # Add the standalone bootstrap executable

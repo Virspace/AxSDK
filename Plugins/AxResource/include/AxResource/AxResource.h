@@ -340,7 +340,7 @@ struct AxResourceAPI
      * @param Handle Scene handle
      * @return Pointer to scene data, or NULL if invalid handle
      */
-    struct AxScene* (*GetScene)(AxSceneHandle Handle);
+    struct SceneTree* (*GetScene)(AxSceneHandle Handle);
 
     /**
      * Check if a scene handle is still valid.

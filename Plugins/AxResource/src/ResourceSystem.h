@@ -27,6 +27,7 @@
 #ifdef __cplusplus
 
 #include "AxResource/AxResourceTypes.h"
+#include "AxEngine/AxRenderTypes.h"
 #include "Foundation/AxAllocator.h"
 #include "Foundation/AxAPIRegistry.h"
 
@@ -152,7 +153,7 @@ struct AxMaterialDesc;
 struct AxVertex;
 struct AxModelData;
 
-class AxScene;
+class SceneTree;
 
 struct AxSceneParserAPI;
 
@@ -235,64 +236,13 @@ public:
     // Model Management (Handle-based - Phase 6)
     //=========================================================================
 
-    /**
-     * Load a complete model from GLTF file.
-     * Orchestrates LoadTexture, LoadMesh, and CreateMaterial for all
-     * resources referenced in the GLTF file. Returns a handle to the model.
-     *
-     * @param Path Path to the GLTF file
-     * @return Handle to the loaded model, or AX_INVALID_HANDLE on failure
-     */
     AxModelHandle LoadModel(std::string_view Path);
-
-    /**
-     * Get model data by handle.
-     * @param Handle Model handle
-     * @return Pointer to model data, or NULL if invalid handle
-     */
     const struct AxModelData* GetModel(AxModelHandle Handle) const;
-
-    /**
-     * Check if a model handle is still valid.
-     * @param Handle Model handle to check
-     * @return true if valid, false if invalid or stale
-     */
     bool IsModelValid(AxModelHandle Handle) const;
-
-    /**
-     * Get the total count of loaded models.
-     * @return Number of models currently loaded
-     */
     uint32_t GetModelCount() const;
-
-    /**
-     * Get a model handle by iteration index.
-     * @param Index Iteration index (0 to GetModelCount()-1)
-     * @return Handle to the model at this index, or AX_INVALID_HANDLE if out of range
-     */
     AxModelHandle GetModelByIndex(uint32_t Index) const;
-
-    /**
-     * Acquire an additional reference to a model.
-     * Also acquires references to all child resources (textures, meshes, materials).
-     * @param Handle Model handle
-     * @return Same handle if valid, AX_INVALID_HANDLE if input was invalid
-     */
     AxModelHandle AcquireModel(AxModelHandle Handle);
-
-    /**
-     * Release a reference to a model.
-     * Also releases references to all child resources (textures, meshes, materials).
-     * When refcount hits zero, model is queued for deletion.
-     * @param Handle Model handle
-     */
     void ReleaseModel(AxModelHandle Handle);
-
-    /**
-     * Get reference count for a model.
-     * @param Handle Model handle
-     * @return Reference count, or 0 if invalid handle
-     */
     uint32_t GetModelRefCount(AxModelHandle Handle) const;
 
     //=========================================================================
@@ -311,40 +261,31 @@ public:
      * @param Handle Scene handle
      * @return Pointer to scene data, or NULL if invalid handle
      */
-    AxScene* GetScene(AxSceneHandle Handle);
+    SceneTree* GetScene(AxSceneHandle Handle);
 
     /**
      * Check if a scene handle is still valid.
-     * @param Handle Scene handle to check
-     * @return true if valid, false if invalid or stale
      */
     bool IsSceneValid(AxSceneHandle Handle) const;
 
     /**
      * Acquire an additional reference to a scene.
-     * @param Handle Scene handle
-     * @return Same handle if valid, AX_INVALID_HANDLE if input was invalid
      */
     AxSceneHandle AcquireScene(AxSceneHandle Handle);
 
     /**
      * Release a reference to a scene.
-     * When refcount hits zero, scene and all referenced models are queued for deletion.
-     * @param Handle Scene handle
      */
     void ReleaseScene(AxSceneHandle Handle);
 
     /**
      * Get reference count for a scene.
-     * @param Handle Scene handle
-     * @return Reference count, or 0 if invalid handle
      */
     uint32_t GetSceneRefCount(AxSceneHandle Handle) const;
 
     /**
-     * Get the model handle for a node's MeshFilter component.
-     * @param NodePtr Pointer to a Node (void* to avoid exposing C++ Node in C header)
-     * @return AxModelHandle for the node's mesh, or AX_INVALID_HANDLE if none
+     * Get the model handle for a node's MeshInstance typed node.
+     * Checks the node's type and reads the ModelHandle directly.
      */
     AxModelHandle GetNodeModelHandle(void* NodePtr) const;
 
@@ -378,8 +319,8 @@ private:
     // Internal model loading helper (populates model data)
     bool LoadModelInternal(std::string_view Path, struct AxModelData* OutModel);
 
-    // Load models for all MeshFilter components in a scene after parsing
-    void LoadSceneModels(AxScene* Scene);
+    // Load models for all MeshInstance typed nodes in a scene after parsing
+    void LoadSceneModels(SceneTree* Scene);
 
     // Dependencies
     struct AxAllocator* m_Allocator;
@@ -393,7 +334,7 @@ private:
     ResourceSlotArray<AxShaderData> m_Shaders;
     ResourceSlotArray<AxMaterialDesc> m_Materials;
     ResourceSlotArray<AxModelData> m_Models;
-    ResourceSlotArray<AxScene> m_Scenes;
+    ResourceSlotArray<SceneTree> m_Scenes;
 
     // SceneParserAPI for scene loading
     struct AxSceneParserAPI* m_SceneAPI;

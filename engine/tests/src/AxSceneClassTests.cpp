@@ -1,13 +1,19 @@
 /**
- * AxSceneClassTests.cpp - Tests for the New C++ AxScene Class
+ * AxSceneClassTests.cpp - Tests for SceneTree (formerly AxScene) Class
  *
- * Tests the AxScene class directly (no AxSceneExtension, no old C AxScene struct).
- * Validates construction, node management, component tracking, system execution,
- * and correct defaults.
+ * Tests the SceneTree class directly: construction, node management,
+ * typed-node tracking, correct defaults, light/camera via typed nodes,
+ * and engine consumer patterns.
+ *
+ * Component-based tests have been replaced with typed-node tests as part
+ * of the migration to Godot-style typed node subclasses. Lights and cameras
+ * are now tracked via GetNodesByType() instead of public arrays.
  */
 
 #include "gtest/gtest.h"
-#include "AxEngine/AxScene.h"
+#include "AxEngine/AxSceneTree.h"
+#include "AxEngine/AxTypedNodes.h"
+#include "AxEngine/AxRenderTypes.h"
 #include "Foundation/AxTypes.h"
 #include "Foundation/AxHashTable.h"
 #include "Foundation/AxAllocator.h"
@@ -16,102 +22,10 @@
 #include <cstring>
 
 //=============================================================================
-// Test Components (local to this test file)
-//=============================================================================
-
-namespace AxSceneClassTestHelpers {
-
-struct TestCompA : public Component
-{
-  static constexpr uint32_t TypeID = 100;
-  float Value;
-
-  TestCompA() : Value(0.0f)
-  {
-    TypeID_ = TypeID;
-    TypeName_ = "TestCompA";
-  }
-
-  size_t GetSize() const override { return (sizeof(TestCompA)); }
-};
-
-struct TestCompB : public Component
-{
-  static constexpr uint32_t TypeID = 200;
-  int Counter;
-
-  TestCompB() : Counter(0)
-  {
-    TypeID_ = TypeID;
-    TypeName_ = "TestCompB";
-  }
-
-  size_t GetSize() const override { return (sizeof(TestCompB)); }
-};
-
-//=============================================================================
-// MeshFilter-like test component for engine consumer tests
-//=============================================================================
-
-struct TestMeshFilter : public Component
-{
-  static constexpr uint32_t TypeID = 300;
-  char MeshPath[256];
-  uint32_t MeshHandle;
-
-  TestMeshFilter() : MeshHandle(0)
-  {
-    MeshPath[0] = '\0';
-    TypeID_ = TypeID;
-    TypeName_ = "TestMeshFilter";
-  }
-
-  void SetMeshPath(const char* Path)
-  {
-    if (Path) {
-      strncpy(MeshPath, Path, sizeof(MeshPath) - 1);
-      MeshPath[sizeof(MeshPath) - 1] = '\0';
-    }
-  }
-
-  size_t GetSize() const override { return (sizeof(TestMeshFilter)); }
-};
-
-//=============================================================================
-// Test System - Tracks calls for verification
-//=============================================================================
-
-class TestSystem : public System
-{
-public:
-  mutable int UpdateCallCount;
-  mutable uint32_t LastComponentCount;
-  mutable float LastDeltaT;
-
-  TestSystem(const char* Name, SystemPhase Phase, int32_t Priority, uint32_t CompTypeID)
-    : System(Name, Phase, Priority, CompTypeID)
-    , UpdateCallCount(0)
-    , LastComponentCount(0)
-    , LastDeltaT(0.0f)
-  {}
-
-  void Update(float DeltaT, Component** Components, uint32_t Count) override
-  {
-    UpdateCallCount++;
-    LastComponentCount = Count;
-    LastDeltaT = DeltaT;
-  }
-};
-
-} // namespace AxSceneClassTestHelpers
-
-using namespace AxSceneClassTestHelpers;
-
-//=============================================================================
 // Test Fixture
 //=============================================================================
 
-class AxSceneClassTest : public testing::Test
+class SceneTreeClassTest : public testing::Test
 {
 protected:
   void SetUp() override
@@ -133,250 +47,167 @@ protected:
 };
 
 //=============================================================================
-// Test 1: AxScene construction creates RootNode, EventBus, and correct defaults
+// Test 1: SceneTree construction creates RootNode, EventBus, and correct defaults
 //=============================================================================
-TEST_F(AxSceneClassTest, ConstructionCreatesRootAndDefaults)
+TEST_F(SceneTreeClassTest, ConstructionCreatesRootAndDefaults)
 {
-  AxScene* Scene = new AxScene(TableAPI_);
-  ASSERT_NE(Scene, nullptr);
+  SceneTree* Tree = new SceneTree(TableAPI_, nullptr);
+  ASSERT_NE(Tree, nullptr);
 
   // Root node should exist
-  ASSERT_NE(Scene->GetRootNode(), nullptr);
-  EXPECT_EQ(Scene->GetRootNode()->GetName(), "Root");
-  EXPECT_EQ(Scene->GetRootNode()->GetType(), NodeType::Root);
+  ASSERT_NE(Tree->GetRootNode(), nullptr);
+  EXPECT_EQ(Tree->GetRootNode()->GetName(), "Root");
+  EXPECT_EQ(Tree->GetRootNode()->GetType(), NodeType::Root);
 
   // EventBus should exist
-  ASSERT_NE(Scene->GetEventBus(), nullptr);
+  ASSERT_NE(Tree->GetEventBus(), nullptr);
 
   // Node count should be 1 (just the root)
-  EXPECT_EQ(Scene->GetNodeCount(), 1u);
+  EXPECT_EQ(Tree->GetNodeCount(), 1u);
 
   // Scene settings should be initialized to defaults
-  EXPECT_FLOAT_EQ(Scene->AmbientLight.X, 0.1f);
-  EXPECT_FLOAT_EQ(Scene->AmbientLight.Y, 0.1f);
-  EXPECT_FLOAT_EQ(Scene->AmbientLight.Z, 0.1f);
+  EXPECT_FLOAT_EQ(Tree->AmbientLight.X, 0.1f);
+  EXPECT_FLOAT_EQ(Tree->AmbientLight.Y, 0.1f);
+  EXPECT_FLOAT_EQ(Tree->AmbientLight.Z, 0.1f);
 
-  EXPECT_FLOAT_EQ(Scene->Gravity.X, 0.0f);
-  EXPECT_FLOAT_EQ(Scene->Gravity.Y, -9.81f);
-  EXPECT_FLOAT_EQ(Scene->Gravity.Z, 0.0f);
+  EXPECT_FLOAT_EQ(Tree->Gravity.X, 0.0f);
+  EXPECT_FLOAT_EQ(Tree->Gravity.Y, -9.81f);
+  EXPECT_FLOAT_EQ(Tree->Gravity.Z, 0.0f);
 
-  EXPECT_FLOAT_EQ(Scene->FogDensity, 0.0f);
+  EXPECT_FLOAT_EQ(Tree->FogDensity, 0.0f);
 
-  EXPECT_FLOAT_EQ(Scene->FogColor.X, 0.5f);
-  EXPECT_FLOAT_EQ(Scene->FogColor.Y, 0.5f);
-  EXPECT_FLOAT_EQ(Scene->FogColor.Z, 0.5f);
+  EXPECT_FLOAT_EQ(Tree->FogColor.X, 0.5f);
+  EXPECT_FLOAT_EQ(Tree->FogColor.Y, 0.5f);
+  EXPECT_FLOAT_EQ(Tree->FogColor.Z, 0.5f);
 
-  delete Scene;
+  delete Tree;
 }
 
 //=============================================================================
 // Test 2: CreateNode/GetNodeCount -- creating nodes increments count,
 //         nodes parent correctly to root or specified parent
 //=============================================================================
-TEST_F(AxSceneClassTest, CreateNodeIncrementsCountAndParentsCorrectly)
+TEST_F(SceneTreeClassTest, CreateNodeIncrementsCountAndParentsCorrectly)
 {
-  AxScene* Scene = new AxScene(TableAPI_);
-  ASSERT_NE(Scene, nullptr);
+  SceneTree* Tree = new SceneTree(TableAPI_, nullptr);
+  ASSERT_NE(Tree, nullptr);
 
   // Create two nodes as children of root (nullptr parent defaults to root)
-  Node* NodeA = Scene->CreateNode("NodeA", NodeType::Node3D, nullptr);
+  Node* NodeA = Tree->CreateNode("NodeA", NodeType::Node3D, nullptr);
   ASSERT_NE(NodeA, nullptr);
   EXPECT_EQ(NodeA->GetName(), "NodeA");
   EXPECT_EQ(NodeA->GetType(), NodeType::Node3D);
-  EXPECT_EQ(Scene->GetNodeCount(), 2u); // Root + NodeA
+  EXPECT_EQ(Tree->GetNodeCount(), 2u); // Root + NodeA
 
-  Node* NodeB = Scene->CreateNode("NodeB", NodeType::Node2D, nullptr);
+  Node* NodeB = Tree->CreateNode("NodeB", NodeType::Node2D, nullptr);
   ASSERT_NE(NodeB, nullptr);
   EXPECT_EQ(NodeB->GetType(), NodeType::Node2D);
-  EXPECT_EQ(Scene->GetNodeCount(), 3u); // Root + NodeA + NodeB
+  EXPECT_EQ(Tree->GetNodeCount(), 3u); // Root + NodeA + NodeB
 
   // Both should be children of root
-  EXPECT_EQ(NodeA->GetParent(), static_cast<Node*>(Scene->GetRootNode()));
-  EXPECT_EQ(NodeB->GetParent(), static_cast<Node*>(Scene->GetRootNode()));
+  EXPECT_EQ(NodeA->GetParent(), static_cast<Node*>(Tree->GetRootNode()));
+  EXPECT_EQ(NodeB->GetParent(), static_cast<Node*>(Tree->GetRootNode()));
 
   // Create a child of NodeA
-  Node* ChildA1 = Scene->CreateNode("ChildA1", NodeType::Node3D, NodeA);
+  Node* ChildA1 = Tree->CreateNode("ChildA1", NodeType::Node3D, NodeA);
   ASSERT_NE(ChildA1, nullptr);
   EXPECT_EQ(ChildA1->GetParent(), NodeA);
-  EXPECT_EQ(Scene->GetNodeCount(), 4u);
+  EXPECT_EQ(Tree->GetNodeCount(), 4u);
 
-  delete Scene;
+  delete Tree;
 }
 
 //=============================================================================
 // Test 3: DestroyNode -- destroying a node with children removes the
 //         entire subtree and decrements NodeCount
 //=============================================================================
-TEST_F(AxSceneClassTest, DestroyNodeRemovesSubtreeAndDecrementsCount)
+TEST_F(SceneTreeClassTest, DestroyNodeRemovesSubtreeAndDecrementsCount)
 {
-  AxScene* Scene = new AxScene(TableAPI_);
-  ASSERT_NE(Scene, nullptr);
+  SceneTree* Tree = new SceneTree(TableAPI_, nullptr);
+  ASSERT_NE(Tree, nullptr);
 
   // Create a parent with two children
-  Node* Parent = Scene->CreateNode("Parent", NodeType::Node3D, nullptr);
-  Node* Child1 = Scene->CreateNode("Child1", NodeType::Node3D, Parent);
-  Node* Child2 = Scene->CreateNode("Child2", NodeType::Node3D, Parent);
+  Node* Parent = Tree->CreateNode("Parent", NodeType::Node3D, nullptr);
+  Node* Child1 = Tree->CreateNode("Child1", NodeType::Node3D, Parent);
+  Node* Child2 = Tree->CreateNode("Child2", NodeType::Node3D, Parent);
 
-  EXPECT_EQ(Scene->GetNodeCount(), 4u); // Root + Parent + Child1 + Child2
+  EXPECT_EQ(Tree->GetNodeCount(), 4u); // Root + Parent + Child1 + Child2
 
   // Destroy the parent (should also remove children)
-  Scene->DestroyNode(Parent);
+  Tree->DestroyNode(Parent);
 
   // All 3 nodes (Parent + 2 children) should be removed
-  EXPECT_EQ(Scene->GetNodeCount(), 1u); // Only root remains
+  EXPECT_EQ(Tree->GetNodeCount(), 1u); // Only root remains
 
   // Cannot find the destroyed nodes
-  EXPECT_EQ(Scene->FindNode("Parent"), nullptr);
-  EXPECT_EQ(Scene->FindNode("Child1"), nullptr);
-  EXPECT_EQ(Scene->FindNode("Child2"), nullptr);
+  EXPECT_EQ(Tree->FindNode("Parent"), nullptr);
+  EXPECT_EQ(Tree->FindNode("Child1"), nullptr);
+  EXPECT_EQ(Tree->FindNode("Child2"), nullptr);
 
   // Suppress unused variable warnings
   (void)Child1;
   (void)Child2;
 
-  delete Scene;
+  delete Tree;
 }
 
 //=============================================================================
-// Test 4: AddComponent/GetComponentsByType -- components added to nodes
-//         appear in scene-level global lists by type
+// Test 4: CreateNode with typed nodes -- nodes appear in typed tracking lists
 //=============================================================================
-TEST_F(AxSceneClassTest, AddComponentAppearsInGlobalListByType)
+TEST_F(SceneTreeClassTest, CreateTypedNodeAppearsInTrackingList)
 {
-  AxScene* Scene = new AxScene(TableAPI_);
-  ASSERT_NE(Scene, nullptr);
+  SceneTree* Tree = new SceneTree(TableAPI_, nullptr);
+  ASSERT_NE(Tree, nullptr);
 
-  Node* NodeA = Scene->CreateNode("NodeA", NodeType::Node3D, nullptr);
-  Node* NodeB = Scene->CreateNode("NodeB", NodeType::Node3D, nullptr);
+  Node* MeshA = Tree->CreateNode("MeshA", NodeType::MeshInstance, nullptr);
+  Node* MeshB = Tree->CreateNode("MeshB", NodeType::MeshInstance, nullptr);
+  ASSERT_NE(MeshA, nullptr);
+  ASSERT_NE(MeshB, nullptr);
 
-  // Add TestCompA to both nodes
-  TestCompA CompA1;
-  TestCompA CompA2;
-  EXPECT_TRUE(Scene->AddComponent(NodeA, &CompA1));
-  EXPECT_TRUE(Scene->AddComponent(NodeB, &CompA2));
-
-  // Query global component list for TestCompA type
+  // Query typed node list for MeshInstance
   uint32_t Count = 0;
-  Component** List = Scene->GetComponentsByType(TestCompA::TypeID, &Count);
+  Node** List = Tree->GetNodesByType(NodeType::MeshInstance, &Count);
   ASSERT_NE(List, nullptr);
   EXPECT_EQ(Count, 2u);
-  EXPECT_EQ(List[0], static_cast<Component*>(&CompA1));
-  EXPECT_EQ(List[1], static_cast<Component*>(&CompA2));
+  EXPECT_EQ(List[0], MeshA);
+  EXPECT_EQ(List[1], MeshB);
 
-  // A different type should return empty
-  uint32_t CountB = 0;
-  Component** ListB = Scene->GetComponentsByType(TestCompB::TypeID, &CountB);
-  EXPECT_EQ(ListB, nullptr);
-  EXPECT_EQ(CountB, 0u);
+  // Light type should return empty
+  uint32_t LightCount = 0;
+  Node** LightList = Tree->GetNodesByType(NodeType::Light, &LightCount);
+  EXPECT_EQ(LightList, nullptr);
+  EXPECT_EQ(LightCount, 0u);
 
-  // Clean up: remove components before destruction
-  Scene->RemoveComponent(NodeA, TestCompA::TypeID);
-  Scene->RemoveComponent(NodeB, TestCompA::TypeID);
-
-  delete Scene;
+  delete Tree;
 }
 
 //=============================================================================
-// Test 5: RemoveComponent -- removing a component from a node also
-//         removes it from the scene-level global list
+// Test 5: DestroyNode removes typed nodes from tracking lists
 //=============================================================================
-TEST_F(AxSceneClassTest, RemoveComponentRemovesFromGlobalList)
+TEST_F(SceneTreeClassTest, DestroyNodeRemovesFromTrackingList)
 {
-  AxScene* Scene = new AxScene(TableAPI_);
-  ASSERT_NE(Scene, nullptr);
+  SceneTree* Tree = new SceneTree(TableAPI_, nullptr);
+  ASSERT_NE(Tree, nullptr);
 
-  Node* NodeA = Scene->CreateNode("NodeA", NodeType::Node3D, nullptr);
-  Node* NodeB = Scene->CreateNode("NodeB", NodeType::Node3D, nullptr);
-
-  TestCompA CompA1;
-  TestCompA CompA2;
-  Scene->AddComponent(NodeA, &CompA1);
-  Scene->AddComponent(NodeB, &CompA2);
+  Node* MeshA = Tree->CreateNode("MeshA", NodeType::MeshInstance, nullptr);
+  Node* MeshB = Tree->CreateNode("MeshB", NodeType::MeshInstance, nullptr);
 
   // Verify both are present
   uint32_t Count = 0;
-  Scene->GetComponentsByType(TestCompA::TypeID, &Count);
+  Tree->GetNodesByType(NodeType::MeshInstance, &Count);
   EXPECT_EQ(Count, 2u);
 
-  // Remove component from NodeA
-  EXPECT_TRUE(Scene->RemoveComponent(NodeA, TestCompA::TypeID));
+  // Destroy MeshA
+  Tree->DestroyNode(MeshA);
 
-  // Global list should now have only one component
+  // Only MeshB should remain
   uint32_t NewCount = 0;
-  Component** NewList = Scene->GetComponentsByType(TestCompA::TypeID, &NewCount);
+  Node** NewList = Tree->GetNodesByType(NodeType::MeshInstance, &NewCount);
   ASSERT_NE(NewList, nullptr);
   EXPECT_EQ(NewCount, 1u);
-  EXPECT_EQ(NewList[0], static_cast<Component*>(&CompA2));
+  EXPECT_EQ(NewList[0], MeshB);
 
-  // The node should no longer have the component
-  EXPECT_EQ(NodeA->GetComponent(TestCompA::TypeID), nullptr);
-
-  // Clean up remaining component
-  Scene->RemoveComponent(NodeB, TestCompA::TypeID);
-
-  delete Scene;
-}
-
-//=============================================================================
-// Test 6: RegisterSystem/UpdateSystems -- systems registered are sorted
-//         by Phase then Priority; UpdateSystems calls them with correct
-//         component lists
-//=============================================================================
-TEST_F(AxSceneClassTest, RegisterSystemSortsAndUpdateCallsWithCorrectLists)
-{
-  AxScene* Scene = new AxScene(TableAPI_);
-  ASSERT_NE(Scene, nullptr);
-
-  // Add components so systems have something to process
-  Node* NodeA = Scene->CreateNode("NodeA", NodeType::Node3D, nullptr);
-  Node* NodeB = Scene->CreateNode("NodeB", NodeType::Node3D, nullptr);
-
-  TestCompA CompA1;
-  TestCompA CompA2;
-  TestCompB CompB1;
-  Scene->AddComponent(NodeA, &CompA1);
-  Scene->AddComponent(NodeB, &CompA2);
-  Scene->AddComponent(NodeA, &CompB1);
-
-  // Create systems in non-sorted order
-  TestSystem RenderSys("RenderSys", SystemPhase::Render, 0, TestCompA::TypeID);
-  TestSystem EarlySys("EarlySys", SystemPhase::EarlyUpdate, 0, TestCompA::TypeID);
-  TestSystem UpdateSys("UpdateSys", SystemPhase::Update, 0, TestCompB::TypeID);
-
-  // Register in arbitrary order
-  Scene->RegisterSystem(&RenderSys);
-  Scene->RegisterSystem(&EarlySys);
-  Scene->RegisterSystem(&UpdateSys);
-
-  EXPECT_EQ(Scene->GetSystemCount(), 3u);
-
-  // Call UpdateSystems
-  Scene->UpdateSystems(0.016f);
-
-  // EarlySys processes TestCompA (2 components)
-  EXPECT_EQ(EarlySys.UpdateCallCount, 1);
-  EXPECT_EQ(EarlySys.LastComponentCount, 2u);
-  EXPECT_FLOAT_EQ(EarlySys.LastDeltaT, 0.016f);
-
-  // UpdateSys processes TestCompB (1 component)
-  EXPECT_EQ(UpdateSys.UpdateCallCount, 1);
-  EXPECT_EQ(UpdateSys.LastComponentCount, 1u);
-
-  // RenderSys processes TestCompA (2 components)
-  EXPECT_EQ(RenderSys.UpdateCallCount, 1);
-  EXPECT_EQ(RenderSys.LastComponentCount, 2u);
-
-  // Unregister before cleanup
-  Scene->UnregisterSystem(&RenderSys);
-  Scene->UnregisterSystem(&EarlySys);
-  Scene->UnregisterSystem(&UpdateSys);
-
-  // Clean up components
-  Scene->RemoveComponent(NodeA, TestCompA::TypeID);
-  Scene->RemoveComponent(NodeB, TestCompA::TypeID);
-  Scene->RemoveComponent(NodeA, TestCompB::TypeID);
-
-  delete Scene;
+  delete Tree;
 }
 
 //=============================================================================
@@ -385,10 +216,9 @@ TEST_F(AxSceneClassTest, RegisterSystemSortsAndUpdateCallsWithCorrectLists)
 
 //=============================================================================
 // Test 7: Foundation types regression -- AxLight, AxCamera, AxTransform,
-//         AxMaterial still exist and are usable after AxSceneObject and
-//         old C AxScene removal from AxTypes.h
+//         AxMaterial still exist and are usable after cleanup
 //=============================================================================
-TEST_F(AxSceneClassTest, FoundationTypesStillUsableAfterCleanup)
+TEST_F(SceneTreeClassTest, FoundationTypesStillUsableAfterCleanup)
 {
   // Verify AxLight is usable: create and populate
   AxLight Light;
@@ -398,7 +228,7 @@ TEST_F(AxSceneClassTest, FoundationTypesStillUsableAfterCleanup)
   Light.Color = {1.0f, 0.8f, 0.6f};
   Light.Intensity = 2.0f;
 
-  EXPECT_EQ(Light.Name, "TestLight");
+  EXPECT_STREQ(Light.Name, "TestLight");
   EXPECT_EQ(Light.Type, AX_LIGHT_TYPE_DIRECTIONAL);
   EXPECT_FLOAT_EQ(Light.Color.R, 1.0f);
   EXPECT_FLOAT_EQ(Light.Intensity, 2.0f);
@@ -436,81 +266,80 @@ TEST_F(AxSceneClassTest, FoundationTypesStillUsableAfterCleanup)
   MatDesc.PBR.MetallicFactor = 0.5f;
   MatDesc.PBR.RoughnessFactor = 0.8f;
 
-  EXPECT_EQ(MatDesc.Name, "TestMat");
+  EXPECT_STREQ(MatDesc.Name, "TestMat");
   EXPECT_EQ(MatDesc.Type, AX_MATERIAL_TYPE_PBR);
   EXPECT_FLOAT_EQ(MatDesc.PBR.MetallicFactor, 0.5f);
   EXPECT_FLOAT_EQ(MatDesc.PBR.RoughnessFactor, 0.8f);
 }
 
 //=============================================================================
-// Test 8: AxScene stores AxLight and AxCamera correctly -- verifies that
-//         the new C++ AxScene class can create/store lights and cameras
-//         (the Foundation types that remain) without any collision or
-//         issues after the old C AxScene struct was removed
+// Test 8: SceneTree stores LightNode and CameraNode via typed nodes
 //=============================================================================
-TEST_F(AxSceneClassTest, AxSceneStoresLightsAndCamerasCorrectly)
+TEST_F(SceneTreeClassTest, SceneTreeStoresLightsAndCamerasViaTypedNodes)
 {
-  AxScene* Scene = new AxScene(TableAPI_);
-  ASSERT_NE(Scene, nullptr);
+  SceneTree* Tree = new SceneTree(TableAPI_, nullptr);
+  ASSERT_NE(Tree, nullptr);
 
   // Initially no lights or cameras
-  EXPECT_EQ(Scene->LightCount, 0u);
-  EXPECT_EQ(Scene->CameraCount, 0u);
+  uint32_t LightCount = 0;
+  uint32_t CameraCount = 0;
+  Tree->GetNodesByType(NodeType::Light, &LightCount);
+  Tree->GetNodesByType(NodeType::Camera, &CameraCount);
+  EXPECT_EQ(LightCount, 0u);
+  EXPECT_EQ(CameraCount, 0u);
 
-  // Create a directional light via AxScene
-  AxLight* Light = Scene->CreateLight("Sun", AX_LIGHT_TYPE_DIRECTIONAL);
-  ASSERT_NE(Light, nullptr);
-  EXPECT_EQ(Light->Name, "Sun");
-  EXPECT_EQ(Light->Type, AX_LIGHT_TYPE_DIRECTIONAL);
-  EXPECT_FLOAT_EQ(Light->Intensity, 1.0f);
-  EXPECT_EQ(Scene->LightCount, 1u);
+  // Create a directional light via LightNode
+  Node* SunNode = Tree->CreateNode("Sun", NodeType::Light, nullptr);
+  ASSERT_NE(SunNode, nullptr);
+  LightNode* Sun = static_cast<LightNode*>(SunNode);
+  Sun->SetLightType(AX_LIGHT_TYPE_DIRECTIONAL);
+  Sun->SetIntensity(2.5f);
+  Sun->SetColor({1.0f, 0.95f, 0.8f});
 
-  // Create a point light
-  AxLight* PointLight = Scene->CreateLight("Lamp", AX_LIGHT_TYPE_POINT);
-  ASSERT_NE(PointLight, nullptr);
-  EXPECT_EQ(PointLight->Name, "Lamp");
-  EXPECT_EQ(PointLight->Type, AX_LIGHT_TYPE_POINT);
-  EXPECT_EQ(Scene->LightCount, 2u);
+  EXPECT_EQ(Sun->GetLightType(), AX_LIGHT_TYPE_DIRECTIONAL);
+  EXPECT_FLOAT_EQ(Sun->GetIntensity(), 2.5f);
 
-  // Find light by name
-  AxLight* Found = Scene->FindLight("Sun");
+  // Create a point light via LightNode
+  Node* LampNode = Tree->CreateNode("Lamp", NodeType::Light, nullptr);
+  ASSERT_NE(LampNode, nullptr);
+  LightNode* Lamp = static_cast<LightNode*>(LampNode);
+  Lamp->SetLightType(AX_LIGHT_TYPE_POINT);
+  Lamp->SetIntensity(0.8f);
+
+  // Verify lights are tracked
+  Node** Lights = Tree->GetNodesByType(NodeType::Light, &LightCount);
+  ASSERT_NE(Lights, nullptr);
+  EXPECT_EQ(LightCount, 2u);
+  EXPECT_EQ(Lights[0]->GetName(), "Sun");
+  EXPECT_EQ(Lights[1]->GetName(), "Lamp");
+
+  // Find light by name via FindNode
+  Node* Found = Tree->FindNode("Sun");
   ASSERT_NE(Found, nullptr);
-  EXPECT_EQ(Found->Name, "Sun");
+  EXPECT_EQ(Found->GetName(), "Sun");
+  EXPECT_EQ(Found->GetType(), NodeType::Light);
 
-  // Add a camera
-  AxCamera Camera;
-  memset(&Camera, 0, sizeof(AxCamera));
-  Camera.FieldOfView = 75.0f;
-  Camera.NearClipPlane = 0.1f;
-  Camera.FarClipPlane = 500.0f;
+  // Create a camera via CameraNode
+  Node* CamNode = Tree->CreateNode("MainCamera", NodeType::Camera, nullptr);
+  ASSERT_NE(CamNode, nullptr);
+  CameraNode* Cam = static_cast<CameraNode*>(CamNode);
+  Cam->SetFOV(75.0f);
+  Cam->SetNear(0.1f);
+  Cam->SetFar(500.0f);
 
-  AxTransform CamTransform;
-  memset(&CamTransform, 0, sizeof(AxTransform));
-  CamTransform.Translation = {0.0f, 5.0f, -10.0f};
-  CamTransform.Scale = {1.0f, 1.0f, 1.0f};
-  CamTransform.Rotation = {0.0f, 0.0f, 0.0f, 1.0f};
+  // Set camera transform via the node's transform
+  Cam->GetTransform().Translation = {0.0f, 5.0f, -10.0f};
 
-  EXPECT_TRUE(Scene->AddCamera(&Camera, &CamTransform));
-  EXPECT_EQ(Scene->CameraCount, 1u);
+  // Verify camera is tracked
+  Node** Cameras = Tree->GetNodesByType(NodeType::Camera, &CameraCount);
+  ASSERT_NE(Cameras, nullptr);
+  EXPECT_EQ(CameraCount, 1u);
 
-  // Retrieve camera
-  AxTransform* OutTransform = nullptr;
-  AxCamera* RetrievedCam = Scene->GetCamera(0, &OutTransform);
-  ASSERT_NE(RetrievedCam, nullptr);
-  ASSERT_NE(OutTransform, nullptr);
-  EXPECT_FLOAT_EQ(RetrievedCam->FieldOfView, 75.0f);
-  EXPECT_FLOAT_EQ(OutTransform->Translation.Y, 5.0f);
+  CameraNode* RetrievedCam = static_cast<CameraNode*>(Cameras[0]);
+  EXPECT_FLOAT_EQ(RetrievedCam->GetFOV(), 75.0f);
+  EXPECT_FLOAT_EQ(RetrievedCam->GetTransform().Translation.Y, 5.0f);
 
-  // Verify AxScene Lights pointer is accessible (renderer reads this directly)
-  ASSERT_NE(Scene->Lights, nullptr);
-  EXPECT_EQ(Scene->Lights[0].Name, "Sun");
-  EXPECT_EQ(Scene->Lights[1].Name, "Lamp");
-
-  // Verify AxScene Cameras pointer is accessible
-  ASSERT_NE(Scene->Cameras, nullptr);
-  EXPECT_FLOAT_EQ(Scene->Cameras[0].FieldOfView, 75.0f);
-
-  delete Scene;
+  delete Tree;
 }
 
 //=============================================================================
@@ -518,116 +347,114 @@ TEST_F(AxSceneClassTest, AxSceneStoresLightsAndCamerasCorrectly)
 //=============================================================================
 
 //=============================================================================
-// Test 9: AxScene with nodes containing MeshFilter components -- verify
-//         iterating GetComponentsByType(MeshFilter::TypeID) finds all mesh
-//         references (validates the ResourceSystem loading approach)
+// Test 9: SceneTree with MeshInstance typed nodes -- verify iterating
+//         GetNodesByType(MeshInstance) finds all mesh references
+//         (validates the ResourceSystem loading approach)
 //=============================================================================
-TEST_F(AxSceneClassTest, GetComponentsByTypeFindsMeshFilterReferences)
+TEST_F(SceneTreeClassTest, GetNodesByTypeFindsMeshInstanceReferences)
 {
-  AxScene* Scene = new AxScene(TableAPI_);
-  ASSERT_NE(Scene, nullptr);
+  SceneTree* Tree = new SceneTree(TableAPI_, nullptr);
+  ASSERT_NE(Tree, nullptr);
 
-  // Create 3 nodes, each with a TestMeshFilter component
-  Node* NodeA = Scene->CreateNode("MeshNodeA", NodeType::Node3D, nullptr);
-  Node* NodeB = Scene->CreateNode("MeshNodeB", NodeType::Node3D, nullptr);
-  Node* NodeC = Scene->CreateNode("EmptyNode", NodeType::Node3D, nullptr);
+  // Create 3 nodes: 2 MeshInstance, 1 plain Node3D
+  Node* MeshNodeA = Tree->CreateNode("MeshNodeA", NodeType::MeshInstance, nullptr);
+  Node* MeshNodeB = Tree->CreateNode("MeshNodeB", NodeType::MeshInstance, nullptr);
+  Node* EmptyNode = Tree->CreateNode("EmptyNode", NodeType::Node3D, nullptr);
 
-  TestMeshFilter FilterA;
-  FilterA.SetMeshPath("models/cube.gltf");
-  TestMeshFilter FilterB;
-  FilterB.SetMeshPath("models/sphere.gltf");
+  ASSERT_NE(MeshNodeA, nullptr);
+  ASSERT_NE(MeshNodeB, nullptr);
+  ASSERT_NE(EmptyNode, nullptr);
 
-  EXPECT_TRUE(Scene->AddComponent(NodeA, &FilterA));
-  EXPECT_TRUE(Scene->AddComponent(NodeB, &FilterB));
-  // NodeC has no MeshFilter -- it is intentionally empty
+  // Set mesh paths on the MeshInstance nodes
+  MeshInstance* MIA = static_cast<MeshInstance*>(MeshNodeA);
+  MIA->SetMeshPath("models/cube.gltf");
 
-  // Iterate all MeshFilter components by type
+  MeshInstance* MIB = static_cast<MeshInstance*>(MeshNodeB);
+  MIB->SetMeshPath("models/sphere.gltf");
+
+  // Iterate all MeshInstance nodes by type
   uint32_t Count = 0;
-  Component** MeshFilters = Scene->GetComponentsByType(TestMeshFilter::TypeID, &Count);
-  ASSERT_NE(MeshFilters, nullptr);
+  Node** MeshNodes = Tree->GetNodesByType(NodeType::MeshInstance, &Count);
+  ASSERT_NE(MeshNodes, nullptr);
   EXPECT_EQ(Count, 2u);
 
-  // Verify we can read MeshPath from the components (resource loading approach)
-  TestMeshFilter* MF0 = static_cast<TestMeshFilter*>(MeshFilters[0]);
-  TestMeshFilter* MF1 = static_cast<TestMeshFilter*>(MeshFilters[1]);
-  EXPECT_EQ(MF0->MeshPath, "models/cube.gltf");
-  EXPECT_EQ(MF1->MeshPath, "models/sphere.gltf");
+  // Verify we can read MeshPath from the typed nodes (resource loading approach)
+  MeshInstance* MI0 = static_cast<MeshInstance*>(MeshNodes[0]);
+  MeshInstance* MI1 = static_cast<MeshInstance*>(MeshNodes[1]);
+  EXPECT_STREQ(MI0->MeshPath, "models/cube.gltf");
+  EXPECT_STREQ(MI1->MeshPath, "models/sphere.gltf");
 
-  // Verify we can get the owning node from the component
-  EXPECT_EQ(MF0->GetOwner(), NodeA);
-  EXPECT_EQ(MF1->GetOwner(), NodeB);
+  // Verify the empty node is not in the MeshInstance list
+  EXPECT_EQ(EmptyNode->GetType(), NodeType::Node3D);
 
-  // Verify the empty node has no MeshFilter
-  EXPECT_EQ(NodeC->GetComponent(TestMeshFilter::TypeID), nullptr);
-
-  // Clean up
-  Scene->RemoveComponent(NodeA, TestMeshFilter::TypeID);
-  Scene->RemoveComponent(NodeB, TestMeshFilter::TypeID);
-
-  delete Scene;
+  delete Tree;
 }
 
 //=============================================================================
-// Test 10: AxScene with lights and cameras -- verify Scene->Lights,
-//          Scene->LightCount, Scene->Cameras, Scene->CameraCount are
-//          accessible (validates renderer can read light/camera data)
+// Test 10: SceneTree with LightNode and CameraNode typed nodes -- verify
+//          they are accessible via GetNodesByType (validates renderer pattern)
 //=============================================================================
-TEST_F(AxSceneClassTest, LightsAndCamerasAccessibleForRenderer)
+TEST_F(SceneTreeClassTest, LightsAndCamerasAccessibleViaGetNodesByType)
 {
-  AxScene* Scene = new AxScene(TableAPI_);
-  ASSERT_NE(Scene, nullptr);
+  SceneTree* Tree = new SceneTree(TableAPI_, nullptr);
+  ASSERT_NE(Tree, nullptr);
 
-  // Create lights
-  AxLight* Sun = Scene->CreateLight("Sun", AX_LIGHT_TYPE_DIRECTIONAL);
-  ASSERT_NE(Sun, nullptr);
-  Sun->Color = {1.0f, 0.95f, 0.8f};
-  Sun->Intensity = 2.5f;
-  Sun->Direction = {0.0f, -1.0f, -0.5f};
+  // Create lights via typed LightNode
+  Node* SunNode = Tree->CreateNode("Sun", NodeType::Light, nullptr);
+  ASSERT_NE(SunNode, nullptr);
+  LightNode* Sun = static_cast<LightNode*>(SunNode);
+  Sun->SetLightType(AX_LIGHT_TYPE_DIRECTIONAL);
+  Sun->SetColor({1.0f, 0.95f, 0.8f});
+  Sun->SetIntensity(2.5f);
+  Sun->Light.Direction = {0.0f, -1.0f, -0.5f};
 
-  AxLight* Fill = Scene->CreateLight("Fill", AX_LIGHT_TYPE_POINT);
-  ASSERT_NE(Fill, nullptr);
-  Fill->Color = {0.3f, 0.3f, 0.5f};
-  Fill->Intensity = 0.8f;
+  Node* FillNode = Tree->CreateNode("Fill", NodeType::Light, nullptr);
+  ASSERT_NE(FillNode, nullptr);
+  LightNode* Fill = static_cast<LightNode*>(FillNode);
+  Fill->SetLightType(AX_LIGHT_TYPE_POINT);
+  Fill->SetColor({0.3f, 0.3f, 0.5f});
+  Fill->SetIntensity(0.8f);
 
-  // Verify lights are accessible via public members (renderer reads these directly)
-  EXPECT_EQ(Scene->LightCount, 2u);
-  ASSERT_NE(Scene->Lights, nullptr);
-  EXPECT_FLOAT_EQ(Scene->Lights[0].Intensity, 2.5f);
-  EXPECT_FLOAT_EQ(Scene->Lights[1].Intensity, 0.8f);
-  EXPECT_EQ(Scene->Lights[0].Name, "Sun");
-  EXPECT_EQ(Scene->Lights[1].Name, "Fill");
+  // Verify lights are accessible via GetNodesByType (renderer reads these)
+  uint32_t LightCount = 0;
+  Node** Lights = Tree->GetNodesByType(NodeType::Light, &LightCount);
+  ASSERT_NE(Lights, nullptr);
+  EXPECT_EQ(LightCount, 2u);
 
-  // Add cameras
-  AxCamera Cam1;
-  memset(&Cam1, 0, sizeof(AxCamera));
-  Cam1.FieldOfView = 60.0f;
-  Cam1.NearClipPlane = 0.1f;
-  Cam1.FarClipPlane = 200.0f;
+  LightNode* L0 = static_cast<LightNode*>(Lights[0]);
+  LightNode* L1 = static_cast<LightNode*>(Lights[1]);
+  EXPECT_FLOAT_EQ(L0->GetIntensity(), 2.5f);
+  EXPECT_FLOAT_EQ(L1->GetIntensity(), 0.8f);
+  EXPECT_EQ(L0->GetName(), "Sun");
+  EXPECT_EQ(L1->GetName(), "Fill");
 
-  AxTransform CamTransform1;
-  memset(&CamTransform1, 0, sizeof(AxTransform));
-  CamTransform1.Translation = {0.0f, 2.0f, 5.0f};
-  CamTransform1.Scale = {1.0f, 1.0f, 1.0f};
-  CamTransform1.Rotation = {0.0f, 0.0f, 0.0f, 1.0f};
-
-  EXPECT_TRUE(Scene->AddCamera(&Cam1, &CamTransform1));
+  // Create camera via typed CameraNode
+  Node* CamNode = Tree->CreateNode("MainCamera", NodeType::Camera, nullptr);
+  ASSERT_NE(CamNode, nullptr);
+  CameraNode* Cam = static_cast<CameraNode*>(CamNode);
+  Cam->SetFOV(60.0f);
+  Cam->SetNear(0.1f);
+  Cam->SetFar(200.0f);
+  Cam->GetTransform().Translation = {0.0f, 2.0f, 5.0f};
 
   // Verify cameras are accessible
-  EXPECT_EQ(Scene->CameraCount, 1u);
-  ASSERT_NE(Scene->Cameras, nullptr);
-  EXPECT_FLOAT_EQ(Scene->Cameras[0].FieldOfView, 60.0f);
-  EXPECT_FLOAT_EQ(Scene->Cameras[0].NearClipPlane, 0.1f);
-  EXPECT_FLOAT_EQ(Scene->Cameras[0].FarClipPlane, 200.0f);
+  uint32_t CameraCount = 0;
+  Node** Cameras = Tree->GetNodesByType(NodeType::Camera, &CameraCount);
+  ASSERT_NE(Cameras, nullptr);
+  EXPECT_EQ(CameraCount, 1u);
 
-  // Verify camera transform is accessible
-  ASSERT_NE(Scene->CameraTransforms, nullptr);
-  EXPECT_FLOAT_EQ(Scene->CameraTransforms[0].Translation.X, 0.0f);
-  EXPECT_FLOAT_EQ(Scene->CameraTransforms[0].Translation.Y, 2.0f);
-  EXPECT_FLOAT_EQ(Scene->CameraTransforms[0].Translation.Z, 5.0f);
+  CameraNode* RetrievedCam = static_cast<CameraNode*>(Cameras[0]);
+  EXPECT_FLOAT_EQ(RetrievedCam->GetFOV(), 60.0f);
+  EXPECT_FLOAT_EQ(RetrievedCam->GetNear(), 0.1f);
+  EXPECT_FLOAT_EQ(RetrievedCam->GetFar(), 200.0f);
+  EXPECT_FLOAT_EQ(RetrievedCam->GetTransform().Translation.X, 0.0f);
+  EXPECT_FLOAT_EQ(RetrievedCam->GetTransform().Translation.Y, 2.0f);
+  EXPECT_FLOAT_EQ(RetrievedCam->GetTransform().Translation.Z, 5.0f);
 
   // Verify GetRootNode is accessible for scene traversal
-  ASSERT_NE(Scene->GetRootNode(), nullptr);
-  EXPECT_EQ(Scene->GetNodeCount(), 1u);
+  ASSERT_NE(Tree->GetRootNode(), nullptr);
+  // Root + Sun + Fill + MainCamera = 4
+  EXPECT_EQ(Tree->GetNodeCount(), 4u);
 
-  delete Scene;
+  delete Tree;
 }

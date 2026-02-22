@@ -47,10 +47,11 @@ target_compile_definitions(AxResourceTests
         AXON_LINKS_FOUNDATION
 )
 
-# Get AxOpenGL include directories
+# Include directories for AxResource and Engine headers
 target_include_directories(AxResourceTests
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/../include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../engine/include
 )
 
 # Link dependencies

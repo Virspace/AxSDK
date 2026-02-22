@@ -1,27 +1,15 @@
 /**
- * AxNode.cpp - Node hierarchy manipulation and component operations
+ * AxNode.cpp - Node hierarchy manipulation and script operations
  *
- * Implements the Node base class for the hybrid node tree + component
- * architecture. Follows the AxSceneObject Parent/FirstChild/NextSibling
- * pattern for hierarchy traversal.
+ * Implements the Node base class for the Godot-style typed node hierarchy.
+ * Follows the Parent/FirstChild/NextSibling pattern for hierarchy traversal.
  */
 
 #include "AxEngine/AxNode.h"
-#include "AxEngine/AxComponent.h"
+#include "AxEngine/AxScriptBase.h"
 #include "Foundation/AxAllocator.h"
 #include "Foundation/AxHashTable.h"
 #include "Foundation/AxMath.h"
-
-// Helper to convert a uint32_t TypeID to a string key for the hash table.
-// Uses a small static buffer per call -- safe for single-threaded use within
-// the scope of one hash table operation.
-static std::string_view TypeIDToKey(uint32_t TypeID)
-{
-  // 10 digits max for uint32_t + null terminator
-  static char Buffer[16];
-  std::snprintf(Buffer, sizeof(Buffer), "%u", TypeID);
-  return (Buffer);
-}
 
 //=============================================================================
 // Node Construction / Destruction
@@ -34,18 +22,13 @@ Node::Node(std::string_view Name, NodeType Type, AxHashTableAPI* TableAPI)
   , Parent_(nullptr)
   , FirstChild_(nullptr)
   , NextSibling_(nullptr)
-  , ComponentRegistry_(nullptr)
   , HashTableAPI_(TableAPI)
+  , Script_(nullptr)
   , IsInitialized_(false)
   , IsActive_(true)
 {
   // Initialize transform to identity
   Transform_ = TransformIdentity();
-
-  // Create the component registry hash table
-  if (HashTableAPI_) {
-    ComponentRegistry_ = HashTableAPI_->CreateTable();
-  }
 }
 
 Node::~Node()
@@ -55,11 +38,9 @@ Node::~Node()
     Shutdown();
   }
 
-  // Destroy the component registry
-  if (ComponentRegistry_ && HashTableAPI_) {
-    HashTableAPI_->DestroyTable(ComponentRegistry_);
-    free(ComponentRegistry_);
-    ComponentRegistry_ = nullptr;
+  // Destroy the attached script (DetachScript fires OnDisable/OnDetach first)
+  if (Script_) {
+    delete DetachScript();
   }
 
   // Detach from parent to clean up sibling links
@@ -208,76 +189,76 @@ void Node::Shutdown()
 }
 
 //=============================================================================
-// Component Operations
+// Script Operations
 //=============================================================================
 
-bool Node::AddComponent(Component* Comp)
+void Node::AttachScript(ScriptBase* Script)
 {
-  if (!Comp || !ComponentRegistry_ || !HashTableAPI_) {
-    return (false);
+  if (!Script) {
+    return;
   }
 
-  uint32_t TypeID = Comp->GetTypeID();
-  auto Key = TypeIDToKey(TypeID);
-
-  // Check for duplicate: one component per type per node
-  if (HashTableAPI_->Find(ComponentRegistry_, Key.data()) != nullptr) {
-    return (false);
+  // If a script is already present, fully detach and destroy it first
+  if (Script_) {
+    delete DetachScript();
   }
 
-  // Set the owner before calling OnAttach
-  Comp->Owner_ = this;
+  // Set ownership and assign
+  Script->Owner_ = this;
+  Script_ = Script;
 
-  HashTableAPI_->Set(ComponentRegistry_, Key.data(), static_cast<void*>(Comp));
-
-  // Call the OnAttach lifecycle hook
-  Comp->OnAttach();
-
-  return (true);
+  // Notify script it has been attached
+  Script_->OnAttach();
 }
 
-bool Node::RemoveComponent(uint32_t TypeID)
+ScriptBase* Node::DetachScript()
 {
-  if (!ComponentRegistry_ || !HashTableAPI_) {
-    return (false);
-  }
-
-  auto Key = TypeIDToKey(TypeID);
-
-  // Check if the component exists
-  void* Existing = HashTableAPI_->Find(ComponentRegistry_, Key.data());
-  if (!Existing) {
-    return (false);
-  }
-
-  // Call the OnDetach lifecycle hook
-  Component* Comp = static_cast<Component*>(Existing);
-  Comp->OnDetach();
-
-  // Clear the owner after OnDetach
-  Comp->Owner_ = nullptr;
-
-  HashTableAPI_->Remove(ComponentRegistry_, Key.data());
-  return (true);
-}
-
-Component* Node::GetComponent(uint32_t TypeID) const
-{
-  if (!ComponentRegistry_ || !HashTableAPI_) {
+  if (!Script_) {
     return (nullptr);
   }
 
-  auto Key = TypeIDToKey(TypeID);
-  void* Result = HashTableAPI_->Find(ComponentRegistry_, Key.data());
-  return (static_cast<Component*>(Result));
-}
+  ScriptBase* Detached = Script_;
 
-bool Node::HasComponent(uint32_t TypeID) const
-{
-  if (!ComponentRegistry_ || !HashTableAPI_) {
-    return (false);
+  // If the node is active and the script is initialized, fire OnDisable first
+  if (IsActive_ && Detached->IsInitialized_) {
+    Detached->OnDisable();
   }
 
-  auto Key = TypeIDToKey(TypeID);
-  return (HashTableAPI_->Find(ComponentRegistry_, Key.data()) != nullptr);
+  // Always fire OnDetach
+  Detached->OnDetach();
+
+  // Clear the owner reference
+  Detached->Owner_ = nullptr;
+
+  // Release the slot
+  Script_ = nullptr;
+
+  return (Detached);
+}
+
+ScriptBase* Node::GetScript() const
+{
+  return (Script_);
+}
+
+//=============================================================================
+// Active State
+//=============================================================================
+
+void Node::SetActive(bool Active)
+{
+  if (IsActive_ == Active) {
+    return;
+  }
+
+  IsActive_ = Active;
+
+  // Fire script callbacks on active state transitions, if script is initialized
+  if (Script_ && Script_->IsInitialized_) {
+    if (!IsActive_) {
+      Script_->OnDisable();
+    } else {
+      Script_->OnEnable();
+    }
+  }
 }

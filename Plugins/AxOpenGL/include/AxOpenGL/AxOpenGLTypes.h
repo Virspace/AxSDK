@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Foundation/AxTypes.h>
+#include <AxEngine/AxRenderTypes.h>
 
 #ifdef __cplusplus
 extern "C" {

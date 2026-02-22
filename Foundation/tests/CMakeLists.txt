@@ -81,6 +81,12 @@ target_compile_definitions(FoundationTests
 #         ${CMAKE_CURRENT_SOURCE_DIR}/include/FoundationTests
 # )
 
+# Engine include path for AxRenderTypes.h (pure data header, no runtime dependency)
+target_include_directories(FoundationTests
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../engine/include
+)
+
 # Link dependencies
 target_link_libraries(FoundationTests
     PRIVATE

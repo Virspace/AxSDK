@@ -1,11 +1,12 @@
 #pragma once
 
 /**
- * AxNode.h - Node Base System for Hybrid Node Tree + Component Architecture
+ * AxNode.h - Node Base System for Godot-Style Typed Node Hierarchy
  *
- * Nodes are lightweight scene tree elements with transforms, names, ordered
- * children, and component registries. They follow the existing AxSceneObject
- * hierarchy pattern (Parent/FirstChild/NextSibling) but as proper C++ classes.
+ * Nodes are lightweight scene tree elements with transforms, names, and ordered
+ * children. They follow the Parent/FirstChild/NextSibling hierarchy pattern
+ * as proper C++ classes. Typed node subclasses carry their data directly
+ * (e.g. MeshInstance holds mesh path and model handle, CameraNode holds AxCamera).
  *
  * This is engine-level code (C++). Foundation types (AxTransform, AxHashTable,
  * AxAllocator) are C11 structs used here but not modified.
@@ -18,17 +19,30 @@
 struct AxHashTable;
 struct AxHashTableAPI;
 
-class Component;
+class ScriptBase;
 
 /**
  * Node type discriminator for the scene hierarchy.
+ * Each typed node subclass sets its Type_ to the corresponding enum value.
  */
 enum class NodeType : uint32_t
 {
   Base = 0,
   Node2D,
   Node3D,
-  Root
+  Root,
+  // 3D typed nodes
+  MeshInstance,
+  Camera,
+  Light,
+  RigidBody,
+  Collider,
+  AudioSource,
+  AudioListener,
+  Animator,
+  ParticleEmitter,
+  // 2D typed nodes
+  Sprite
 };
 
 /**
@@ -36,8 +50,10 @@ enum class NodeType : uint32_t
  *
  * Contains Parent/FirstChild/NextSibling pointers for efficient
  * hierarchy traversal. Each node holds a local transform relative
- * to its parent, a name, and a component registry backed by
- * AxHashTable for type-to-component mapping.
+ * to its parent and a name.
+ *
+ * Each node may have at most one behavioral script attached via
+ * AttachScript. The node owns the script and destroys it on destruction.
  */
 class Node
 {
@@ -82,48 +98,29 @@ public:
   virtual void Shutdown();
 
   //=========================================================================
-  // Component Operations
+  // Script Operations
   //=========================================================================
 
   /**
-   * Add a component to this node. One component per type is enforced.
-   * Invokes OnAttach lifecycle hook on the component.
-   * @param Comp Component to add (must not be nullptr).
-   * @return true if added, false if a component with the same TypeID already exists.
+   * Attach a behavioral script to this node. Takes ownership.
+   * If a script is already attached, it is fully detached and destroyed first.
+   * Immediately calls Script->OnAttach().
+   * @param Script Script to attach (must not be nullptr).
    */
-  bool AddComponent(Component* Comp);
+  void AttachScript(ScriptBase* Script);
 
   /**
-   * Remove a component by its TypeID.
-   * Invokes OnDetach lifecycle hook on the component.
-   * @param TypeID The type identifier of the component to remove.
-   * @return true if removed, false if no component with that TypeID exists.
+   * Detach the current script from this node and return ownership to caller.
+   * Calls OnDisable() if the node is active and the script is initialized,
+   * then calls OnDetach() unconditionally. Clears the script's owner.
+   * @return The detached script pointer (caller must delete), or nullptr if none.
    */
-  bool RemoveComponent(uint32_t TypeID);
+  ScriptBase* DetachScript();
 
   /**
-   * Get a component by its TypeID.
-   * @param TypeID The type identifier.
-   * @return Pointer to the component, or nullptr if not found.
+   * Get the currently attached script, or nullptr if none.
    */
-  Component* GetComponent(uint32_t TypeID) const;
-
-  /**
-   * Check if a component with the given TypeID exists on this node.
-   * @param TypeID The type identifier.
-   * @return true if the component exists.
-   */
-  bool HasComponent(uint32_t TypeID) const;
-
-  /**
-   * Template helper to get a component by its static TypeID.
-   * Requires T to have a static constexpr uint32_t TypeID member.
-   */
-  template<typename T>
-  T* GetComponent() const
-  {
-    return (static_cast<T*>(GetComponent(T::TypeID)));
-  }
+  ScriptBase* GetScript() const;
 
   //=========================================================================
   // Accessors
@@ -136,10 +133,25 @@ public:
 
   bool IsInitialized() const { return (IsInitialized_); }
   bool IsActive() const { return (IsActive_); }
-  void SetActive(bool Active) { IsActive_ = Active; }
+
+  /**
+   * Set the active state of this node.
+   * Fires OnDisable on the script when transitioning to inactive (if initialized).
+   * Fires OnEnable on the script when transitioning to active (if initialized).
+   */
+  void SetActive(bool Active);
 
   AxTransform& GetTransform() { return (Transform_); }
   const AxTransform& GetTransform() const { return (Transform_); }
+
+  /**
+   * Get the cached world transform matrix.
+   * This matrix is populated by SceneTree::UpdateNodeTransforms at the
+   * top of each Update() call. Returns the CachedForwardMatrix from
+   * the node's transform.
+   * @return Reference to the cached world matrix.
+   */
+  const AxMat4x4& GetWorldTransform() const { return (Transform_.CachedForwardMatrix); }
 
   Node* GetParent() const { return (Parent_); }
   Node* GetFirstChild() const { return (FirstChild_); }
@@ -155,9 +167,10 @@ protected:
   Node* FirstChild_;
   Node* NextSibling_;
 
-  // Component registry: maps TypeID string key to Component pointer
-  AxHashTable* ComponentRegistry_;
   AxHashTableAPI* HashTableAPI_;
+
+  // Script slot -- one behavioral script per node; node owns it
+  ScriptBase* Script_;
 
   // Flags
   bool IsInitialized_;
