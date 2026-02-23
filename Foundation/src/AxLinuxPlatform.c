@@ -146,6 +146,12 @@ static uint64_t FileWrite(AxFile File, void *Buffer, uint32_t BytesToWrite)
     return ((uint64_t)NumBytesWritten);
 }
 
+static void FileFlush(AxFile File)
+{
+    AXON_ASSERT(FileIsValid(File));
+    fsync(File.Handle);
+}
+
 static void FileClose(AxFile File)
 {
     AXON_ASSERT(FileIsValid(File));
@@ -178,6 +184,7 @@ struct AxPlatformAPI *PlatformAPI = &(struct AxPlatformAPI) {
         .Size = FileSize,
         .Read = FileRead,
         .Write = FileWrite,
+        .Flush = FileFlush,
         .IsValid = FileIsValid,
         .Close = FileClose
     },

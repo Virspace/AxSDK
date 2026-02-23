@@ -20,6 +20,7 @@
 #include "Foundation/AxPlatform.h"
 #include "Foundation/AxPlugin.h"
 #include "AxWindow/AxWindow.h"
+#include "AxLog/AxLog.h"
 
 #include <string>
 #include <string_view>
@@ -44,12 +45,12 @@ bool AxEngine::LoadPlugins()
 {
     AXON_ASSERT(PluginAPI_ && "PluginAPI is NULL in AxEngine::LoadPlugins!");
     if (!WindowAPI_ || !Window_) {
-        fprintf(stderr, "WindowAPI or Window is NULL in AxEngine::LoadPlugins!\n");
+        AX_LOG(ERROR, "WindowAPI or Window is NULL in AxEngine::LoadPlugins!");
         return false;
     }
 
     auto ShowPluginLoadError = [&](const char* PluginName, const char* ErrorMessage) {
-        fprintf(stderr, "Failed to load %s plugin\n", PluginName);
+        AX_LOG(ERROR, "Failed to load %s plugin", PluginName);
         WindowAPI_->CreateMessageBox(
             Window_,
             "Error",
@@ -74,21 +75,21 @@ bool AxEngine::LoadPlugins()
     ResourceAPI_ = static_cast<AxResourceAPI*>(APIRegistry_->Get(AXON_RESOURCE_API_NAME));
 
     if (!WindowAPI_ || !PlatformAPI_ || !ResourceAPI_) {
-        fprintf(stderr, "Failed to get required APIs from registry\n");
+        AX_LOG(ERROR, "Failed to get required APIs from registry");
         return (false);
     }
 
     // Initialize ResourceAPI with an allocator
     AxAllocatorAPI* AllocatorAPI = static_cast<AxAllocatorAPI*>(APIRegistry_->Get(AXON_ALLOCATOR_API_NAME));
     if (!AllocatorAPI) {
-        fprintf(stderr, "Failed to get AllocatorAPI from registry\n");
+        AX_LOG(ERROR, "Failed to get AllocatorAPI from registry");
         return (false);
     }
 
     // Create a heap allocator for engine resources (64MB initial, 256MB max)
     gResourceAllocator = AllocatorAPI->CreateHeap("EngineResources", 64 * 1024 * 1024, 256 * 1024 * 1024);
     if (!gResourceAllocator) {
-        fprintf(stderr, "Failed to create resource allocator\n");
+        AX_LOG(ERROR, "Failed to create resource allocator");
         return (false);
     }
 
@@ -107,13 +108,13 @@ AxEngine::AxEngine() = default;
 bool AxEngine::InitWindow()
 {
     if (!PluginAPI_->Load("libAxWindow.dll", false)) {
-        fprintf(stderr, "AxEngine: Failed to load AxWindow plugin\n");
+        AX_LOG(ERROR, "Failed to load AxWindow plugin");
         return (false);
     }
 
     WindowAPI_ = static_cast<AxWindowAPI*>(APIRegistry_->Get(AXON_WINDOW_API_NAME));
     if (!WindowAPI_) {
-        fprintf(stderr, "AxEngine: Failed to get WindowAPI from registry\n");
+        AX_LOG(ERROR, "Failed to get WindowAPI from registry");
         return (false);
     }
     WindowAPI_->Init();
@@ -128,11 +129,11 @@ bool AxEngine::InitWindow()
     AxWindowError Error = AX_WINDOW_ERROR_NONE;
     Window_ = WindowAPI_->CreateWindowWithConfig(&WindowConfig, &Error);
     if (Error != AX_WINDOW_ERROR_NONE) {
-        fprintf(stderr, "AxEngine: Window creation failed (error %d)\n", (int)Error);
+        AX_LOG(ERROR, "Window creation failed (error %d)", (int)Error);
         return (false);
     }
 
-    printf("AxEngine: Window created\n");
+    AX_LOG(INFO, "Window created");
     return (true);
 }
 
@@ -141,14 +142,14 @@ bool AxEngine::InitRenderer()
     AxWindowPlatformData WindowPlatformData = WindowAPI_->GetPlatformData(Window_);
     Renderer_ = new AxRenderer();
     if (!Renderer_->Initialize(APIRegistry_, WindowPlatformData.Win32.Handle, DefaultWindowWidth, DefaultWindowHeight)) {
-        fprintf(stderr, "AxEngine: Failed to initialize renderer\n");
+        AX_LOG(ERROR, "Failed to initialize renderer");
         return (false);
     }
 
     AxWindowError Error = AX_WINDOW_ERROR_NONE;
     WindowAPI_->SetCursorMode(Window_, AX_CURSOR_DISABLED, &Error);
 
-    printf("AxEngine: Renderer initialized\n");
+    AX_LOG(INFO, "Renderer initialized");
     return (true);
 }
 
@@ -163,7 +164,7 @@ bool AxEngine::InitScene()
 
     SceneTree_ = LoadScene("examples/graphics/scenes/sponza_atrium.ats");
     if (!SceneTree_) {
-        fprintf(stderr, "AxEngine: Failed to load scene\n");
+        AX_LOG(ERROR, "Failed to load scene");
         return (false);
     }
 
@@ -175,7 +176,7 @@ bool AxEngine::InitScene()
         SceneTree_->SetMainCamera(SceneCam);
     }
 
-    printf("AxEngine: Scene loaded\n");
+    AX_LOG(INFO, "Scene loaded");
     return (true);
 }
 
@@ -184,7 +185,7 @@ void AxEngine::InitGameScript()
     AxPlatformDLLAPI* DLLAPI = PlatformAPI_->DLLAPI;
     GameDLL_ = DLLAPI->Load("libGame.dll");
     if (!DLLAPI->IsValid(GameDLL_)) {
-        fprintf(stderr, "AxEngine: Warning: Failed to load Game DLL\n");
+        AX_LOG(WARNING, "Failed to load Game DLL");
         return;
     }
 
@@ -192,14 +193,14 @@ void AxEngine::InitGameScript()
     auto CreateNodeScript = reinterpret_cast<CreateNodeScriptFn>(
         DLLAPI->Symbol(GameDLL_, "CreateNodeScript"));
     if (!CreateNodeScript) {
-        fprintf(stderr, "AxEngine: Warning: CreateNodeScript symbol not found in Game DLL\n");
+        AX_LOG(WARNING, "CreateNodeScript symbol not found in Game DLL");
         return;
     }
 
     ScriptBase* GameScript = CreateNodeScript();
     if (GameScript) {
         SceneTree_->GetRootNode()->AttachScript(GameScript);
-        printf("AxEngine: Game script attached to root node\n");
+        AX_LOG(INFO, "Game script attached to root node");
     }
 }
 
@@ -213,13 +214,13 @@ bool AxEngine::Initialize(const AxEngineConfig* config)
 
     APIRegistry_ = gAPIRegistry;
     if (!APIRegistry_) {
-        fprintf(stderr, "AxEngine: Failed to get API registry\n");
+        AX_LOG(ERROR, "Failed to get API registry");
         return (false);
     }
 
     PluginAPI_ = static_cast<AxPluginAPI*>(APIRegistry_->Get(AXON_PLUGIN_API_NAME));
     if (!PluginAPI_) {
-        fprintf(stderr, "AxEngine: Failed to get PluginAPI from registry\n");
+        AX_LOG(ERROR, "Failed to get PluginAPI from registry");
         return (false);
     }
 
@@ -240,7 +241,7 @@ bool AxEngine::Initialize(const AxEngineConfig* config)
     WindowAPI_->SetWindowVisible(Window_, true, NULL);
     isRunning_ = true;
 
-    printf("AxEngine: Initialization complete\n");
+    AX_LOG(INFO, "Initialization complete");
     return (true);
 }
 
@@ -397,7 +398,7 @@ void AxEngine::LoadSceneModels(SceneTree* Scene)
         return;
     }
 
-    printf("AxEngine: Loading models for %u MeshInstance node(s)\n", Count);
+    AX_LOG(INFO, "Loading models for %u MeshInstance node(s)", Count);
 
     for (uint32_t i = 0; i < Count; ++i) {
         MeshInstance* MI = static_cast<MeshInstance*>(MeshNodes[i]);
@@ -412,10 +413,10 @@ void AxEngine::LoadSceneModels(SceneTree* Scene)
         AxModelHandle Handle = ResourceAPI_->LoadModel(MI->MeshPath);
         if (AX_HANDLE_IS_VALID(Handle)) {
             MI->ModelHandle = Handle;
-            printf("AxEngine: Loaded model '%s' -> [%u:%u]\n",
+            AX_LOG(DEBUG, "Loaded model '%s' -> [%u:%u]",
                    MI->MeshPath, Handle.Index, Handle.Generation);
         } else {
-            fprintf(stderr, "AxEngine: Failed to load model '%s'\n", MI->MeshPath);
+            AX_LOG(ERROR, "Failed to load model '%s'", MI->MeshPath);
         }
     }
 }
@@ -488,7 +489,7 @@ extern "C" AXENGINE_API void LoadPlugin(AxAPIRegistry* Registry, bool Load)
     if (Load) {
         gAPIRegistry = Registry;
         Registry->Set(AX_ENGINE_API_NAME, &gEngineAPI, sizeof(AxEngineAPI));
-        printf("AxEngine: Plugin loaded and API registered\n");
+        AX_LOG(INFO, "Plugin loaded and API registered");
     } else {
         if (gEngine) {
             delete gEngine;

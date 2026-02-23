@@ -82,6 +82,7 @@ target_include_directories(AxResource
 target_link_libraries(AxResource
     PRIVATE
         Virspace::Foundation
+        Virspace::AxLog
         axresource_stb
         axresource_cgltf
 )

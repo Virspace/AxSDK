@@ -40,6 +40,7 @@ target_include_directories(AxWindow
 target_link_libraries(AxWindow
     PRIVATE
         Virspace::Foundation
+        Virspace::AxLog
 )
 
 #

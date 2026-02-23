@@ -1,7 +1,7 @@
-#include <stdio.h>
 #include "GL/gl3w.h"
 
 #include "AxOpenGL.h"
+#include "AxLog/AxLog.h"
 #include "Drawable/AxDrawData.h"
 #include "Drawable/AxDrawCommand.h"
 #include "Drawable/AxDrawList.h"
@@ -128,14 +128,14 @@ static bool CheckShader(GLuint Handle, const char *Description)
     glGetShaderiv(Handle, GL_COMPILE_STATUS, &Status);
     glGetShaderiv(Handle, GL_INFO_LOG_LENGTH, &LogLength);
     if ((GLboolean)Status == GL_FALSE) {
-        fprintf(stderr, "ERROR: CheckShader failed to compile %s!\n", Description);
+        AX_LOG(ERROR, "CheckShader failed to compile %s", Description);
     }
 
     if (LogLength > 1)
     {
         char *Buffer = malloc(LogLength + 1);
         glGetShaderInfoLog(Handle, LogLength, NULL, (GLchar *)Buffer);
-        fprintf(stderr, "%s\n", Buffer);
+        AX_LOG(ERROR, "%s", Buffer);
         if (Buffer) {
             free(Buffer);
         }
@@ -150,14 +150,14 @@ static bool CheckProgram(GLuint Handle, const char *Description)
     glGetProgramiv(Handle, GL_LINK_STATUS, &Status);
     glGetProgramiv(Handle, GL_INFO_LOG_LENGTH, &LogLength);
     if ((GLboolean)Status == GL_FALSE) {
-        fprintf(stderr, "ERROR: CreateDeviceObjects failed to link %s!\n", Description);
+        AX_LOG(ERROR, "CheckProgram failed to link %s", Description);
     }
 
     if (LogLength > 1)
     {
         char *Buffer = malloc(LogLength + 1);
         glGetProgramInfoLog(Handle, LogLength, NULL, (GLchar *)Buffer);
-        fprintf(stderr, "%s\n", Buffer);
+        AX_LOG(ERROR, "%s", Buffer);
         if (Buffer) {
             free(Buffer);
         }
@@ -619,7 +619,7 @@ void Render(AxDrawData *DrawData)
     // Check for errors
     GLenum err;
     while((err = glGetError()) != GL_NO_ERROR) {
-      printf("GL Error: %d\n", err);
+      AX_LOG(ERROR, "GL Error: %d", err);
     }
 }
 

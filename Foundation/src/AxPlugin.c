@@ -66,7 +66,6 @@ static uint64_t Load(const char *Path, bool HotReload)
     }
 
     if (Hash == 0) {
-        fprintf(stderr, "AxPlugin: Failed to read/hash DLL file: %s\n", Path);
         return (0);
     }
 

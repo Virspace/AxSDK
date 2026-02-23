@@ -18,6 +18,7 @@
 #include "Foundation/AxTypes.h"
 #include "AxOpenGL/AxOpenGL.h"
 #include "AxOpenGL/AxOpenGLTypes.h"
+#include "AxLog/AxLog.h"
 
 #include <cstring>
 #include <cstdlib>
@@ -484,7 +485,7 @@ void ResourceSystem::Shutdown()
 char* ResourceSystem::ReadFileToString(std::string_view Path, uint64_t* OutSize)
 {
     if (!m_PlatformAPI || !m_PlatformAPI->FileAPI) {
-        fprintf(stderr, "ResourceSystem: PlatformAPI not available\n");
+        AX_LOG(ERROR, "PlatformAPI not available");
         return nullptr;
     }
 
@@ -492,13 +493,13 @@ char* ResourceSystem::ReadFileToString(std::string_view Path, uint64_t* OutSize)
 
     AxFile File = FileAPI->OpenForRead(Path.data());
     if (!FileAPI->IsValid(File)) {
-        fprintf(stderr, "ResourceSystem: Failed to open file: %.*s\n", static_cast<int>(Path.size()), Path.data());
+        AX_LOG(ERROR, "Failed to open file: %.*s", static_cast<int>(Path.size()), Path.data());
         return nullptr;
     }
 
     uint64_t FileSize = FileAPI->Size(File);
     if (FileSize == 0) {
-        fprintf(stderr, "ResourceSystem: File is empty: %.*s\n", static_cast<int>(Path.size()), Path.data());
+        AX_LOG(ERROR, "File is empty: %.*s", static_cast<int>(Path.size()), Path.data());
         FileAPI->Close(File);
         return nullptr;
     }
@@ -506,7 +507,7 @@ char* ResourceSystem::ReadFileToString(std::string_view Path, uint64_t* OutSize)
     // Allocate buffer with extra byte for null terminator
     char* Buffer = static_cast<char*>(AxAlloc(m_Allocator, FileSize + 1));
     if (!Buffer) {
-        fprintf(stderr, "ResourceSystem: Failed to allocate buffer for file: %.*s\n", static_cast<int>(Path.size()), Path.data());
+        AX_LOG(ERROR, "Failed to allocate buffer for file: %.*s", static_cast<int>(Path.size()), Path.data());
         FileAPI->Close(File);
         return nullptr;
     }
@@ -515,7 +516,7 @@ char* ResourceSystem::ReadFileToString(std::string_view Path, uint64_t* OutSize)
     FileAPI->Close(File);
 
     if (BytesRead != FileSize) {
-        fprintf(stderr, "ResourceSystem: Failed to read file: %.*s\n", static_cast<int>(Path.size()), Path.data());
+        AX_LOG(ERROR, "Failed to read file: %.*s", static_cast<int>(Path.size()), Path.data());
         AxFree(m_Allocator, Buffer);
         return nullptr;
     }
@@ -651,19 +652,19 @@ AxTextureHandle ResourceSystem::LoadTexture(std::string_view Path,
                                              const struct AxTextureLoadOptions* Options)
 {
     if (!m_Initialized) {
-        fprintf(stderr, "ResourceSystem: Not initialized\n");
+        AX_LOG(ERROR, "Not initialized");
         return AX_INVALID_HANDLE;
     }
 
     if (Path.empty()) {
-        fprintf(stderr, "ResourceSystem: Invalid texture path\n");
+        AX_LOG(ERROR, "Invalid texture path");
         return AX_INVALID_HANDLE;
     }
 
     // Check if file exists
     if (m_PlatformAPI && m_PlatformAPI->PathAPI) {
         if (!m_PlatformAPI->PathAPI->FileExists(Path.data())) {
-            fprintf(stderr, "ResourceSystem: Texture file not found: %.*s\n", static_cast<int>(Path.size()), Path.data());
+            AX_LOG(ERROR, "Texture file not found: %.*s", static_cast<int>(Path.size()), Path.data());
             return AX_INVALID_HANDLE;
         }
     }
@@ -672,9 +673,9 @@ AxTextureHandle ResourceSystem::LoadTexture(std::string_view Path,
     std::string_view NormalizedPath = Path;
     if (m_PlatformAPI && m_PlatformAPI->PathAPI && m_PlatformAPI->PathAPI->Normalize) {
         NormalizedPath = m_PlatformAPI->PathAPI->Normalize(Path.data());
-        printf("ResourceSystem: Normalized '%.*s' -> '%.*s'\n", static_cast<int>(Path.size()), Path.data(), static_cast<int>(NormalizedPath.size()), NormalizedPath.data());
+        AX_LOG(DEBUG, "Normalized '%.*s' -> '%.*s'", static_cast<int>(Path.size()), Path.data(), static_cast<int>(NormalizedPath.size()), NormalizedPath.data());
     } else {
-        printf("ResourceSystem: WARNING - Normalize function not available, using raw path\n");
+        AX_LOG(WARNING, "Normalize function not available, using raw path");
     }
 
     // Check cache for existing texture
@@ -691,7 +692,7 @@ AxTextureHandle ResourceSystem::LoadTexture(std::string_view Path,
 
     unsigned char* Pixels = stbi_load(Path.data(), &Width, &Height, &Channels, DesiredChannels);
     if (!Pixels) {
-        fprintf(stderr, "ResourceSystem: Failed to load texture: %.*s - %s\n",
+        AX_LOG(ERROR, "Failed to load texture: %.*s - %s",
                 static_cast<int>(Path.size()), Path.data(), stbi_failure_reason());
         return AX_INVALID_HANDLE;
     }
@@ -699,14 +700,14 @@ AxTextureHandle ResourceSystem::LoadTexture(std::string_view Path,
     // Allocate a slot for the texture
     AxTextureHandle Handle = m_Textures.Allocate();
     if (!AX_HANDLE_IS_VALID(Handle)) {
-        fprintf(stderr, "ResourceSystem: Failed to allocate texture slot\n");
+        AX_LOG(ERROR, "Failed to allocate texture slot");
         stbi_image_free(Pixels);
         return AX_INVALID_HANDLE;
     }
 
     ResourceSlot<AxTexture>* Slot = m_Textures.GetSlot(Handle);
     if (!Slot) {
-        fprintf(stderr, "ResourceSystem: Failed to get texture slot\n");
+        AX_LOG(ERROR, "Failed to get texture slot");
         stbi_image_free(Pixels);
         return AX_INVALID_HANDLE;
     }
@@ -714,7 +715,7 @@ AxTextureHandle ResourceSystem::LoadTexture(std::string_view Path,
     // Allocate texture data structure
     AxTexture* Texture = static_cast<AxTexture*>(AxAlloc(m_Allocator, sizeof(AxTexture)));
     if (!Texture) {
-        fprintf(stderr, "ResourceSystem: Failed to allocate texture data\n");
+        AX_LOG(ERROR, "Failed to allocate texture data");
         m_Textures.Free(Handle.Index);
         stbi_image_free(Pixels);
         return AX_INVALID_HANDLE;
@@ -747,7 +748,7 @@ AxTextureHandle ResourceSystem::LoadTexture(std::string_view Path,
     // Add to path cache for future deduplication
     TexturePathCacheInsert(NormalizedPath, Handle);
 
-    printf("ResourceSystem: Loaded texture [%u:%u] - %.*s (%dx%d, %d channels)\n",
+    AX_LOG(INFO, "Loaded texture [%u:%u] - %.*s (%dx%d, %d channels)",
            Handle.Index, Handle.Generation, static_cast<int>(Path.size()), Path.data(), Width, Height, Channels);
 
     return Handle;
@@ -816,19 +817,19 @@ AxMeshHandle ResourceSystem::LoadMesh(std::string_view Path,
                                        const struct AxMeshLoadOptions* Options)
 {
     if (!m_Initialized) {
-        fprintf(stderr, "ResourceSystem: Not initialized\n");
+        AX_LOG(ERROR, "Not initialized");
         return AX_INVALID_HANDLE;
     }
 
     if (Path.empty()) {
-        fprintf(stderr, "ResourceSystem: Invalid mesh path\n");
+        AX_LOG(ERROR, "Invalid mesh path");
         return AX_INVALID_HANDLE;
     }
 
     // Check if file exists
     if (m_PlatformAPI && m_PlatformAPI->PathAPI) {
         if (!m_PlatformAPI->PathAPI->FileExists(Path.data())) {
-            fprintf(stderr, "ResourceSystem: Mesh file not found: %.*s\n", static_cast<int>(Path.size()), Path.data());
+            AX_LOG(ERROR, "Mesh file not found: %.*s", static_cast<int>(Path.size()), Path.data());
             return AX_INVALID_HANDLE;
         }
     }
@@ -840,21 +841,21 @@ AxMeshHandle ResourceSystem::LoadMesh(std::string_view Path,
     cgltf_data* Data = nullptr;
     cgltf_result Result = cgltf_parse_file(&ParseOptions, Path.data(), &Data);
     if (Result != cgltf_result_success) {
-        fprintf(stderr, "ResourceSystem: Failed to parse GLTF: %.*s\n", static_cast<int>(Path.size()), Path.data());
+        AX_LOG(ERROR, "Failed to parse GLTF: %.*s", static_cast<int>(Path.size()), Path.data());
         return AX_INVALID_HANDLE;
     }
 
     // Load buffers
     Result = cgltf_load_buffers(&ParseOptions, Data, Path.data());
     if (Result != cgltf_result_success) {
-        fprintf(stderr, "ResourceSystem: Failed to load GLTF buffers: %.*s\n", static_cast<int>(Path.size()), Path.data());
+        AX_LOG(ERROR, "Failed to load GLTF buffers: %.*s", static_cast<int>(Path.size()), Path.data());
         cgltf_free(Data);
         return AX_INVALID_HANDLE;
     }
 
     // Check if there's at least one mesh
     if (Data->meshes_count == 0) {
-        fprintf(stderr, "ResourceSystem: No meshes in GLTF file: %.*s\n", static_cast<int>(Path.size()), Path.data());
+        AX_LOG(ERROR, "No meshes in GLTF file: %.*s", static_cast<int>(Path.size()), Path.data());
         cgltf_free(Data);
         return AX_INVALID_HANDLE;
     }
@@ -862,7 +863,7 @@ AxMeshHandle ResourceSystem::LoadMesh(std::string_view Path,
     // Get the first mesh's first primitive
     cgltf_mesh* GltfMesh = &Data->meshes[0];
     if (GltfMesh->primitives_count == 0) {
-        fprintf(stderr, "ResourceSystem: No primitives in mesh: %.*s\n", static_cast<int>(Path.size()), Path.data());
+        AX_LOG(ERROR, "No primitives in mesh: %.*s", static_cast<int>(Path.size()), Path.data());
         cgltf_free(Data);
         return AX_INVALID_HANDLE;
     }
@@ -898,7 +899,7 @@ AxMeshHandle ResourceSystem::LoadMesh(std::string_view Path,
     }
 
     if (!PositionAccessor) {
-        fprintf(stderr, "ResourceSystem: No position data in mesh: %.*s\n", static_cast<int>(Path.size()), Path.data());
+        AX_LOG(ERROR, "No position data in mesh: %.*s", static_cast<int>(Path.size()), Path.data());
         cgltf_free(Data);
         return AX_INVALID_HANDLE;
     }
@@ -913,7 +914,7 @@ AxMeshHandle ResourceSystem::LoadMesh(std::string_view Path,
     uint32_t VertexCount = static_cast<uint32_t>(PositionAccessor->count);
     AxVertex* Vertices = static_cast<AxVertex*>(AxAlloc(m_Allocator, sizeof(AxVertex) * VertexCount));
     if (!Vertices) {
-        fprintf(stderr, "ResourceSystem: Failed to allocate vertices for mesh: %.*s\n", static_cast<int>(Path.size()), Path.data());
+        AX_LOG(ERROR, "Failed to allocate vertices for mesh: %.*s", static_cast<int>(Path.size()), Path.data());
         cgltf_free(Data);
         return AX_INVALID_HANDLE;
     }
@@ -966,7 +967,7 @@ AxMeshHandle ResourceSystem::LoadMesh(std::string_view Path,
         IndexCount = static_cast<uint32_t>(Primitive->indices->count);
         Indices = static_cast<uint32_t*>(AxAlloc(m_Allocator, sizeof(uint32_t) * IndexCount));
         if (!Indices) {
-            fprintf(stderr, "ResourceSystem: Failed to allocate indices\n");
+            AX_LOG(ERROR, "Failed to allocate indices");
             AxFree(m_Allocator, Vertices);
             cgltf_free(Data);
             return AX_INVALID_HANDLE;
@@ -989,7 +990,7 @@ AxMeshHandle ResourceSystem::LoadMesh(std::string_view Path,
     // Allocate a slot for the mesh
     AxMeshHandle Handle = m_Meshes.Allocate();
     if (!AX_HANDLE_IS_VALID(Handle)) {
-        fprintf(stderr, "ResourceSystem: Failed to allocate mesh slot\n");
+        AX_LOG(ERROR, "Failed to allocate mesh slot");
         AxFree(m_Allocator, Vertices);
         if (Indices) {
             AxFree(m_Allocator, Indices);
@@ -1000,7 +1001,7 @@ AxMeshHandle ResourceSystem::LoadMesh(std::string_view Path,
 
     ResourceSlot<AxMesh>* Slot = m_Meshes.GetSlot(Handle);
     if (!Slot) {
-        fprintf(stderr, "ResourceSystem: Failed to get mesh slot\n");
+        AX_LOG(ERROR, "Failed to get mesh slot");
         AxFree(m_Allocator, Vertices);
         if (Indices) {
             AxFree(m_Allocator, Indices);
@@ -1012,7 +1013,7 @@ AxMeshHandle ResourceSystem::LoadMesh(std::string_view Path,
     // Allocate mesh data structure
     AxMesh* Mesh = static_cast<AxMesh*>(AxAlloc(m_Allocator, sizeof(AxMesh)));
     if (!Mesh) {
-        fprintf(stderr, "ResourceSystem: Failed to allocate mesh data\n");
+        AX_LOG(ERROR, "Failed to allocate mesh data");
         m_Meshes.Free(Handle.Index);
         AxFree(m_Allocator, Vertices);
         if (Indices) {
@@ -1052,7 +1053,7 @@ AxMeshHandle ResourceSystem::LoadMesh(std::string_view Path,
     // Store mesh in slot
     Slot->Data = Mesh;
 
-    printf("ResourceSystem: Loaded mesh [%u:%u] - %.*s (%u vertices, %u indices)\n",
+    AX_LOG(INFO, "Loaded mesh [%u:%u] - %.*s (%u vertices, %u indices)",
            Handle.Index, Handle.Generation, static_cast<int>(Path.size()), Path.data(), VertexCount, IndexCount);
 
     return Handle;
@@ -1121,33 +1122,33 @@ AxShaderHandle ResourceSystem::LoadShader(std::string_view VertexPath,
                                            const struct AxShaderLoadOptions* Options)
 {
     if (!m_Initialized) {
-        fprintf(stderr, "ResourceSystem: Not initialized\n");
+        AX_LOG(ERROR, "Not initialized");
         return AX_INVALID_HANDLE;
     }
 
     if (VertexPath.empty()) {
-        fprintf(stderr, "ResourceSystem: Invalid vertex shader path\n");
+        AX_LOG(ERROR, "Invalid vertex shader path");
         return AX_INVALID_HANDLE;
     }
 
     if (FragmentPath.empty()) {
-        fprintf(stderr, "ResourceSystem: Invalid fragment shader path\n");
+        AX_LOG(ERROR, "Invalid fragment shader path");
         return AX_INVALID_HANDLE;
     }
 
     if (!m_RenderAPI) {
-        fprintf(stderr, "ResourceSystem: RenderAPI not available for shader compilation\n");
+        AX_LOG(ERROR, "RenderAPI not available for shader compilation");
         return AX_INVALID_HANDLE;
     }
 
     // Check if files exist
     if (m_PlatformAPI && m_PlatformAPI->PathAPI) {
         if (!m_PlatformAPI->PathAPI->FileExists(VertexPath.data())) {
-            fprintf(stderr, "ResourceSystem: Vertex shader not found: %.*s\n", static_cast<int>(VertexPath.size()), VertexPath.data());
+            AX_LOG(ERROR, "Vertex shader not found: %.*s", static_cast<int>(VertexPath.size()), VertexPath.data());
             return AX_INVALID_HANDLE;
         }
         if (!m_PlatformAPI->PathAPI->FileExists(FragmentPath.data())) {
-            fprintf(stderr, "ResourceSystem: Fragment shader not found: %.*s\n", static_cast<int>(FragmentPath.size()), FragmentPath.data());
+            AX_LOG(ERROR, "Fragment shader not found: %.*s", static_cast<int>(FragmentPath.size()), FragmentPath.data());
             return AX_INVALID_HANDLE;
         }
     }
@@ -1177,7 +1178,7 @@ AxShaderHandle ResourceSystem::LoadShader(std::string_view VertexPath,
     uint32_t ShaderProgram = m_RenderAPI->CreateProgram(HeaderCode.data(), VertexSource.data(), FragmentSource.data());
 
     if (ShaderProgram == 0) {
-        fprintf(stderr, "ResourceSystem: Failed to compile shader: %.*s, %.*s\n",
+        AX_LOG(ERROR, "Failed to compile shader: %.*s, %.*s",
                 static_cast<int>(VertexPath.size()), VertexPath.data(),
                 static_cast<int>(FragmentPath.size()), FragmentPath.data());
         return AX_INVALID_HANDLE;
@@ -1186,14 +1187,14 @@ AxShaderHandle ResourceSystem::LoadShader(std::string_view VertexPath,
     // Allocate a slot for the shader
     AxShaderHandle Handle = m_Shaders.Allocate();
     if (!AX_HANDLE_IS_VALID(Handle)) {
-        fprintf(stderr, "ResourceSystem: Failed to allocate shader slot\n");
+        AX_LOG(ERROR, "Failed to allocate shader slot");
         m_RenderAPI->DestroyProgram(ShaderProgram);
         return AX_INVALID_HANDLE;
     }
 
     ResourceSlot<AxShaderData>* Slot = m_Shaders.GetSlot(Handle);
     if (!Slot) {
-        fprintf(stderr, "ResourceSystem: Failed to get shader slot\n");
+        AX_LOG(ERROR, "Failed to get shader slot");
         m_RenderAPI->DestroyProgram(ShaderProgram);
         return AX_INVALID_HANDLE;
     }
@@ -1201,7 +1202,7 @@ AxShaderHandle ResourceSystem::LoadShader(std::string_view VertexPath,
     // Allocate shader data structure
     AxShaderData* ShaderData = static_cast<AxShaderData*>(AxAlloc(m_Allocator, sizeof(AxShaderData)));
     if (!ShaderData) {
-        fprintf(stderr, "ResourceSystem: Failed to allocate shader data\n");
+        AX_LOG(ERROR, "Failed to allocate shader data");
         m_Shaders.Free(Handle.Index);
         m_RenderAPI->DestroyProgram(ShaderProgram);
         return AX_INVALID_HANDLE;
@@ -1217,7 +1218,7 @@ AxShaderHandle ResourceSystem::LoadShader(std::string_view VertexPath,
     // Store shader in slot
     Slot->Data = ShaderData;
 
-    printf("ResourceSystem: Loaded shader [%u:%u] - %.*s, %.*s (Program=%u)\n",
+    AX_LOG(INFO, "Loaded shader [%u:%u] - %.*s, %.*s (Program=%u)",
            Handle.Index, Handle.Generation, static_cast<int>(VertexPath.size()), VertexPath.data(),
            static_cast<int>(FragmentPath.size()), FragmentPath.data(), ShaderProgram);
 
@@ -1285,32 +1286,32 @@ uint32_t ResourceSystem::GetShaderCount() const
 AxMaterialHandle ResourceSystem::CreateMaterial(const struct AxMaterialDesc* Desc)
 {
     if (!m_Initialized) {
-        fprintf(stderr, "ResourceSystem: Not initialized\n");
+        AX_LOG(ERROR, "Not initialized");
         return AX_INVALID_HANDLE;
     }
 
     if (!Desc) {
-        fprintf(stderr, "ResourceSystem: NULL material description\n");
+        AX_LOG(ERROR, "NULL material description");
         return AX_INVALID_HANDLE;
     }
 
     // Allocate a slot for the material
     AxMaterialHandle Handle = m_Materials.Allocate();
     if (!AX_HANDLE_IS_VALID(Handle)) {
-        fprintf(stderr, "ResourceSystem: Failed to allocate material slot\n");
+        AX_LOG(ERROR, "Failed to allocate material slot");
         return AX_INVALID_HANDLE;
     }
 
     ResourceSlot<AxMaterialDesc>* Slot = m_Materials.GetSlot(Handle);
     if (!Slot) {
-        fprintf(stderr, "ResourceSystem: Failed to get material slot\n");
+        AX_LOG(ERROR, "Failed to get material slot");
         return AX_INVALID_HANDLE;
     }
 
     // Allocate material data structure
     AxMaterialDesc* Material = static_cast<AxMaterialDesc*>(AxAlloc(m_Allocator, sizeof(AxMaterialDesc)));
     if (!Material) {
-        fprintf(stderr, "ResourceSystem: Failed to allocate material data\n");
+        AX_LOG(ERROR, "Failed to allocate material data");
         m_Materials.Free(Handle.Index);
         return AX_INVALID_HANDLE;
     }
@@ -1324,7 +1325,7 @@ AxMaterialHandle ResourceSystem::CreateMaterial(const struct AxMaterialDesc* Des
         Desc->Custom.CustomDataSize > 0) {
         void* CustomDataCopy = AxAlloc(m_Allocator, Desc->Custom.CustomDataSize);
         if (!CustomDataCopy) {
-            fprintf(stderr, "ResourceSystem: Failed to allocate custom data\n");
+            AX_LOG(ERROR, "Failed to allocate custom data");
             AxFree(m_Allocator, Material);
             m_Materials.Free(Handle.Index);
             return AX_INVALID_HANDLE;
@@ -1336,7 +1337,7 @@ AxMaterialHandle ResourceSystem::CreateMaterial(const struct AxMaterialDesc* Des
     // Store material in slot
     Slot->Data = Material;
 
-    printf("ResourceSystem: Created material [%u:%u] - %s (Type=%s)\n",
+    AX_LOG(DEBUG, "Created material [%u:%u] - %s (Type=%s)",
            Handle.Index, Handle.Generation, Material->Name,
            Material->Type == AX_MATERIAL_TYPE_PBR ? "PBR" : "Custom");
 
@@ -1414,7 +1415,7 @@ bool ResourceSystem::LoadModelInternal(std::string_view Path, struct AxModelData
     // Check if file exists
     if (m_PlatformAPI && m_PlatformAPI->PathAPI) {
         if (!m_PlatformAPI->PathAPI->FileExists(Path.data())) {
-            fprintf(stderr, "ResourceSystem: Model file not found: %.*s\n", static_cast<int>(Path.size()), Path.data());
+            AX_LOG(ERROR, "Model file not found: %.*s", static_cast<int>(Path.size()), Path.data());
             return false;
         }
     }
@@ -1440,14 +1441,14 @@ bool ResourceSystem::LoadModelInternal(std::string_view Path, struct AxModelData
     cgltf_data* Data = nullptr;
     cgltf_result Result = cgltf_parse_file(&ParseOptions, Path.data(), &Data);
     if (Result != cgltf_result_success) {
-        fprintf(stderr, "ResourceSystem: Failed to parse GLTF: %.*s\n", static_cast<int>(Path.size()), Path.data());
+        AX_LOG(ERROR, "Failed to parse GLTF: %.*s", static_cast<int>(Path.size()), Path.data());
         return false;
     }
 
     // Load buffers
     Result = cgltf_load_buffers(&ParseOptions, Data, Path.data());
     if (Result != cgltf_result_success) {
-        fprintf(stderr, "ResourceSystem: Failed to load GLTF buffers: %.*s\n", static_cast<int>(Path.size()), Path.data());
+        AX_LOG(ERROR, "Failed to load GLTF buffers: %.*s", static_cast<int>(Path.size()), Path.data());
         cgltf_free(Data);
         return false;
     }
@@ -1512,7 +1513,7 @@ bool ResourceSystem::LoadModelInternal(std::string_view Path, struct AxModelData
                 CacheImage(Image, TextureIndex);
                 return TextureIndex;
             } else {
-                fprintf(stderr, "ResourceSystem: Failed to load texture: %.*s\n", static_cast<int>(strlen(TexturePath)), TexturePath);
+                AX_LOG(ERROR, "Failed to load texture: %s", TexturePath);
                 return -1;
             }
         } else if (Image->buffer_view) {
@@ -1526,7 +1527,7 @@ bool ResourceSystem::LoadModelInternal(std::string_view Path, struct AxModelData
             unsigned char* Pixels = stbi_load_from_memory(ImageData, static_cast<int>(BufferView->size),
                                                            &Width, &Height, &Channels, 0);
             if (!Pixels) {
-                fprintf(stderr, "ResourceSystem: Failed to load embedded texture: %s\n",
+                AX_LOG(ERROR, "Failed to load embedded texture: %s",
                         stbi_failure_reason());
                 return -1;
             }
@@ -1659,7 +1660,7 @@ bool ResourceSystem::LoadModelInternal(std::string_view Path, struct AxModelData
         }
 
         // Debug output for material texture indices
-        printf("ResourceSystem: Material '%s' textures - Base:%d Normal:%d MetRough:%d Emissive:%d Occlusion:%d AlphaMode:%d\n",
+        AX_LOG(DEBUG, "Material '%s' textures - Base:%d Normal:%d MetRough:%d Emissive:%d Occlusion:%d AlphaMode:%d",
                MatDesc.Name,
                MatDesc.PBR.BaseColorTexture,
                MatDesc.PBR.NormalTexture,
@@ -1670,11 +1671,11 @@ bool ResourceSystem::LoadModelInternal(std::string_view Path, struct AxModelData
 
         // Create the material
         AxMaterialHandle MatHandle = CreateMaterial(&MatDesc);
-        if (AX_HANDLE_IS_VALID(MatHandle)) {
+        if (!AX_HANDLE_IS_VALID(MatHandle)) {
+            AX_LOG(ERROR, "Failed to create material: %s", MatDesc.Name);
+        } else {
             OutModel->Materials[OutModel->MaterialCount] = MatHandle;
             OutModel->MaterialCount++;
-        } else {
-            fprintf(stderr, "ResourceSystem: Failed to create material: %s\n", MatDesc.Name);
         }
     }
 
@@ -1989,14 +1990,13 @@ bool ResourceSystem::LoadModelInternal(std::string_view Path, struct AxModelData
     cgltf_free(Data);
 
     // Print texture cache statistics for this model load
-    if (ImageCacheHits > 0 || ImageCacheMisses > 0) {
-        printf("ResourceSystem: Texture cache stats - %u hits, %u misses (%.1f%% hit rate)\n",
-               ImageCacheHits, ImageCacheMisses,
-               (ImageCacheHits + ImageCacheMisses) > 0 ?
-               100.0f * ImageCacheHits / (ImageCacheHits + ImageCacheMisses) : 0.0f);
-    }
+    AX_LOG_IF(DEBUG, ImageCacheHits > 0 || ImageCacheMisses > 0,
+              "Texture cache stats - %u hits, %u misses (%.1f%% hit rate)",
+              ImageCacheHits, ImageCacheMisses,
+              (ImageCacheHits + ImageCacheMisses) > 0 ?
+              100.0f * ImageCacheHits / (ImageCacheHits + ImageCacheMisses) : 0.0f);
 
-    printf("ResourceSystem: Loaded model %s - %u meshes, %u textures, %u materials, %u transforms\n",
+    AX_LOG(INFO, "Loaded model %s - %u meshes, %u textures, %u materials, %u transforms",
            OutModel->Name, OutModel->MeshCount, OutModel->TextureCount, OutModel->MaterialCount, OutModel->TransformCount);
 
     return (OutModel->MeshCount > 0);
@@ -2005,39 +2005,39 @@ bool ResourceSystem::LoadModelInternal(std::string_view Path, struct AxModelData
 AxModelHandle ResourceSystem::LoadModel(std::string_view Path)
 {
     if (!m_Initialized) {
-        fprintf(stderr, "ResourceSystem: Not initialized\n");
+        AX_LOG(ERROR, "Not initialized");
         return AX_INVALID_HANDLE;
     }
 
     if (Path.empty()) {
-        fprintf(stderr, "ResourceSystem: Invalid model path\n");
+        AX_LOG(ERROR, "Invalid model path");
         return AX_INVALID_HANDLE;
     }
 
     // Allocate a slot for the model
     AxModelHandle Handle = m_Models.Allocate();
     if (!AX_HANDLE_IS_VALID(Handle)) {
-        fprintf(stderr, "ResourceSystem: Failed to allocate model slot\n");
+        AX_LOG(ERROR, "Failed to allocate model slot");
         return AX_INVALID_HANDLE;
     }
 
     ResourceSlot<AxModelData>* Slot = m_Models.GetSlot(Handle);
     if (!Slot) {
-        fprintf(stderr, "ResourceSystem: Failed to get model slot\n");
+        AX_LOG(ERROR, "Failed to get model slot");
         return AX_INVALID_HANDLE;
     }
 
     // Allocate model data structure
     AxModelData* Model = static_cast<AxModelData*>(AxAlloc(m_Allocator, sizeof(AxModelData)));
     if (!Model) {
-        fprintf(stderr, "ResourceSystem: Failed to allocate model data\n");
+        AX_LOG(ERROR, "Failed to allocate model data");
         m_Models.Free(Handle.Index);
         return AX_INVALID_HANDLE;
     }
 
     // Load the model data
     if (!LoadModelInternal(Path, Model)) {
-        fprintf(stderr, "ResourceSystem: Failed to load model: %.*s\n", static_cast<int>(Path.size()), Path.data());
+        AX_LOG(ERROR, "Failed to load model: %.*s", static_cast<int>(Path.size()), Path.data());
         AxFree(m_Allocator, Model);
         m_Models.Free(Handle.Index);
         return AX_INVALID_HANDLE;
@@ -2046,7 +2046,7 @@ AxModelHandle ResourceSystem::LoadModel(std::string_view Path)
     // Store model in slot
     Slot->Data = Model;
 
-    printf("ResourceSystem: Created model handle [%u:%u] - %s\n",
+    AX_LOG(INFO, "Created model handle [%u:%u] - %s",
            Handle.Index, Handle.Generation, Model->Name);
 
     return Handle;

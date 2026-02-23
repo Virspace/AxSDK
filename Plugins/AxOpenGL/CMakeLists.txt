@@ -62,6 +62,7 @@ target_link_libraries(AxOpenGL
     PUBLIC
         Virspace::Foundation
     PRIVATE
+        Virspace::AxLog
         opengl32
 )
 

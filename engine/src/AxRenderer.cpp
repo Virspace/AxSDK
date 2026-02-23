@@ -17,8 +17,7 @@
 #include "AxResource/AxResource.h"
 #include "Foundation/AxAPIRegistry.h"
 #include "Foundation/AxMath.h"
-
-#include <stdio.h>
+#include "AxLog/AxLog.h"
 
 AxRenderer::~AxRenderer()
 {
@@ -37,7 +36,7 @@ bool AxRenderer::Initialize(AxAPIRegistry* Registry, uint64_t WindowHandle, int3
     ResourceAPI_ = static_cast<AxResourceAPI*>(Registry->Get(AXON_RESOURCE_API_NAME));
 
     if (!RenderAPI_ || !ResourceAPI_) {
-        fprintf(stderr, "AxRender: Failed to get required APIs\n");
+        AX_LOG(ERROR, "Failed to get required APIs");
         return (false);
     }
 
@@ -60,13 +59,13 @@ bool AxRenderer::Initialize(AxAPIRegistry* Registry, uint64_t WindowHandle, int3
         nullptr);
     if (AX_HANDLE_IS_VALID(ShaderHandle)) {
         ShaderData_ = const_cast<AxShaderData*>(ResourceAPI_->GetShader(ShaderHandle));
-        printf("AxRender: Loaded shader program %u\n", ShaderData_->ShaderHandle);
+        AX_LOG(INFO, "Loaded shader program %u", ShaderData_->ShaderHandle);
     } else {
-        fprintf(stderr, "AxRender: Failed to load shaders\n");
+        AX_LOG(ERROR, "Failed to load shaders");
         return (false);
     }
 
-    printf("AxRender: Initialized (%dx%d)\n", Width, Height);
+    AX_LOG(INFO, "Initialized (%dx%d)", Width, Height);
     return (true);
 }
 

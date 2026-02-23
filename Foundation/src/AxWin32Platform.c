@@ -312,7 +312,7 @@ static AxFile FileOpenForWrite(const char *Path)
     AxFile File = { 0 };
 
     uint32_t Access = GENERIC_WRITE;
-    uint32_t WinFlags = 0;
+    uint32_t WinFlags = FILE_SHARE_READ;
     uint32_t Create = CREATE_ALWAYS;
 
     HANDLE Handle = CreateFileA(Path, Access, WinFlags, NULL, Create, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -394,6 +394,12 @@ static uint64_t FileWrite(AxFile File, void* Buffer, uint32_t BytesToWrite)
     }
 
     return((uint64_t)NumBytesWritten);
+}
+
+static void FileFlush(AxFile File)
+{
+    AXON_ASSERT(FileIsValid(File));
+    FlushFileBuffers((HANDLE)File.Handle);
 }
 
 static void FileClose(AxFile File)
@@ -834,6 +840,7 @@ struct AxPlatformAPI *PlatformAPI = &(struct AxPlatformAPI) {
         .Size = FileSize,
         .Read = FileRead,
         .Write = FileWrite,
+        .Flush = FileFlush,
         .Close = FileClose,
         .DeleteFile = FileDelete
     },

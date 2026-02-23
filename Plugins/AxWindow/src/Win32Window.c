@@ -2,6 +2,7 @@
 #include "Foundation/AxMath.h"
 #include "Foundation/AxPlatform.h"
 #include "AxWindow.h"
+#include "AxLog/AxLog.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <float.h>
@@ -1158,7 +1159,7 @@ static bool Win32RegisterWindowClass()
     if (!RegisterClassEx(&WNDClass))
     {
         DWORD Error = GetLastError();
-        fprintf(stderr, "Failed to register window class: %lu\n", Error);
+        AX_LOG(ERROR, "Failed to register window class: %lu", Error);
         MessageBox(NULL, "Window Registration Failed!", "Abandon Ship!",
             MB_ICONEXCLAMATION | MB_OK);
 
@@ -1255,7 +1256,7 @@ static enum AxWindowError Init(void)
     // Set DPI awareness - this should be done before any window creation
     if (!SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)) {
         DWORD Error = GetLastError();
-        fprintf(stderr, "Failed to set DPI awareness: %lu\n", Error);
+        AX_LOG(ERROR, "Failed to set DPI awareness: %lu", Error);
         return AX_WINDOW_ERROR_UNKNOWN;
     }
 

@@ -1,20 +1,22 @@
 #include "Foundation/AxAPIRegistry.h"
 #include "Foundation/AxPlugin.h"
 #include "AxEngine/AxEngine.h"
-
-#include <stdio.h>
-#include <stdlib.h>
+#include "AxLog/AxLog.h"
 
 // Simple bootstrap host that loads AxEngine.dll and delegates to it
 int main(int argc, char** argv)
 {
-    printf("AxStandalone - Bootstrapping AxEngine...\n");
-
     // Initialize Foundation's global API registry
     AxonInitGlobalAPIRegistry();
 
     // Register all Foundation APIs (Platform, Plugin, etc.)
     AxonRegisterAllFoundationAPIs(AxonGlobalAPIRegistry);
+
+    // Open log file early -- this also sets the uptime epoch for all subsequent log calls.
+    // Foundation/Platform is available now, so file I/O works.
+    AxLogOpenFile("engine.log");
+
+    AX_LOG(INFO, "Bootstrapping AxEngine...");
 
     // Get PluginAPI from registry
     AxPluginAPI* PluginAPI = static_cast<AxPluginAPI*>(
@@ -22,17 +24,19 @@ int main(int argc, char** argv)
     );
 
     if (!PluginAPI) {
-        fprintf(stderr, "ERROR: Failed to get PluginAPI from Foundation\n");
+        AX_LOG(FATAL, "Failed to get PluginAPI from Foundation");
+        AxLogCloseFile();
         AxonTermGlobalAPIRegistry();
         return (1);
     }
 
     // Load AxEngine.dll
-    printf("Loading libAxEngine.dll...\n");
+    AX_LOG(INFO, "Loading libAxEngine.dll...");
     uint64_t EngineHandle = PluginAPI->Load("libAxEngine.dll", false);
 
     if (!PluginAPI->IsValid(EngineHandle)) {
-        fprintf(stderr, "ERROR: Failed to load libAxEngine.dll\n");
+        AX_LOG(FATAL, "Failed to load libAxEngine.dll");
+        AxLogCloseFile();
         AxonTermGlobalAPIRegistry();
         return (1);
     }
@@ -43,8 +47,9 @@ int main(int argc, char** argv)
     );
 
     if (!Engine) {
-        fprintf(stderr, "ERROR: Failed to get AxEngineAPI from registry\n");
+        AX_LOG(FATAL, "Failed to get AxEngineAPI from registry");
         PluginAPI->Unload(EngineHandle);
+        AxLogCloseFile();
         AxonTermGlobalAPIRegistry();
         return (1);
     }
@@ -58,28 +63,32 @@ int main(int argc, char** argv)
     };
 
     // Initialize engine
-    printf("Initializing engine...\n");
+    AX_LOG(INFO, "Initializing engine...");
     if (!Engine->Initialize(&Config)) {
-        fprintf(stderr, "ERROR: Engine initialization failed\n");
+        AX_LOG(FATAL, "Engine initialization failed");
         Engine->Shutdown();
         PluginAPI->Unload(EngineHandle);
+        AxLogCloseFile();
         AxonTermGlobalAPIRegistry();
         return (1);
     }
 
     // Run engine (blocks until exit)
-    printf("Running engine...\n");
+    AX_LOG(INFO, "Running engine...");
     int ExitCode = Engine->Run();
-    printf("Engine exited with code: %d\n", ExitCode);
+    AX_LOG(INFO, "Engine exited with code: %d", ExitCode);
 
     // Shutdown engine
-    printf("Shutting down engine...\n");
+    AX_LOG(INFO, "Shutting down engine...");
     Engine->Shutdown();
 
     // Cleanup
     PluginAPI->Unload(EngineHandle);
+
+    AX_LOG(INFO, "Shutdown complete");
+
+    AxLogCloseFile();
     AxonTermGlobalAPIRegistry();
 
-    printf("AxStandalone - Shutdown complete\n");
     return (ExitCode);
 }

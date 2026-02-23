@@ -4,6 +4,7 @@
 #include "GL/gl3w.h"
 
 #include "AxOpenGL.h"
+#include "AxLog/AxLog.h"
 
 //#include "AxWindow/AxWindow.h"
 #include "Foundation/AxAPIRegistry.h"
@@ -97,46 +98,25 @@ static HGLRC RenderContext = 0;
 ///////////////////////////////////////////////////////////////
 void APIENTRY GLDebugMessageCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *message, const void *userParam)
 {
-    fprintf(stderr, "----------opengl-callback-start----------\n");
-    fprintf(stderr, "message: %s\n", message);
-    fprintf(stderr, "type: ");
-
+    const char *TypeStr = "OTHER";
     switch (type) {
-    case GL_DEBUG_TYPE_ERROR:
-        fprintf(stderr, "ERROR\n");
-        break;
-    case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR:
-        fprintf(stderr, "DEPRECATED_BEHAVIOR\n");
-        break;
-    case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:
-        fprintf(stderr, "UNDEFINED_BEHAVIOR\n");
-        break;
-    case GL_DEBUG_TYPE_PORTABILITY:
-        fprintf(stderr, "PORTABILITY\n");
-        break;
-    case GL_DEBUG_TYPE_PERFORMANCE:
-        fprintf(stderr, "PERFORMANCE\n");
-        break;
-    case GL_DEBUG_TYPE_OTHER:
-        fprintf(stderr, "OTHER\n");
-        break;
+    case GL_DEBUG_TYPE_ERROR:               TypeStr = "ERROR"; break;
+    case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR: TypeStr = "DEPRECATED"; break;
+    case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:  TypeStr = "UNDEFINED_BEHAVIOR"; break;
+    case GL_DEBUG_TYPE_PORTABILITY:         TypeStr = "PORTABILITY"; break;
+    case GL_DEBUG_TYPE_PERFORMANCE:         TypeStr = "PERFORMANCE"; break;
+    case GL_DEBUG_TYPE_OTHER:               TypeStr = "OTHER"; break;
     }
 
-    fprintf(stderr, "id: %u\n", id);
-    fprintf(stderr, "severity: ");
-    switch (severity){
-    case GL_DEBUG_SEVERITY_LOW:
-        fprintf(stderr, "LOW\n");
-        break;
-    case GL_DEBUG_SEVERITY_MEDIUM:
-        fprintf(stderr, "MEDIUM\n");
-        break;
-    case GL_DEBUG_SEVERITY_HIGH:
-        fprintf(stderr, "HIGH\n");
-        break;
+    const char *SeverityStr = "UNKNOWN";
+    int LogLevel = AX_LOG_LEVEL_DEBUG;
+    switch (severity) {
+    case GL_DEBUG_SEVERITY_HIGH:   SeverityStr = "HIGH";   LogLevel = AX_LOG_LEVEL_ERROR;   break;
+    case GL_DEBUG_SEVERITY_MEDIUM: SeverityStr = "MEDIUM"; LogLevel = AX_LOG_LEVEL_WARNING; break;
+    case GL_DEBUG_SEVERITY_LOW:    SeverityStr = "LOW";    LogLevel = AX_LOG_LEVEL_DEBUG;   break;
     }
-    fprintf(stderr, "\n");
-    fprintf(stderr, "----------opengl-callback-end----------\n");
+
+    AxLogWrite(LogLevel, __FILE__, __LINE__, "GL Debug [%s] [%s] id=%u: %s", TypeStr, SeverityStr, id, message);
 
     AXON_ASSERT(false && "OpenGL Error!");
 }
@@ -167,14 +147,14 @@ static bool CheckShader(GLuint Handle, const char *Description)
     glGetShaderiv(Handle, GL_COMPILE_STATUS, &Status);
     glGetShaderiv(Handle, GL_INFO_LOG_LENGTH, &LogLength);
     if ((GLboolean)Status == GL_FALSE) {
-        fprintf(stderr, "ERROR: CheckShader failed to compile %s!\n", Description);
+        AX_LOG(ERROR, "CheckShader failed to compile %s", Description);
     }
 
     if (LogLength > 1)
     {
         char *Buffer = malloc(LogLength + 1);
         glGetShaderInfoLog(Handle, LogLength, NULL, (GLchar *)Buffer);
-        fprintf(stderr, "%s\n", Buffer);
+        AX_LOG(ERROR, "%s", Buffer);
         if (Buffer) {
             free(Buffer);
         }
@@ -191,14 +171,14 @@ static bool CheckProgram(GLuint Handle, const char *Description)
     glGetProgramiv(Handle, GL_LINK_STATUS, &Status);
     glGetProgramiv(Handle, GL_INFO_LOG_LENGTH, &LogLength);
     if ((GLboolean)Status == GL_FALSE) {
-        fprintf(stderr, "ERROR: CheckProgram failed to link %s!\n", Description);
+        AX_LOG(ERROR, "CheckProgram failed to link %s", Description);
     }
 
     if (LogLength > 1)
     {
         char *Buffer = malloc(LogLength + 1);
         glGetProgramInfoLog(Handle, LogLength, NULL, (GLchar *)Buffer);
-        fprintf(stderr, "%s\n", Buffer);
+        AX_LOG(ERROR, "%s", Buffer);
         if (Buffer) {
             free(Buffer);
         }
@@ -373,7 +353,7 @@ static bool CheckDSASupport()
         }
 
         DSA_Checked = true;
-        printf("Direct State Access support: %s\n", HasDSA ? "Yes" : "No");
+        AX_LOG(DEBUG, "Direct State Access support: %s", HasDSA ? "Yes" : "No");
     }
 
     return HasDSA;
@@ -423,7 +403,7 @@ void AxCreateContext(uint64_t WindowHandle) // But then we'd need AX_LAST_KEY?
     // Enable sRGB framebuffer for proper gamma correction
     // This will automatically convert linear color output to sRGB for display
     glEnable(GL_FRAMEBUFFER_SRGB);
-    printf("sRGB framebuffer enabled for correct gamma correction\n");
+    AX_LOG(INFO, "sRGB framebuffer enabled for correct gamma correction");
 
     // Create default viewport
     Viewport = calloc(1, sizeof(AxViewport));
@@ -712,7 +692,7 @@ static void AxRender(AxViewport *Viewport, struct AxMesh *Mesh, struct AxShaderD
     // Check for errors
     GLenum err;
     while((err = glGetError()) != GL_NO_ERROR) {
-        printf("GL Error: %d\n", err);
+        AX_LOG(ERROR, "GL Error: %d", err);
     }
 }
 
@@ -846,71 +826,48 @@ static bool AxGetAttributeLocations(const uint32_t ProgramID, struct AxShaderDat
     ShaderData->AttribLocationLightColor = glGetUniformLocation(ShaderData->ShaderHandle, "lightColor");
 
     ShaderData->AttribLocationViewPos = glGetUniformLocation(ShaderData->ShaderHandle, "viewPos");
-    if (ShaderData->AttribLocationViewPos < 0) {
-        printf("Warning: Could not find uniform 'viewPos'\n");
-    }
+    AX_LOG_IF(DEBUG, ShaderData->AttribLocationViewPos < 0, "Could not find uniform 'viewPos'");
 
     ShaderData->AttribLocationMaterialColor = glGetUniformLocation(ShaderData->ShaderHandle, "materialColor");
-    if (ShaderData->AttribLocationMaterialColor < 0) {
-        printf("Warning: Could not find uniform 'materialColor'\n");
-    }
+    AX_LOG_IF(DEBUG, ShaderData->AttribLocationMaterialColor < 0, "Could not find uniform 'materialColor'");
 
     ShaderData->AttribLocationDiffuseTexture = glGetUniformLocation(ShaderData->ShaderHandle, "diffuseTexture");
-    if (ShaderData->AttribLocationDiffuseTexture < 0) {
-        printf("Warning: Could not find uniform 'diffuseTexture'\n");
-    }
+    AX_LOG_IF(DEBUG, ShaderData->AttribLocationDiffuseTexture < 0, "Could not find uniform 'diffuseTexture'");
 
     ShaderData->AttribLocationNormalTexture = glGetUniformLocation(ShaderData->ShaderHandle, "normalTexture");
-    if (ShaderData->AttribLocationNormalTexture < 0) {
-        printf("Warning: Could not find uniform 'normalTexture'\n");
-    }
+    AX_LOG_IF(DEBUG, ShaderData->AttribLocationNormalTexture < 0, "Could not find uniform 'normalTexture'");
 
     ShaderData->AttribLocationUseDiffuseTexture = glGetUniformLocation(ShaderData->ShaderHandle, "useDiffuseTexture");
-    if (ShaderData->AttribLocationUseDiffuseTexture < 0) {
-        printf("Warning: Could not find uniform 'useDiffuseTexture'\n");
-    }
+    AX_LOG_IF(DEBUG, ShaderData->AttribLocationUseDiffuseTexture < 0, "Could not find uniform 'useDiffuseTexture'");
 
     ShaderData->AttribLocationUseNormalTexture = glGetUniformLocation(ShaderData->ShaderHandle, "useNormalTexture");
-    if (ShaderData->AttribLocationUseNormalTexture < 0) {
-        printf("Warning: Could not find uniform 'useNormalTexture'\n");
-    }
+    AX_LOG_IF(DEBUG, ShaderData->AttribLocationUseNormalTexture < 0, "Could not find uniform 'useNormalTexture'");
 
     // Alpha handling uniforms
     ShaderData->AttribLocationAlphaMode = glGetUniformLocation(ShaderData->ShaderHandle, "alphaMode");
-    if (ShaderData->AttribLocationAlphaMode < 0) {
-        printf("Warning: Could not find uniform 'alphaMode'\n");
-    }
+    AX_LOG_IF(DEBUG, ShaderData->AttribLocationAlphaMode < 0, "Could not find uniform 'alphaMode'");
 
     ShaderData->AttribLocationAlphaCutoff = glGetUniformLocation(ShaderData->ShaderHandle, "alphaCutoff");
-    if (ShaderData->AttribLocationAlphaCutoff < 0) {
-        printf("Warning: Could not find uniform 'alphaCutoff'\n");
-    }
+    AX_LOG_IF(DEBUG, ShaderData->AttribLocationAlphaCutoff < 0, "Could not find uniform 'alphaCutoff'");
 
     // Legacy uniforms (for backward compatibility) - optional
     ShaderData->AttribLocationColor = glGetUniformLocation(ShaderData->ShaderHandle, "color");
-    if (ShaderData->AttribLocationColor < 0) {
-        printf("Info: Could not find legacy uniform 'color'\n");
-    }
+    AX_LOG_IF(TRACE, ShaderData->AttribLocationColor < 0, "Could not find legacy uniform 'color'");
 
     ShaderData->AttribLocationMaterialAlpha = glGetUniformLocation(ShaderData->ShaderHandle, "materialAlpha");
-    if (ShaderData->AttribLocationMaterialAlpha < 0) {
-        printf("Info: Could not find legacy uniform 'materialAlpha'\n");
-    }
+    AX_LOG_IF(TRACE, ShaderData->AttribLocationMaterialAlpha < 0, "Could not find legacy uniform 'materialAlpha'");
 
     ShaderData->AttribLocationHasNormalMap = glGetUniformLocation(ShaderData->ShaderHandle, "hasNormalMap");
-    if (ShaderData->AttribLocationHasNormalMap < 0) {
-        printf("Info: Could not find legacy uniform 'hasNormalMap'\n");
-    }
+    AX_LOG_IF(TRACE, ShaderData->AttribLocationHasNormalMap < 0, "Could not find legacy uniform 'hasNormalMap'");
 
     Result = glGetError();
     AXON_ASSERT(!Result && "OpenGL Error in GetAttributeLocations()!");
 
-    printf("Shader attribute locations loaded successfully:\n");
-    printf("  Required: model=%d, view=%d, projection=%d\n", 
-           ShaderData->AttribLocationModelMatrix, 
-           ShaderData->AttribLocationViewMatrix, 
+    AX_LOG(DEBUG, "Shader attribute locations: model=%d, view=%d, projection=%d",
+           ShaderData->AttribLocationModelMatrix,
+           ShaderData->AttribLocationViewMatrix,
            ShaderData->AttribLocationProjectionMatrix);
-    printf("  Textures: diffuse=%d, normal=%d, useDiffuse=%d, useNormal=%d\n",
+    AX_LOG(DEBUG, "  Textures: diffuse=%d, normal=%d, useDiffuse=%d, useNormal=%d",
            ShaderData->AttribLocationDiffuseTexture,
            ShaderData->AttribLocationNormalTexture,
            ShaderData->AttribLocationUseDiffuseTexture,
@@ -1007,7 +964,7 @@ static void AxSetUniform(struct AxShaderData *ShaderData, const char *UniformNam
 
     uint32_t Result = glGetError();
     if (Result != GL_NO_ERROR) {
-        printf("OpenGL Error in SetUniform('%s'): %u\n", UniformName, Result);
+        AX_LOG(ERROR, "OpenGL Error in SetUniform('%s'): %u", UniformName, Result);
     }
 }
 
@@ -1119,7 +1076,7 @@ static void AxSetPBRMaterialUniforms(struct AxShaderData* ShaderData, const AxPB
 
     uint32_t Result = glGetError();
     if (Result != GL_NO_ERROR) {
-        printf("OpenGL Error in AxSetPBRMaterialUniforms: %u\n", Result);
+        AX_LOG(ERROR, "OpenGL Error in AxSetPBRMaterialUniforms: %u", Result);
     }
 }
 
@@ -1176,7 +1133,7 @@ static void AxSetSceneLights(struct AxShaderData* ShaderData, const AxLight* Lig
 
     uint32_t Result = glGetError();
     if (Result != GL_NO_ERROR) {
-        printf("OpenGL Error in AxSetSceneLights: %u\n", Result);
+        AX_LOG(ERROR, "OpenGL Error in AxSetSceneLights: %u", Result);
     }
 }
 
@@ -1206,13 +1163,13 @@ static void AxInitTexture(AxTexture *Texture, uint8_t *Pixels)
     bool useDSA = CheckDSASupport();
 
     if (useDSA && glCreateTextures != NULL && glTextureStorage2D != NULL && glTextureSubImage2D != NULL) {
-        printf("Using DSA path for texture creation\n");
+        AX_LOG(TRACE, "Using DSA path for texture creation");
 
         // DSA path: create texture
         glCreateTextures(GL_TEXTURE_2D, 1, &Texture->ID);
         uint32_t err = glGetError();
         if (err != GL_NO_ERROR) {
-            printf("Error after glCreateTextures: 0x%X\n", err);
+            AX_LOG(ERROR, "Error after glCreateTextures: 0x%X", err);
             // Fall back to legacy if DSA fails
             useDSA = false;
         } else {
@@ -1224,13 +1181,13 @@ static void AxInitTexture(AxTexture *Texture, uint8_t *Pixels)
                 maxDim >>= 1;
                 Levels++;
             }
-            printf("Allocating %u mip levels for %ux%u texture\n", Levels, Texture->Width, Texture->Height);
+            AX_LOG(TRACE, "Allocating %u mip levels for %ux%u texture", Levels, Texture->Width, Texture->Height);
 
             // Allocate immutable storage with mipmap levels
             glTextureStorage2D(Texture->ID, Levels, internalFormat, Texture->Width, Texture->Height);
             err = glGetError();
             if (err != GL_NO_ERROR) {
-                printf("Error after glTextureStorage2D: 0x%X (internalFormat: 0x%X)\n", err, internalFormat);
+                AX_LOG(ERROR, "Error after glTextureStorage2D: 0x%X (internalFormat: 0x%X)", err, internalFormat);
                 useDSA = false;
             }
 
@@ -1238,16 +1195,12 @@ static void AxInitTexture(AxTexture *Texture, uint8_t *Pixels)
                 // Upload pixel data
                 glTextureSubImage2D(Texture->ID, 0, 0, 0, Texture->Width, Texture->Height, format, GL_UNSIGNED_BYTE, Pixels);
                 err = glGetError();
-                if (err != GL_NO_ERROR) {
-                    printf("Error after glTextureSubImage2D: 0x%X\n", err);
-                }
+                AX_LOG_IF(ERROR, err != GL_NO_ERROR, "Error after glTextureSubImage2D: 0x%X", err);
 
                 // Generate mipmaps
                 glGenerateTextureMipmap(Texture->ID);
                 err = glGetError();
-                if (err != GL_NO_ERROR) {
-                    printf("Error after glGenerateTextureMipmap: 0x%X\n", err);
-                }
+                AX_LOG_IF(ERROR, err != GL_NO_ERROR, "Error after glGenerateTextureMipmap: 0x%X", err);
 
                 // Set default texture parameters using DSA
                 glTextureParameteri(Texture->ID, GL_TEXTURE_WRAP_S, GL_REPEAT);
@@ -1260,10 +1213,10 @@ static void AxInitTexture(AxTexture *Texture, uint8_t *Pixels)
                 glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &maxAnisotropy);
                 if (maxAnisotropy > 1.0f) {
                     glTextureParameterf(Texture->ID, GL_TEXTURE_MAX_ANISOTROPY, maxAnisotropy);
-                    printf("Anisotropic filtering enabled: %.1fx\n", maxAnisotropy);
+                    AX_LOG(TRACE, "Anisotropic filtering enabled: %.1fx", maxAnisotropy);
                 }
 
-                printf("Created texture ID %u: %dx%d, %d channels, %s (DSA with mipmaps)\n",
+                AX_LOG(DEBUG, "Created texture ID %u: %dx%d, %d channels, %s (DSA with mipmaps)",
                        Texture->ID, Texture->Width, Texture->Height, Texture->Channels,
                        Texture->IsSRGB ? "sRGB" : "Linear");
             }
@@ -1271,39 +1224,31 @@ static void AxInitTexture(AxTexture *Texture, uint8_t *Pixels)
     }
 
     if (!useDSA) {
-        printf("Using legacy path for texture creation\n");
+        AX_LOG(TRACE, "Using legacy path for texture creation");
 
         // Legacy OpenGL path
         glGenTextures(1, &Texture->ID);
         uint32_t err = glGetError();
-        if (err != GL_NO_ERROR) {
-            printf("Error after glGenTextures: 0x%X\n", err);
-        }
+        AX_LOG_IF(ERROR, err != GL_NO_ERROR, "Error after glGenTextures: 0x%X", err);
 
         GLint currentTexture;
         glGetIntegerv(GL_TEXTURE_BINDING_2D, &currentTexture);
 
         glBindTexture(GL_TEXTURE_2D, Texture->ID);
         err = glGetError();
-        if (err != GL_NO_ERROR) {
-            printf("Error after glBindTexture: 0x%X\n", err);
-        }
+        AX_LOG_IF(ERROR, err != GL_NO_ERROR, "Error after glBindTexture: 0x%X", err);
 
         glTexImage2D(GL_TEXTURE_2D, 0, internalFormat,
                      Texture->Width, Texture->Height, 0,
                      format, GL_UNSIGNED_BYTE, Pixels);
         err = glGetError();
-        if (err != GL_NO_ERROR) {
-            printf("Error after glTexImage2D: 0x%X (internalFormat: 0x%X, format: 0x%X)\n",
+        AX_LOG_IF(ERROR, err != GL_NO_ERROR, "Error after glTexImage2D: 0x%X (internalFormat: 0x%X, format: 0x%X)",
                    err, internalFormat, format);
-        }
 
         // Generate mipmaps
         glGenerateMipmap(GL_TEXTURE_2D);
         err = glGetError();
-        if (err != GL_NO_ERROR) {
-            printf("Error after glGenerateMipmap: 0x%X\n", err);
-        }
+        AX_LOG_IF(ERROR, err != GL_NO_ERROR, "Error after glGenerateMipmap: 0x%X", err);
 
         // Set default texture parameters
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
@@ -1316,20 +1261,20 @@ static void AxInitTexture(AxTexture *Texture, uint8_t *Pixels)
         glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &maxAnisotropy);
         if (maxAnisotropy > 1.0f) {
             glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY, maxAnisotropy);
-            printf("Anisotropic filtering enabled: %.1fx\n", maxAnisotropy);
+            AX_LOG(TRACE, "Anisotropic filtering enabled: %.1fx", maxAnisotropy);
         }
 
         // Restore previous texture binding
         glBindTexture(GL_TEXTURE_2D, currentTexture);
 
-        printf("Created texture ID %u: %dx%d, %d channels, %s (Legacy with mipmaps)\n",
+        AX_LOG(DEBUG, "Created texture ID %u: %dx%d, %d channels, %s (Legacy with mipmaps)",
                Texture->ID, Texture->Width, Texture->Height, Texture->Channels,
                Texture->IsSRGB ? "sRGB" : "Linear");
     }
 
     uint32_t Result = glGetError();
     if (Result != GL_NO_ERROR) {
-        printf("OpenGL Error in InitTexture(): %u\n", Result);
+        AX_LOG(ERROR, "OpenGL Error in InitTexture(): %u", Result);
         AXON_ASSERT(!Result && "OpenGL Error in InitTexture()!");
     }
 }
@@ -1383,7 +1328,7 @@ static void AxBindTexture(AxTexture *Texture, uint32_t Slot)
 
     uint32_t err = glGetError();
     if (err != GL_NO_ERROR) {
-        printf("OpenGL Error in BindTexture(): 0x%X (Texture ID: %u, Slot: %u)\n",
+        AX_LOG(ERROR, "OpenGL Error in BindTexture(): 0x%X (Texture ID: %u, Slot: %u)",
                err, Texture->ID, Slot);
     }
 }
@@ -1557,13 +1502,13 @@ static void AxSetTextureWrapMode(AxTexture *Texture, AxTextureWrapMode WrapS, Ax
     AXON_ASSERT(Texture && "Texture is NULL in SetTextureWrapMode()!");
     AXON_ASSERT(Texture->ID > 0 && "Texture ID is invalid in SetTextureWrapMode()!");
 
-    printf("SetTextureWrapMode called: Texture ID %u, WrapS enum=%d, WrapT enum=%d\n",
+    AX_LOG(TRACE, "SetTextureWrapMode: Texture ID %u, WrapS enum=%d, WrapT enum=%d",
            Texture->ID, WrapS, WrapT);
 
     uint32_t GLWrapS = AxTextureWrapModeToGL(WrapS);
     uint32_t GLWrapT = AxTextureWrapModeToGL(WrapT);
 
-    printf("  Converted to GL: WrapS=0x%X, WrapT=0x%X\n", GLWrapS, GLWrapT);
+    AX_LOG(TRACE, "  Converted to GL: WrapS=0x%X, WrapT=0x%X", GLWrapS, GLWrapT);
 
     Texture->WrapS = GLWrapS;
     Texture->WrapT = GLWrapT;
@@ -1572,20 +1517,16 @@ static void AxSetTextureWrapMode(AxTexture *Texture, AxTextureWrapMode WrapS, Ax
     while (glGetError() != GL_NO_ERROR);
 
     if (CheckDSASupport()) {
-        printf("  Using DSA path\n");
+        AX_LOG(TRACE, "  Using DSA path");
         glTextureParameteri(Texture->ID, GL_TEXTURE_WRAP_S, GLWrapS);
         uint32_t err = glGetError();
-        if (err != GL_NO_ERROR) {
-            printf("  ERROR after glTextureParameteri(WRAP_S): 0x%X\n", err);
-        }
+        AX_LOG_IF(ERROR, err != GL_NO_ERROR, "  ERROR after glTextureParameteri(WRAP_S): 0x%X", err);
 
         glTextureParameteri(Texture->ID, GL_TEXTURE_WRAP_T, GLWrapT);
         err = glGetError();
-        if (err != GL_NO_ERROR) {
-            printf("  ERROR after glTextureParameteri(WRAP_T): 0x%X\n", err);
-        }
+        AX_LOG_IF(ERROR, err != GL_NO_ERROR, "  ERROR after glTextureParameteri(WRAP_T): 0x%X", err);
     } else {
-        printf("  Using legacy binding path\n");
+        AX_LOG(TRACE, "  Using legacy binding path");
         GLint currentTexture;
         glGetIntegerv(GL_TEXTURE_BINDING_2D, &currentTexture);
 
@@ -1604,12 +1545,11 @@ static void AxSetTextureWrapMode(AxTexture *Texture, AxTextureWrapMode WrapS, Ax
             case GL_INVALID_VALUE: errorStr = "GL_INVALID_VALUE"; break;
             case GL_INVALID_OPERATION: errorStr = "GL_INVALID_OPERATION"; break;
         }
-        printf("OpenGL Error in SetTextureWrapMode(): 0x%X (%s)\n", Result, errorStr);
-        printf("  Texture ID: %u, WrapS: 0x%X, WrapT: 0x%X\n",
-               Texture->ID, GLWrapS, GLWrapT);
+        AX_LOG(ERROR, "OpenGL Error in SetTextureWrapMode(): 0x%X (%s), Texture ID: %u, WrapS: 0x%X, WrapT: 0x%X",
+               Result, errorStr, Texture->ID, GLWrapS, GLWrapT);
         AXON_ASSERT(!Result && "OpenGL Error in SetTextureWrapMode()!");
     } else {
-        printf("  SetTextureWrapMode completed successfully\n");
+        AX_LOG(TRACE, "  SetTextureWrapMode completed successfully");
     }
 }
 
@@ -1619,23 +1559,23 @@ static void AxSetTextureFilterMode(AxTexture *Texture, AxTextureFilter MagFilter
     AXON_ASSERT(Texture && "Texture is NULL in SetTextureFilterMode()!");
     AXON_ASSERT(Texture->ID > 0 && "Texture ID is invalid in SetTextureFilterMode()!");
 
-    printf("Setting texture filter mode for texture ID %u:\n", Texture->ID);
-    printf("  MagFilter: %d, MinFilter: %d\n", MagFilter, MinFilter);
+    AX_LOG(TRACE, "Setting texture filter mode for texture ID %u: MagFilter=%d, MinFilter=%d",
+           Texture->ID, MagFilter, MinFilter);
 
     Texture->MagFilter = AxTextureFilterToGL(MagFilter);
     Texture->MinFilter = AxTextureFilterToGL(MinFilter);
 
-    printf("  Converted to GL: Mag=%d, Min=%d\n", Texture->MagFilter, Texture->MinFilter);
+    AX_LOG(TRACE, "  Converted to GL: Mag=%d, Min=%d", Texture->MagFilter, Texture->MinFilter);
 
     // Clear any previous errors
     while (glGetError() != GL_NO_ERROR);
 
     if (CheckDSASupport()) {
-        printf("  Using DSA...\n");
+        AX_LOG(TRACE, "  Using DSA...");
         glTextureParameteri(Texture->ID, GL_TEXTURE_MAG_FILTER, Texture->MagFilter);
         glTextureParameteri(Texture->ID, GL_TEXTURE_MIN_FILTER, Texture->MinFilter);
     } else {
-        printf("  Using traditional binding...\n");
+        AX_LOG(TRACE, "  Using traditional binding...");
         GLint currentTexture;
         glGetIntegerv(GL_TEXTURE_BINDING_2D, &currentTexture);
 
@@ -1656,12 +1596,12 @@ static void AxSetTextureFilterMode(AxTexture *Texture, AxTextureFilter MagFilter
             case GL_INVALID_FRAMEBUFFER_OPERATION: errorStr = "GL_INVALID_FRAMEBUFFER_OPERATION"; break;
             case GL_OUT_OF_MEMORY: errorStr = "GL_OUT_OF_MEMORY"; break;
         }
-        printf("OpenGL Error in SetTextureFilterMode(): %u (%s)\n", Result, errorStr);
-        printf("  Texture ID: %u, DSA: %s\n", Texture->ID, CheckDSASupport() ? "Yes" : "No");
-        printf("  MagFilter GL enum: %d, MinFilter GL enum: %d\n", Texture->MagFilter, Texture->MinFilter);
+        AX_LOG(ERROR, "OpenGL Error in SetTextureFilterMode(): %u (%s), Texture ID: %u, DSA: %s, Mag=%d, Min=%d",
+               Result, errorStr, Texture->ID, CheckDSASupport() ? "Yes" : "No",
+               Texture->MagFilter, Texture->MinFilter);
         AXON_ASSERT(!Result && "OpenGL Error in SetTextureFilterMode()!");
     } else {
-        printf("  Texture filter set successfully\n");
+        AX_LOG(TRACE, "  Texture filter set successfully");
     }
 }
 

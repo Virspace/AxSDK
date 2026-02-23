@@ -93,6 +93,9 @@ struct AxPlatformFileAPI
     // Checks to see if a file handle is valid.
     bool (*IsValid)(AxFile File);
 
+    // Flushes the file's write buffers to disk.
+    void (*Flush)(AxFile File);
+
     // Closes the file.
     void (*Close)(AxFile File);
 

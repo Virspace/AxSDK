@@ -112,15 +112,17 @@ target_include_directories(AxEngine
 target_link_libraries(AxEngine
     PRIVATE
         Virspace::Foundation
+        Virspace::AxLog
         axsdk_stb
         cgltf
         -Wl,--export-all-symbols
 )
 
-# Link AxStandalone with Foundation
+# Link AxStandalone with Foundation and AxLog
 target_link_libraries(AxStandalone
     PRIVATE
         Virspace::Foundation
+        Virspace::AxLog
         shell32
 )
 

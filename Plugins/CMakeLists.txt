@@ -1,3 +1,6 @@
+add_subdirectory(AxLog)
+set_target_properties(AxLog PROPERTIES FOLDER Plugins)
+
 if(WIN32)
     add_subdirectory(AxAudio)
     set_target_properties(AxAudio PROPERTIES FOLDER Plugins)
