@@ -9,8 +9,10 @@
 #include "AxEngine/AxInput.h"
 #include "AxEngine/AxRenderer.h"
 #include "AxEngine/AxSceneTree.h"
+#include "AxEngine/AxSceneParser.h"
 #include "AxEngine/AxScriptBase.h"
 #include "AxEngine/AxNode.h"
+#include "AxEngine/AxTypedNodes.h"
 
 #include "AxResource/AxResource.h"
 #include "Foundation/AxAPIRegistry.h"
@@ -91,9 +93,7 @@ bool AxEngine::LoadPlugins()
     }
 
     // Initialize ResourceAPI with our allocator
-    fprintf(stderr, "[INIT] Calling ResourceAPI->Initialize...\n");
     ResourceAPI_->Initialize(APIRegistry_, gResourceAllocator, nullptr);
-    fprintf(stderr, "[INIT] ResourceAPI initialized\n");
 
     return (true);
 }
@@ -104,41 +104,20 @@ bool AxEngine::LoadPlugins()
 
 AxEngine::AxEngine() = default;
 
-bool AxEngine::Initialize(const AxEngineConfig* config)
+bool AxEngine::InitWindow()
 {
-    if (!config) {
-        return (false);
-    }
-
-    gEngine = this;
-
-    // Use global APIRegistry from LoadPlugin
-    APIRegistry_ = gAPIRegistry;
-    if (!APIRegistry_) {
-        fprintf(stderr, "[INIT] Failed to get API registry\n");
-        return (false);
-    }
-
-    // Get PluginAPI from registry
-    PluginAPI_ = static_cast<AxPluginAPI*>(APIRegistry_->Get(AXON_PLUGIN_API_NAME));
-    if (!PluginAPI_) {
-        fprintf(stderr, "[INIT] Failed to get PluginAPI from registry\n");
-        return (false);
-    }
-
-    // Load Window plugin
-    fprintf(stderr, "[INIT] Loading AxWindow\n");
     if (!PluginAPI_->Load("libAxWindow.dll", false)) {
-        fprintf(stderr, "Failed to load AxWindow plugin\n");
+        fprintf(stderr, "AxEngine: Failed to load AxWindow plugin\n");
         return (false);
     }
 
-    // Initialize Window API
     WindowAPI_ = static_cast<AxWindowAPI*>(APIRegistry_->Get(AXON_WINDOW_API_NAME));
-    fprintf(stderr, "[INIT] Window API: %s\n", WindowAPI_ ? "OK" : "NULL");
+    if (!WindowAPI_) {
+        fprintf(stderr, "AxEngine: Failed to get WindowAPI from registry\n");
+        return (false);
+    }
     WindowAPI_->Init();
 
-    // Create window
     AxWindowConfig WindowConfig = {
         "AxonSDK Game",
         100, 100,
@@ -147,76 +126,120 @@ bool AxEngine::Initialize(const AxEngineConfig* config)
     };
 
     AxWindowError Error = AX_WINDOW_ERROR_NONE;
-    fprintf(stderr, "[INIT] Creating window...\n");
     Window_ = WindowAPI_->CreateWindowWithConfig(&WindowConfig, &Error);
     if (Error != AX_WINDOW_ERROR_NONE) {
-        fprintf(stderr, "[INIT] Window creation failed (error %d)\n", (int)Error);
+        fprintf(stderr, "AxEngine: Window creation failed (error %d)\n", (int)Error);
         return (false);
     }
-    fprintf(stderr, "[INIT] Window created\n");
 
-    // Load plugins (OpenGL, Scene, Resource)
-    fprintf(stderr, "[INIT] Loading plugins...\n");
-    if (!LoadPlugins()) {
-        return (false);
-    }
-    fprintf(stderr, "[INIT] Plugins loaded\n");
+    printf("AxEngine: Window created\n");
+    return (true);
+}
 
-    // Initialize renderer
+bool AxEngine::InitRenderer()
+{
     AxWindowPlatformData WindowPlatformData = WindowAPI_->GetPlatformData(Window_);
-    fprintf(stderr, "[INIT] Initializing renderer...\n");
     Renderer_ = new AxRenderer();
     if (!Renderer_->Initialize(APIRegistry_, WindowPlatformData.Win32.Handle, DefaultWindowWidth, DefaultWindowHeight)) {
         fprintf(stderr, "AxEngine: Failed to initialize renderer\n");
         return (false);
     }
-    fprintf(stderr, "[INIT] Renderer initialized\n");
 
-    // Set cursor mode to disabled for FPS-style controls
+    AxWindowError Error = AX_WINDOW_ERROR_NONE;
     WindowAPI_->SetCursorMode(Window_, AX_CURSOR_DISABLED, &Error);
 
-    // Initialize input system
-    fprintf(stderr, "[INIT] Initializing input...\n");
-    AxInput::Get().Initialize(APIRegistry_, Window_);
+    printf("AxEngine: Renderer initialized\n");
+    return (true);
+}
 
-    // Load the default scene (ResourceAPI creates and owns the SceneTree)
-    fprintf(stderr, "[INIT] Loading scene...\n");
-    SceneHandle_ = ResourceAPI_->LoadScene("examples/graphics/scenes/sponza_atrium.ats");
-    if (!AX_HANDLE_IS_VALID(SceneHandle_)) {
+void AxEngine::InitInput()
+{
+    AxInput::Get().Initialize(APIRegistry_, Window_);
+}
+
+bool AxEngine::InitScene()
+{
+    SceneParser_.Init(APIRegistry_);
+
+    SceneTree_ = LoadScene("examples/graphics/scenes/sponza_atrium.ats");
+    if (!SceneTree_) {
         fprintf(stderr, "AxEngine: Failed to load scene\n");
         return (false);
     }
-    SceneTree_ = ResourceAPI_->GetScene(SceneHandle_);
 
-    // Provide engine state to SceneTree for script propagation
-    SceneTree_->SetMainCamera(Renderer_->GetMainCamera());
-
-    // Load Game DLL and attach script to root node
-    fprintf(stderr, "[INIT] Loading Game DLL...\n");
-    AxPlatformDLLAPI* DLLAPI = PlatformAPI_->DLLAPI;
-    GameDLL_ = DLLAPI->Load("libGame.dll");
-    if (DLLAPI->IsValid(GameDLL_)) {
-        typedef ScriptBase* (*CreateNodeScriptFn)();
-        auto CreateNodeScript = reinterpret_cast<CreateNodeScriptFn>(
-            DLLAPI->Symbol(GameDLL_, "CreateNodeScript"));
-        if (CreateNodeScript) {
-            ScriptBase* GameScript = CreateNodeScript();
-            if (GameScript) {
-                SceneTree_->GetRootNode()->AttachScript(GameScript);
-                fprintf(stderr, "[INIT] Game script attached to root node\n");
-            }
-        } else {
-            fprintf(stderr, "[INIT] Warning: CreateNodeScript symbol not found in Game DLL\n");
-        }
-    } else {
-        fprintf(stderr, "[INIT] Warning: Failed to load Game DLL\n");
+    uint32_t CamCount = 0;
+    Node** CamNodes = SceneTree_->GetNodesByType(NodeType::Camera, &CamCount);
+    if (CamNodes && CamCount > 0) {
+        CameraNode* SceneCam = static_cast<CameraNode*>(CamNodes[0]);
+        Renderer_->SetMainCamera(SceneCam);
+        SceneTree_->SetMainCamera(SceneCam);
     }
 
-    fprintf(stderr, "[INIT] Showing window...\n");
+    printf("AxEngine: Scene loaded\n");
+    return (true);
+}
+
+void AxEngine::InitGameScript()
+{
+    AxPlatformDLLAPI* DLLAPI = PlatformAPI_->DLLAPI;
+    GameDLL_ = DLLAPI->Load("libGame.dll");
+    if (!DLLAPI->IsValid(GameDLL_)) {
+        fprintf(stderr, "AxEngine: Warning: Failed to load Game DLL\n");
+        return;
+    }
+
+    typedef ScriptBase* (*CreateNodeScriptFn)();
+    auto CreateNodeScript = reinterpret_cast<CreateNodeScriptFn>(
+        DLLAPI->Symbol(GameDLL_, "CreateNodeScript"));
+    if (!CreateNodeScript) {
+        fprintf(stderr, "AxEngine: Warning: CreateNodeScript symbol not found in Game DLL\n");
+        return;
+    }
+
+    ScriptBase* GameScript = CreateNodeScript();
+    if (GameScript) {
+        SceneTree_->GetRootNode()->AttachScript(GameScript);
+        printf("AxEngine: Game script attached to root node\n");
+    }
+}
+
+bool AxEngine::Initialize(const AxEngineConfig* config)
+{
+    if (!config) {
+        return (false);
+    }
+
+    gEngine = this;
+
+    APIRegistry_ = gAPIRegistry;
+    if (!APIRegistry_) {
+        fprintf(stderr, "AxEngine: Failed to get API registry\n");
+        return (false);
+    }
+
+    PluginAPI_ = static_cast<AxPluginAPI*>(APIRegistry_->Get(AXON_PLUGIN_API_NAME));
+    if (!PluginAPI_) {
+        fprintf(stderr, "AxEngine: Failed to get PluginAPI from registry\n");
+        return (false);
+    }
+
+    if (!InitWindow())
+        return (false);
+    if (!LoadPlugins())
+        return (false);
+    if (!InitRenderer())
+        return (false);
+
+        InitInput();
+
+    if (!InitScene())
+        return (false);
+
+    InitGameScript();
+
     WindowAPI_->SetWindowVisible(Window_, true, NULL);
     isRunning_ = true;
 
-    fprintf(stderr, "[INIT] Done\n");
     printf("AxEngine: Initialization complete\n");
     return (true);
 }
@@ -305,12 +328,8 @@ void AxEngine::Shutdown()
         GameDLL_ = {};
     }
 
-    // Release scene handle (queues SceneTree for deferred destruction by ResourceAPI)
-    if (ResourceAPI_ && AX_HANDLE_IS_VALID(SceneHandle_)) {
-        ResourceAPI_->ReleaseScene(SceneHandle_);
-        SceneHandle_ = AX_INVALID_HANDLE;
-    }
-    SceneTree_ = nullptr;
+    // Release scene (unload models, destroy tree)
+    UnloadScene();
 
     // Shutdown renderer
     if (Renderer_) {
@@ -323,6 +342,9 @@ void AxEngine::Shutdown()
     if (ResourceAPI_ && ResourceAPI_->IsInitialized()) {
         ResourceAPI_->Shutdown();
     }
+
+    // Terminate scene parser
+    SceneParser_.Term();
 
     // Destroy resource allocator
     if (gResourceAllocator) {
@@ -344,6 +366,80 @@ AxEngine::~AxEngine()
     if (isRunning_) {
         Shutdown();
     }
+}
+
+//=============================================================================
+// Scene Loading (Engine-owned)
+//=============================================================================
+
+SceneTree* AxEngine::LoadScene(const char* FilePath)
+{
+    if (!FilePath) {
+        return (nullptr);
+    }
+
+    SceneTree* Scene = SceneParser_.LoadSceneFromFile(FilePath);
+    if (Scene) {
+        LoadSceneModels(Scene);
+    }
+    return (Scene);
+}
+
+void AxEngine::LoadSceneModels(SceneTree* Scene)
+{
+    if (!Scene || !ResourceAPI_) {
+        return;
+    }
+
+    uint32_t Count = 0;
+    Node** MeshNodes = Scene->GetNodesByType(NodeType::MeshInstance, &Count);
+    if (!MeshNodes || Count == 0) {
+        return;
+    }
+
+    printf("AxEngine: Loading models for %u MeshInstance node(s)\n", Count);
+
+    for (uint32_t i = 0; i < Count; ++i) {
+        MeshInstance* MI = static_cast<MeshInstance*>(MeshNodes[i]);
+        if (!MI || MI->MeshPath[0] == '\0') {
+            continue;
+        }
+
+        if (AX_HANDLE_IS_VALID(MI->ModelHandle)) {
+            continue;
+        }
+
+        AxModelHandle Handle = ResourceAPI_->LoadModel(MI->MeshPath);
+        if (AX_HANDLE_IS_VALID(Handle)) {
+            MI->ModelHandle = Handle;
+            printf("AxEngine: Loaded model '%s' -> [%u:%u]\n",
+                   MI->MeshPath, Handle.Index, Handle.Generation);
+        } else {
+            fprintf(stderr, "AxEngine: Failed to load model '%s'\n", MI->MeshPath);
+        }
+    }
+}
+
+void AxEngine::UnloadScene()
+{
+    if (!SceneTree_) {
+        return;
+    }
+
+    // Release model handles for all MeshInstance nodes
+    if (ResourceAPI_) {
+        uint32_t Count = 0;
+        Node** MeshNodes = SceneTree_->GetNodesByType(NodeType::MeshInstance, &Count);
+        for (uint32_t i = 0; i < Count; ++i) {
+            MeshInstance* MI = static_cast<MeshInstance*>(MeshNodes[i]);
+            if (MI && AX_HANDLE_IS_VALID(MI->ModelHandle)) {
+                ResourceAPI_->ReleaseModel(MI->ModelHandle);
+            }
+        }
+    }
+
+    delete SceneTree_;
+    SceneTree_ = nullptr;
 }
 
 //=============================================================================

@@ -55,9 +55,6 @@ target_include_directories(AxOpenGL
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> # Used for working with a 'build tree'
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include/AxOpenGL
-        # Engine scene types (AxCamera, AxLight) are defined at the engine layer.
-        # Added as a compile-time include only; no link dependency on AxEngine.
-        ${CMAKE_CURRENT_SOURCE_DIR}/../../engine/include
 )
 
 # Link dependencies

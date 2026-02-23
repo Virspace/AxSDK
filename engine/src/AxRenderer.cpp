@@ -53,22 +53,6 @@ bool AxRenderer::Initialize(AxAPIRegistry* Registry, uint64_t WindowHandle, int3
     Viewport_->IsActive = true;
     Viewport_->ClearColor = { 0.42f, 0.51f, 0.54f, 0.0f };
 
-    // Create and configure main camera
-    MainCamera_ = new AxCamera();
-    RenderAPI_->CreateCamera(MainCamera_);
-    RenderAPI_->CameraSetFOV(MainCamera_, 60.0f * (AX_PI / 180.0f));
-    RenderAPI_->CameraSetAspectRatio(MainCamera_, Viewport_->Size.X / Viewport_->Size.Y);
-    RenderAPI_->CameraSetNearClipPlane(MainCamera_, 0.1f);
-    RenderAPI_->CameraSetFarClipPlane(MainCamera_, 200.0f);
-
-    // Initialize camera transform
-    MainCamera_->Transform = {
-        .Translation = { 0.0f, 2.0f, 5.0f },
-        .Rotation = QuatIdentity(),
-        .Scale = Vec3One(),
-        .Up = Vec3Up()
-    };
-
     // Load default shaders
     AxShaderHandle ShaderHandle = ResourceAPI_->LoadShader(
         "examples/graphics/scenes/shaders/vert.glsl",
@@ -91,11 +75,8 @@ void AxRenderer::Shutdown()
     // Clear shader pointer (ResourceAPI handles cleanup)
     ShaderData_ = nullptr;
 
-    // Delete camera
-    if (MainCamera_) {
-        delete MainCamera_;
-        MainCamera_ = nullptr;
-    }
+    // Camera is owned by the SceneTree, just clear our reference
+    MainCameraNode_ = nullptr;
 
     // Destroy renderer context
     if (RenderAPI_) {
@@ -123,20 +104,29 @@ void AxRenderer::EndFrame()
     RenderAPI_->SwapBuffers();
 }
 
+void AxRenderer::SetMainCamera(CameraNode* Camera)
+{
+    MainCameraNode_ = Camera;
+    if (Camera && RenderAPI_ && Viewport_) {
+        RenderAPI_->CreateCamera(&Camera->Camera);
+        Camera->Camera.AspectRatio = Viewport_->Size.X / Viewport_->Size.Y;
+    }
+}
+
 void AxRenderer::RenderScene(SceneTree* Scene)
 {
-    if (!Scene || !ShaderData_) {
+    if (!Scene || !ShaderData_ || !MainCameraNode_) {
         return;
     }
 
     // Set up shared state once
-    AxMat4x4 ViewMatrix = CreateViewMatrix(&MainCamera_->Transform);
-    AxMat4x4 ProjectionMatrix = RenderAPI_->CameraGetProjectionMatrix(MainCamera_);
+    AxMat4x4 ViewMatrix = CreateViewMatrix(&MainCameraNode_->GetTransform());
+    AxMat4x4 ProjectionMatrix = RenderAPI_->CameraGetProjectionMatrix(&MainCameraNode_->Camera);
     RenderAPI_->SetUniform(ShaderData_, "view", &ViewMatrix);
     RenderAPI_->SetUniform(ShaderData_, "projection", &ProjectionMatrix);
 
     // Set lighting uniforms from scene's LightNode typed nodes
-    AxVec3 ViewPos = MainCamera_->Transform.Translation;
+    AxVec3 ViewPos = MainCameraNode_->GetTransform().Translation;
     RenderAPI_->SetUniform(ShaderData_, "viewPos", &ViewPos);
 
     // Collect lights from typed LightNode nodes into a flat AxLight array

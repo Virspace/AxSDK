@@ -23,8 +23,7 @@
 #include "AxEngine/AxTypedNodes.h"
 #include "AxEngine/AxSceneTree.h"
 #include "AxEngine/AxEventBus.h"
-#include "AxScene/AxScene.h"
-#include "AxSceneParserInternal.h"
+#include "AxEngine/AxSceneParser.h"
 
 #include <cstring>
 #include <cstdlib>
@@ -87,14 +86,12 @@ protected:
     ASSERT_NE(Allocator_, nullptr) << "Failed to create test allocator";
 
     // Initialize the scene parser
-    AxSceneParser_Init(AxonGlobalAPIRegistry);
-    ParserAPI_ = AxSceneParser_GetAPI();
-    ASSERT_NE(ParserAPI_, nullptr) << "Failed to get AxSceneParserAPI";
+    Parser_.Init(AxonGlobalAPIRegistry);
   }
 
   void TearDown() override
   {
-    AxSceneParser_Term();
+    Parser_.Term();
 
     if (Allocator_) {
       Allocator_->Destroy(Allocator_);
@@ -125,7 +122,7 @@ protected:
   AxHashTableAPI*   TableAPI_{nullptr};
   AxAllocatorAPI*   AllocatorAPI_{nullptr};
   AxAllocator*      Allocator_{nullptr};
-  AxSceneParserAPI* ParserAPI_{nullptr};
+  SceneParser       Parser_;
 };
 
 //=============================================================================
@@ -151,7 +148,7 @@ TEST_F(IntegrationTest, FullPipelineParseAndVerifyTransform)
     }
   })";
 
-  SceneTree* Tree = ParserAPI_->ParseFromString(SceneSource, Allocator_);
+  SceneTree* Tree = Parser_.ParseFromString(SceneSource, Allocator_);
   ASSERT_NE(Tree, nullptr);
 
   Node* PlayerNode = Tree->GetRootNode()->GetFirstChild();
@@ -316,13 +313,13 @@ TEST_F(IntegrationTest, PrefabInstantiationIntegratesWithTransformPropagation)
     material: "ObstacleMat"
   })";
 
-  Node* PrefabRoot = ParsePrefab(PrefabData, Tree);
+  Node* PrefabRoot = Parser_.ParsePrefab(PrefabData, Tree);
   ASSERT_NE(PrefabRoot, nullptr);
   EXPECT_EQ(PrefabRoot->GetType(), NodeType::MeshInstance);
 
   // Instantiate two copies at different positions
-  Node* Copy1 = InstantiatePrefab(Tree, PrefabRoot, nullptr, Allocator_);
-  Node* Copy2 = InstantiatePrefab(Tree, PrefabRoot, nullptr, Allocator_);
+  Node* Copy1 = Parser_.InstantiatePrefab(Tree, PrefabRoot, nullptr);
+  Node* Copy2 = Parser_.InstantiatePrefab(Tree, PrefabRoot, nullptr);
   ASSERT_NE(Copy1, nullptr);
   ASSERT_NE(Copy2, nullptr);
 

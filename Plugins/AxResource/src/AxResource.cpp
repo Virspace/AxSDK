@@ -15,8 +15,6 @@
  * - Added AcquireModel/ReleaseModel for reference counting
  * - Added GetModelRefCount for debugging
  *
- * Scene loading delegates to ResourceSystem.
-
  */
 
 #include "AxResource/AxResource.h"
@@ -85,15 +83,6 @@ static AxModelHandle GetModelByIndex(uint32_t Index);
 static AxModelHandle AcquireModel(AxModelHandle Handle);
 static void ReleaseModel(AxModelHandle Handle);
 
-// Scene (Handle-based)
-static AxSceneHandle LoadScene(std::string_view Path);
-static struct SceneTree* GetScene(AxSceneHandle Handle);
-static bool IsSceneValid(AxSceneHandle Handle);
-static AxSceneHandle AcquireScene(AxSceneHandle Handle);
-static void ReleaseScene(AxSceneHandle Handle);
-static uint32_t GetSceneRefCount(AxSceneHandle Handle);
-static AxModelHandle GetNodeModelHandle(void* NodePtr);
-
 // Deferred Destruction
 static void ProcessPendingReleases(void);
 static void ProcessPendingReleasesLimited(uint32_t MaxCount);
@@ -157,15 +146,6 @@ static struct AxResourceAPI s_ResourceAPI = {
     .GetModelByIndex = GetModelByIndex,
     .AcquireModel = AcquireModel,
     .ReleaseModel = ReleaseModel,
-
-    // Scene (Handle-based)
-    .LoadScene = LoadScene,
-    .GetScene = GetScene,
-    .IsSceneValid = IsSceneValid,
-    .AcquireScene = AcquireScene,
-    .ReleaseScene = ReleaseScene,
-    .GetSceneRefCount = GetSceneRefCount,
-    .GetNodeModelHandle = GetNodeModelHandle,
 
     // Deferred Destruction
     .ProcessPendingReleases = ProcessPendingReleases,
@@ -427,46 +407,6 @@ static AxModelHandle AcquireModel(AxModelHandle Handle)
 static void ReleaseModel(AxModelHandle Handle)
 {
     ResourceSystem::Get().ReleaseModel(Handle);
-}
-
-//=============================================================================
-// Scene Implementation (Handle-based)
-//=============================================================================
-
-static AxSceneHandle LoadScene(std::string_view Path)
-{
-    AxSceneHandle Handle = ResourceSystem::Get().LoadScene(Path);
-    return (Handle);
-}
-
-static struct SceneTree* GetScene(AxSceneHandle Handle)
-{
-    return ResourceSystem::Get().GetScene(Handle);
-}
-
-static bool IsSceneValid(AxSceneHandle Handle)
-{
-    return ResourceSystem::Get().IsSceneValid(Handle);
-}
-
-static AxSceneHandle AcquireScene(AxSceneHandle Handle)
-{
-    return ResourceSystem::Get().AcquireScene(Handle);
-}
-
-static void ReleaseScene(AxSceneHandle Handle)
-{
-    ResourceSystem::Get().ReleaseScene(Handle);
-}
-
-static uint32_t GetSceneRefCount(AxSceneHandle Handle)
-{
-    return ResourceSystem::Get().GetSceneRefCount(Handle);
-}
-
-static AxModelHandle GetNodeModelHandle(void* NodePtr)
-{
-    return ResourceSystem::Get().GetNodeModelHandle(NodePtr);
 }
 
 //=============================================================================

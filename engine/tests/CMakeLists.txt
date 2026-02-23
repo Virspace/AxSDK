@@ -42,11 +42,12 @@ target_sources(AxEngineTests
         src/AxEventBusTests.cpp
         src/AxParserExTests.cpp
         src/AxIntegrationTests.cpp
+        src/MaterialTests.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxNode.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxTypedNodes.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxSceneTree.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxEventBus.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../../Plugins/AxResource/src/AxScene.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxSceneParser.cpp
 )
 
 #
@@ -65,8 +66,9 @@ target_compile_definitions(AxEngineTests
 target_include_directories(AxEngineTests
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/../include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../Plugins/AxOpenGL/include
         ${CMAKE_CURRENT_SOURCE_DIR}/../../Plugins/AxResource/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/../../Plugins/AxResource/src
 )
 
 # Link dependencies

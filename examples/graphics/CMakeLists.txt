@@ -57,7 +57,6 @@ set_target_properties(OpenGLGame PROPERTIES OUTPUT_NAME "Game")
 # Add sources to library target
 target_sources(OpenGLGame
     PRIVATE
-        src/Game.h
         src/Game.cpp
 )
 

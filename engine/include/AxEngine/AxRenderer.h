@@ -6,12 +6,12 @@ struct AxAPIRegistry;
 struct AxOpenGLAPI;
 struct AxResourceAPI;
 struct AxViewport;
-struct AxCamera;
 struct AxShaderData;
 struct AxModelData;
 
 class SceneTree;
 class Node;
+class CameraNode;
 
 /**
  * AxRender - Handles all rendering operations
@@ -57,9 +57,15 @@ public:
     void RenderScene(SceneTree* Scene);
 
     /**
-     * Get the main camera for script access.
+     * Get the main camera node.
      */
-    AxCamera* GetMainCamera() { return MainCamera_; }
+    CameraNode* GetMainCamera() { return (MainCameraNode_); }
+
+    /**
+     * Set the main camera from a scene CameraNode.
+     * Initializes OpenGL projection state and sets aspect ratio.
+     */
+    void SetMainCamera(CameraNode* Camera);
 
 private:
     void RenderNode(Node* NodePtr, const AxMat4x4* ParentTransform);
@@ -69,6 +75,6 @@ private:
     AxResourceAPI* ResourceAPI_{nullptr};
 
     AxViewport* Viewport_{nullptr};
-    AxCamera* MainCamera_{nullptr};
+    CameraNode* MainCameraNode_{nullptr};
     AxShaderData* ShaderData_{nullptr};
 };

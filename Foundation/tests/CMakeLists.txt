@@ -22,24 +22,6 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 # Get google test
 FetchContent_MakeAvailable(googletest)
 
-# Get cgltf for material tests
-FetchContent_Declare(
-    cgltf
-    GIT_REPOSITORY https://github.com/jkuhlmann/cgltf.git
-    GIT_TAG v1.14
-    GIT_SHALLOW     TRUE
-    GIT_PROGRESS    TRUE
-)
-
-FetchContent_GetProperties(cgltf)
-if(NOT cgltf_POPULATED)
-    FetchContent_Populate(cgltf)
-    message("Fetching cgltf")
-
-    add_library(cgltf INTERFACE ${cgltf_SOURCE_DIR}/cgltf.h)
-    target_include_directories(cgltf INTERFACE ${cgltf_SOURCE_DIR})
-endif()
-
 #
 # Create Target
 #
@@ -58,7 +40,6 @@ target_sources(FoundationTests
         src/LinkedListTests.cpp
         src/PlatformTests.cpp
         src/MathTests.cpp
-        src/MaterialTests.cpp
 )
 
 #
@@ -81,17 +62,10 @@ target_compile_definitions(FoundationTests
 #         ${CMAKE_CURRENT_SOURCE_DIR}/include/FoundationTests
 # )
 
-# Engine include path for AxRenderTypes.h (pure data header, no runtime dependency)
-target_include_directories(FoundationTests
-    PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/../../engine/include
-)
-
 # Link dependencies
 target_link_libraries(FoundationTests
     PRIVATE
         Virspace::Foundation
-        cgltf
         gtest
         gtest_main
 )

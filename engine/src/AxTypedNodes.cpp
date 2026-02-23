@@ -55,7 +55,6 @@ CameraNode::CameraNode(std::string_view Name, AxHashTableAPI* TableAPI)
   Camera.AspectRatio = 16.0f / 9.0f;
   Camera.IsOrthographic = false;
   Camera.ZoomLevel = 1.0f;
-  Camera.Transform = TransformIdentity();
 }
 
 //=============================================================================
@@ -70,7 +69,6 @@ LightNode::LightNode(std::string_view Name, AxHashTableAPI* TableAPI)
   Light.Type = AX_LIGHT_TYPE_POINT;
   Light.Color = {1.0f, 1.0f, 1.0f};
   Light.Intensity = 1.0f;
-  Light.Direction = {0.0f, -1.0f, 0.0f};
   Light.Range = 0.0f;
   Light.InnerConeAngle = 0.5f;
   Light.OuterConeAngle = 1.0f;

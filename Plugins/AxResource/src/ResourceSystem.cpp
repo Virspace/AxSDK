@@ -18,11 +18,6 @@
 #include "Foundation/AxTypes.h"
 #include "AxOpenGL/AxOpenGL.h"
 #include "AxOpenGL/AxOpenGLTypes.h"
-#include "AxScene/AxScene.h"
-#include "AxEngine/AxSceneTree.h"
-#include "AxEngine/AxNode.h"
-#include "AxEngine/AxTypedNodes.h"
-#include "AxSceneParserInternal.h"
 
 #include <cstring>
 #include <cstdlib>
@@ -254,7 +249,6 @@ template class ResourceSlotArray<AxMesh>;
 template class ResourceSlotArray<AxShaderData>;
 template class ResourceSlotArray<AxMaterialDesc>;
 template class ResourceSlotArray<AxModelData>;
-template class ResourceSlotArray<SceneTree>;
 
 //=============================================================================
 // ResourceSystem Implementation
@@ -265,7 +259,6 @@ ResourceSystem::ResourceSystem()
     , m_Registry(nullptr)
     , m_RenderAPI(nullptr)
     , m_PlatformAPI(nullptr)
-    , m_SceneAPI(nullptr)
     , m_PendingDeletions(nullptr)
     , m_PendingCount(0)
     , m_PendingCapacity(0)
@@ -307,16 +300,6 @@ bool ResourceSystem::Initialize(struct AxAPIRegistry* Registry,
     // Get dependencies from registry
     m_RenderAPI = static_cast<struct AxOpenGLAPI*>(Registry->Get(AXON_OPENGL_API_NAME));
     m_PlatformAPI = static_cast<struct AxPlatformAPI*>(Registry->Get(AXON_PLATFORM_API_NAME));
-    // Initialize the scene parser directly (sources compiled into AxResource).
-    // This avoids the segfault from looking up a registry entry that doesn't
-    // exist because libAxScene.dll is no longer loaded separately.
-    AxSceneParser_Init(Registry);
-    m_SceneAPI = AxSceneParser_GetAPI();
-
-    // Also register the parser API so other systems can find it if needed
-    if (m_SceneAPI) {
-        Registry->Set(AXON_SCENE_PARSER_API_NAME, m_SceneAPI, sizeof(AxSceneParserAPI));
-    }
 
     // Use default capacities if no options provided
     uint32_t TextureCapacity = Options ? Options->InitialTextureCapacity : AX_RESOURCE_DEFAULT_TEXTURE_CAPACITY;
@@ -324,7 +307,6 @@ bool ResourceSystem::Initialize(struct AxAPIRegistry* Registry,
     uint32_t ShaderCapacity = Options ? Options->InitialShaderCapacity : AX_RESOURCE_DEFAULT_SHADER_CAPACITY;
     uint32_t MaterialCapacity = Options ? Options->InitialMaterialCapacity : AX_RESOURCE_DEFAULT_MATERIAL_CAPACITY;
     uint32_t ModelCapacity = Options ? Options->InitialModelCapacity : AX_RESOURCE_DEFAULT_MODEL_CAPACITY;
-    uint32_t SceneCapacity = Options ? Options->InitialSceneCapacity : AX_RESOURCE_DEFAULT_SCENE_CAPACITY;
 
     // Ensure non-zero capacities
     if (TextureCapacity == 0) TextureCapacity = AX_RESOURCE_DEFAULT_TEXTURE_CAPACITY;
@@ -332,7 +314,6 @@ bool ResourceSystem::Initialize(struct AxAPIRegistry* Registry,
     if (ShaderCapacity == 0) ShaderCapacity = AX_RESOURCE_DEFAULT_SHADER_CAPACITY;
     if (MaterialCapacity == 0) MaterialCapacity = AX_RESOURCE_DEFAULT_MATERIAL_CAPACITY;
     if (ModelCapacity == 0) ModelCapacity = AX_RESOURCE_DEFAULT_MODEL_CAPACITY;
-    if (SceneCapacity == 0) SceneCapacity = AX_RESOURCE_DEFAULT_SCENE_CAPACITY;
 
     // Initialize slot arrays
     if (!m_Textures.Initialize(Allocator, TextureCapacity)) {
@@ -360,14 +341,6 @@ bool ResourceSystem::Initialize(struct AxAPIRegistry* Registry,
         m_Materials.Shutdown();
         return false;
     }
-    if (!m_Scenes.Initialize(Allocator, SceneCapacity)) {
-        m_Textures.Shutdown();
-        m_Meshes.Shutdown();
-        m_Shaders.Shutdown();
-        m_Materials.Shutdown();
-        m_Models.Shutdown();
-        return false;
-    }
 
     // Initialize pending deletion queue
     m_PendingCapacity = 64;
@@ -379,7 +352,6 @@ bool ResourceSystem::Initialize(struct AxAPIRegistry* Registry,
         m_Shaders.Shutdown();
         m_Materials.Shutdown();
         m_Models.Shutdown();
-        m_Scenes.Shutdown();
         return false;
     }
     m_PendingCount = 0;
@@ -395,7 +367,6 @@ bool ResourceSystem::Initialize(struct AxAPIRegistry* Registry,
         m_Shaders.Shutdown();
         m_Materials.Shutdown();
         m_Models.Shutdown();
-        m_Scenes.Shutdown();
         return false;
     }
     memset(m_TexturePathCache, 0, sizeof(TexturePathCacheEntry) * m_TexturePathCacheCapacity);
@@ -415,15 +386,6 @@ void ResourceSystem::Shutdown()
     ProcessPendingReleases();
 
     // Clean up any remaining resources in slots (force destroy)
-    // Scenes (must be first - they reference models)
-    for (uint32_t i = 1; i < m_Scenes.GetCapacity(); ++i) {
-        ResourceSlot<SceneTree>* Slot = m_Scenes.GetSlotByIndex(i);
-        if (Slot && Slot->InUse && Slot->Data) {
-            delete Slot->Data;
-            Slot->Data = nullptr;
-        }
-    }
-
     // Models (must be before textures/meshes/materials - they reference those)
     for (uint32_t i = 1; i < m_Models.GetCapacity(); ++i) {
         ResourceSlot<AxModelData>* Slot = m_Models.GetSlotByIndex(i);
@@ -502,7 +464,6 @@ void ResourceSystem::Shutdown()
 
     // Shutdown slot arrays (this does NOT destroy actual resources)
     // Resource destruction should happen via ProcessPendingReleases
-    m_Scenes.Shutdown();
     m_Models.Shutdown();
     m_Textures.Shutdown();
     m_Meshes.Shutdown();
@@ -511,9 +472,6 @@ void ResourceSystem::Shutdown()
 
     m_RenderAPI = nullptr;
     m_PlatformAPI = nullptr;
-    // Terminate the scene parser subsystem
-    AxSceneParser_Term();
-    m_SceneAPI = nullptr;
     m_Registry = nullptr;
     m_Allocator = nullptr;
     m_Initialized = false;
@@ -2208,163 +2166,6 @@ uint32_t ResourceSystem::GetModelRefCount(AxModelHandle Handle) const
 }
 
 //=============================================================================
-// Scene Management (Handle-based)
-//=============================================================================
-
-// Note: Scene model loading via MeshInstance typed nodes is handled after
-// scene parsing. ResourceSystem stores the scene structure; individual models
-// are loaded when LoadSceneModels() iterates MeshInstance nodes.
-
-AxSceneHandle ResourceSystem::LoadScene(std::string_view Path)
-{
-    if (!m_Initialized) {
-        fprintf(stderr, "ResourceSystem: Not initialized\n");
-        return AX_INVALID_HANDLE;
-    }
-
-    if (Path.empty()) {
-        fprintf(stderr, "ResourceSystem: Invalid scene path\n");
-        return AX_INVALID_HANDLE;
-    }
-
-    if (!m_SceneAPI) {
-        fprintf(stderr, "ResourceSystem: SceneAPI not available\n");
-        return AX_INVALID_HANDLE;
-    }
-
-    // Load scene file using SceneAPI
-    SceneTree* Scene = m_SceneAPI->LoadSceneFromFile(Path.data());
-    if (!Scene) {
-        fprintf(stderr, "ResourceSystem: Failed to load scene: %.*s\n", static_cast<int>(Path.size()), Path.data());
-        return AX_INVALID_HANDLE;
-    }
-
-    // Allocate a slot for the scene
-    AxSceneHandle Handle = m_Scenes.Allocate();
-    if (!AX_HANDLE_IS_VALID(Handle)) {
-        fprintf(stderr, "ResourceSystem: Failed to allocate scene slot\n");
-        delete Scene;
-        return AX_INVALID_HANDLE;
-    }
-
-    ResourceSlot<SceneTree>* Slot = m_Scenes.GetSlot(Handle);
-    if (!Slot) {
-        fprintf(stderr, "ResourceSystem: Failed to get scene slot\n");
-        delete Scene;
-        return AX_INVALID_HANDLE;
-    }
-
-    // Store scene in slot
-    Slot->Data = Scene;
-
-    // Query light count from typed-node tracking for the log message
-    uint32_t LightCount = 0;
-    Scene->GetNodesByType(NodeType::Light, &LightCount);
-
-    printf("ResourceSystem: Loaded scene [%u:%u] - %s (%u nodes, %u lights)\n",
-           Handle.Index, Handle.Generation, Scene->Name.data(), Scene->GetNodeCount(), LightCount);
-
-    // Load models for all MeshInstance typed nodes in the scene
-    LoadSceneModels(Scene);
-
-    return Handle;
-}
-
-SceneTree* ResourceSystem::GetScene(AxSceneHandle Handle)
-{
-    ResourceSlot<SceneTree>* Slot = m_Scenes.GetSlot(Handle);
-    return Slot ? Slot->Data : nullptr;
-}
-
-bool ResourceSystem::IsSceneValid(AxSceneHandle Handle) const
-{
-    return m_Scenes.IsValid(Handle);
-}
-
-AxSceneHandle ResourceSystem::AcquireScene(AxSceneHandle Handle)
-{
-    ResourceSlot<SceneTree>* Slot = m_Scenes.GetSlot(Handle);
-    if (!Slot) {
-        return AX_INVALID_HANDLE;
-    }
-    Slot->RefCount++;
-    return Handle;
-}
-
-void ResourceSystem::ReleaseScene(AxSceneHandle Handle)
-{
-    ResourceSlot<SceneTree>* Slot = m_Scenes.GetSlot(Handle);
-    if (!Slot || Slot->RefCount == 0) {
-        return;
-    }
-
-    // Decrement scene refcount
-    Slot->RefCount--;
-    if (Slot->RefCount == 0) {
-        // Queue for deferred deletion
-        QueueForDeletion(ResourceType::Scene, Handle.Index, Handle.Generation);
-    }
-}
-
-uint32_t ResourceSystem::GetSceneRefCount(AxSceneHandle Handle) const
-{
-    const ResourceSlot<SceneTree>* Slot = m_Scenes.GetSlot(Handle);
-    return Slot ? Slot->RefCount : 0;
-}
-
-void ResourceSystem::LoadSceneModels(SceneTree* Scene)
-{
-    if (!Scene) {
-        return;
-    }
-
-    // Get all MeshInstance typed nodes from the scene tree
-    uint32_t Count = 0;
-    Node** MeshNodes = Scene->GetNodesByType(NodeType::MeshInstance, &Count);
-    if (!MeshNodes || Count == 0) {
-        return;
-    }
-
-    printf("ResourceSystem: Loading models for %u MeshInstance node(s)\n", Count);
-
-    for (uint32_t i = 0; i < Count; ++i) {
-        MeshInstance* MI = static_cast<MeshInstance*>(MeshNodes[i]);
-        if (!MI || MI->MeshPath[0] == '\0') {
-            continue;
-        }
-
-        // Skip if already loaded
-        if (AX_HANDLE_IS_VALID(MI->ModelHandle)) {
-            continue;
-        }
-
-        AxModelHandle Handle = LoadModel(MI->MeshPath);
-        if (AX_HANDLE_IS_VALID(Handle)) {
-            MI->ModelHandle = Handle;
-            printf("ResourceSystem: Loaded model '%s' -> [%u:%u]\n",
-                   MI->MeshPath, Handle.Index, Handle.Generation);
-        } else {
-            fprintf(stderr, "ResourceSystem: Failed to load model '%s'\n", MI->MeshPath);
-        }
-    }
-}
-
-AxModelHandle ResourceSystem::GetNodeModelHandle(void* NodePtr) const
-{
-    if (!NodePtr) {
-        return AX_INVALID_HANDLE;
-    }
-
-    Node* NodeObject = static_cast<Node*>(NodePtr);
-    if (NodeObject->GetType() != NodeType::MeshInstance) {
-        return AX_INVALID_HANDLE;
-    }
-
-    MeshInstance* MI = static_cast<MeshInstance*>(NodeObject);
-    return (MI->ModelHandle);
-}
-
-//=============================================================================
 // Deferred Destruction
 //=============================================================================
 
@@ -2510,20 +2311,6 @@ void ResourceSystem::ProcessDeletion(const PendingDeletion& Deletion)
             }
             break;
         }
-        case ResourceType::Scene: {
-            ResourceSlot<SceneTree>* Slot = m_Scenes.GetSlotByIndex(Deletion.SlotIndex);
-            if (Slot && Slot->InUse && Slot->Generation == Deletion.Generation) {
-                // Note: Child resources (models) are already released by ReleaseScene()
-                // before queuing for deletion. We just need to destroy the scene.
-                if (Slot->Data) {
-                    delete Slot->Data;
-                    Slot->Data = nullptr;
-                }
-                // Free slot
-                m_Scenes.Free(Deletion.SlotIndex);
-            }
-            break;
-        }
         default:
             break;
     }
@@ -2544,7 +2331,6 @@ void ResourceSystem::GetStats(struct AxResourceStats* OutStats) const
     OutStats->ShadersLoaded = m_Shaders.GetUsedCount();
     OutStats->MaterialsLoaded = m_Materials.GetUsedCount();
     OutStats->ModelsLoaded = m_Models.GetUsedCount();
-    OutStats->ScenesLoaded = m_Scenes.GetUsedCount();
     OutStats->PendingDeletions = m_PendingCount;
 
     // Calculate memory usage from allocator

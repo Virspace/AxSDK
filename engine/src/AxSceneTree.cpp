@@ -72,7 +72,7 @@ SceneTree::~SceneTree()
 // Engine State Setters
 //=============================================================================
 
-void SceneTree::SetMainCamera(AxCamera* Camera)
+void SceneTree::SetMainCamera(CameraNode* Camera)
 {
   MainCamera_ = Camera;
 }

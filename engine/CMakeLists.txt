@@ -18,8 +18,9 @@ target_sources(AxEngine
         include/AxEngine/AxTypedNodes.h
         include/AxEngine/AxEventBus.h
         include/AxEngine/AxSceneTree.h
-        include/AxEngine/AxRenderTypes.h
+        include/AxEngine/AxSceneParser.h
         include/AxEngine/AxRenderer.h
+        src/AxSceneParser.cpp
         src/AxEngine.cpp
         src/AxInput.cpp
         src/AxNode.cpp

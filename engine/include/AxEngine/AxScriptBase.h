@@ -26,7 +26,7 @@
 // Forward declarations
 class Node;
 class SceneTree;
-struct AxCamera;
+class CameraNode;
 
 /**
  * ScriptBase - Base class for all behavioral scripts attached to Nodes.
@@ -83,7 +83,7 @@ protected:
   ScriptBase() = default;
 
   /** Main camera — set by SceneTree before each traversal. */
-  AxCamera* MainCamera{nullptr};
+  CameraNode* MainCamera{nullptr};
 
   /** Mouse delta this frame — set by SceneTree before each traversal. */
   AxVec2 MouseDelta{0.0f, 0.0f};
@@ -95,3 +95,18 @@ private:
   friend class Node;
   friend class SceneTree;
 };
+
+//=============================================================================
+// AX_IMPLEMENT_SCRIPT — Place at the bottom of your game script .cpp file.
+// Generates the exported factory function the engine uses to instantiate
+// your script from the Game DLL.
+//
+// Example:
+//   class Game : public ScriptBase { ... };
+//   AX_IMPLEMENT_SCRIPT(Game)
+//=============================================================================
+#define AX_IMPLEMENT_SCRIPT(ClassName) \
+  extern "C" AXON_DLL_EXPORT ScriptBase* CreateNodeScript() \
+  { \
+    return (new ClassName()); \
+  }

@@ -51,7 +51,7 @@ target_compile_definitions(AxResourceTests
 target_include_directories(AxResourceTests
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/../include
-        ${CMAKE_CURRENT_SOURCE_DIR}/../../../engine/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../AxOpenGL/include
 )
 
 # Link dependencies

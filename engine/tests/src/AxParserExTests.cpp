@@ -2,8 +2,7 @@
  * AxParserExTests.cpp - Tests for Extended Parser and Prefab Support
  *
  * Tests the .ats parser for the typed node syntax and .axp prefab
- * loading/instantiation. Uses the AxSceneParserAPI (via AxSceneParser_GetAPI)
- * and the internal ParsePrefab/InstantiatePrefab functions directly.
+ * loading/instantiation. Uses the SceneParser class directly.
  *
  * - Parsing `node "Name" { }` creates Node3D (default type)
  * - Parsing `node "Name" MeshInstance { mesh: "path" }` creates typed node
@@ -25,8 +24,7 @@
 #include "AxEngine/AxNode.h"
 #include "AxEngine/AxTypedNodes.h"
 #include "AxEngine/AxSceneTree.h"
-#include "AxScene/AxScene.h"
-#include "AxSceneParserInternal.h"
+#include "AxEngine/AxSceneParser.h"
 
 #include <string>
 #include <string_view>
@@ -54,14 +52,12 @@ protected:
     Allocator_ = AllocatorAPI_->CreateHeap("TestParserAlloc", 64 * 1024, 256 * 1024);
     ASSERT_NE(Allocator_, nullptr);
 
-    AxSceneParser_Init(AxonGlobalAPIRegistry);
-    ParserAPI_ = AxSceneParser_GetAPI();
-    ASSERT_NE(ParserAPI_, nullptr);
+    Parser_.Init(AxonGlobalAPIRegistry);
   }
 
   void TearDown() override
   {
-    AxSceneParser_Term();
+    Parser_.Term();
 
     if (Allocator_) {
       Allocator_->Destroy(Allocator_);
@@ -81,7 +77,7 @@ protected:
     SceneSource.append(NodeSource.data(), NodeSource.size());
     SceneSource.append("\n}");
 
-    SceneTree* Tree = ParserAPI_->ParseFromString(SceneSource.c_str(), Allocator_);
+    SceneTree* Tree = Parser_.ParseFromString(SceneSource.c_str(), Allocator_);
     if (Tree && OutNode) {
       *OutNode = Tree->GetRootNode()->GetFirstChild();
     }
@@ -91,7 +87,7 @@ protected:
   AxHashTableAPI*   TableAPI_{nullptr};
   AxAllocatorAPI*   AllocatorAPI_{nullptr};
   AxAllocator*      Allocator_{nullptr};
-  AxSceneParserAPI* ParserAPI_{nullptr};
+  SceneParser       Parser_;
 };
 
 //=============================================================================
@@ -257,7 +253,7 @@ TEST_F(ParserExTest, PrefabLoadCreatesStandaloneSubtree)
   SceneTree* Tree = new SceneTree(TableAPI_, nullptr);
   Tree->Allocator = Allocator_;
 
-  Node* PrefabRoot = ParsePrefab(PrefabData, Tree);
+  Node* PrefabRoot = Parser_.ParsePrefab(PrefabData, Tree);
   ASSERT_NE(PrefabRoot, nullptr);
   EXPECT_EQ(PrefabRoot->GetName(), "PrefabRoot");
   EXPECT_EQ(PrefabRoot->GetType(), NodeType::MeshInstance);
@@ -290,10 +286,10 @@ TEST_F(ParserExTest, PrefabInstantiationCreatesDeepCopy)
   SceneTree* Tree = new SceneTree(TableAPI_, nullptr);
   Tree->Allocator = Allocator_;
 
-  Node* PrefabRoot = ParsePrefab(PrefabData, Tree);
+  Node* PrefabRoot = Parser_.ParsePrefab(PrefabData, Tree);
   ASSERT_NE(PrefabRoot, nullptr);
 
-  Node* CopyRoot = InstantiatePrefab(Tree, PrefabRoot, nullptr, Allocator_);
+  Node* CopyRoot = Parser_.InstantiatePrefab(Tree, PrefabRoot, nullptr);
   ASSERT_NE(CopyRoot, nullptr);
 
   EXPECT_EQ(CopyRoot->GetName(), "Original");
@@ -319,7 +315,6 @@ TEST_F(ParserExTest, TG5_SceneWithLightAndNodeProducesCorrectData)
   const char* FullScene = R"(scene "TG5Test" {
     node "SunLight" Light {
       type: directional
-      direction: 0.0, -1.0, 0.0
       color: 1.0, 0.9, 0.8
       intensity: 2.5
     }
@@ -330,7 +325,7 @@ TEST_F(ParserExTest, TG5_SceneWithLightAndNodeProducesCorrectData)
     }
   })";
 
-  SceneTree* Tree = ParserAPI_->ParseFromString(FullScene, Allocator_);
+  SceneTree* Tree = Parser_.ParseFromString(FullScene, Allocator_);
   ASSERT_NE(Tree, nullptr);
 
   // Verify light via typed node tracking

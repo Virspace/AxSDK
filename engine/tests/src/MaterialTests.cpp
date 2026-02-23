@@ -1,5 +1,6 @@
 #include "gtest/gtest.h"
-#include "AxEngine/AxRenderTypes.h"
+#include "AxOpenGL/AxOpenGLTypes.h"
+#include <cstring>
 
 // Test AxPBRMaterial creation with default values
 TEST(MaterialTests, PBRMaterialDefaultCreation)

@@ -4,8 +4,10 @@
 scene "SponzaAtrium" {
     # Main light source positioned above the atrium
     node "MainLight" Light {
+        transform {
+            translation: 50.0, 80.0, 30.0
+        }
         type: point
-        position: 50.0, 80.0, 30.0
         color: 1.0, 1.0, 0.9
         intensity: 1.2
         range: 200.0
@@ -13,8 +15,10 @@ scene "SponzaAtrium" {
 
     # Secondary warm light for atmosphere
     node "AtmosphereLight" Light {
+        transform {
+            translation: -30.0, 60.0, -20.0
+        }
         type: point
-        position: -30.0, 60.0, -20.0
         color: 1.0, 0.8, 0.6
         intensity: 0.8
         range: 150.0

@@ -22,7 +22,7 @@
  */
 
 #include "Foundation/AxTypes.h"
-#include "AxEngine/AxSceneTypes.h"
+#include "AxOpenGL/AxOpenGLTypes.h"
 #include "Foundation/AxHashTable.h"
 #include "Foundation/AxAllocator.h"
 #include "AxEngine/AxNode.h"
@@ -162,7 +162,7 @@ public:
   AxHashTableAPI* GetHashTableAPI() const { return (HashTableAPI_); }
 
   /** Store the main camera pointer for propagation to scripts. */
-  void SetMainCamera(AxCamera* Camera);
+  void SetMainCamera(CameraNode* Camera);
 
   /** Store the mouse delta for propagation to scripts this frame. */
   void UpdateMouseDelta(AxVec2 Delta);
@@ -233,6 +233,6 @@ private:
   EventBus* Bus_;
 
   // Engine state propagated to scripts during traversal
-  AxCamera* MainCamera_{nullptr};
+  CameraNode* MainCamera_{nullptr};
   AxVec2 MouseDelta_;
 };

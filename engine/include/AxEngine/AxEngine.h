@@ -2,7 +2,7 @@
 
 #include "Foundation/AxTypes.h"
 #include "Foundation/AxPlatform.h"
-#include "AxResource/AxResourceTypes.h"
+#include "AxEngine/AxSceneParser.h"
 #include <string>
 
 #define AX_ENGINE_API_NAME "AxEngineAPI"
@@ -59,7 +59,12 @@ public:
     bool Tick();
 
 private:
+    bool InitWindow();
     bool LoadPlugins();
+    bool InitRenderer();
+    void InitInput();
+    bool InitScene();
+    void InitGameScript();
 
     // Core APIs
     AxAPIRegistry* APIRegistry_{nullptr};
@@ -74,10 +79,17 @@ private:
     float FixedAccumulator_{0.0f};
     static constexpr float FixedTimestep_ = 1.0f / 60.0f;
 
+    // Scene parser
+    SceneParser SceneParser_;
+
     // Subsystems
     AxRenderer* Renderer_{nullptr};
     SceneTree* SceneTree_{nullptr};
-    AxSceneHandle SceneHandle_;
+
+    // Scene loading
+    SceneTree* LoadScene(const char* FilePath);
+    void LoadSceneModels(SceneTree* Scene);
+    void UnloadScene();
 
     // Game script DLL
     AxDLL GameDLL_;

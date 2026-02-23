@@ -324,61 +324,6 @@ struct AxResourceAPI
     void (*ReleaseModel)(AxModelHandle Handle);
 
     //=========================================================================
-    // Scene Management
-    //=========================================================================
-
-    /**
-     * Load a scene from file (.ats format).
-     * Parses the scene file and loads all referenced meshes/models.
-     * @param Path Path to the scene file
-     * @return Handle to the loaded scene, or AX_INVALID_HANDLE on failure
-     */
-    AxSceneHandle (*LoadScene)(std::string_view Path);
-
-    /**
-     * Get scene data by handle.
-     * @param Handle Scene handle
-     * @return Pointer to scene data, or NULL if invalid handle
-     */
-    struct SceneTree* (*GetScene)(AxSceneHandle Handle);
-
-    /**
-     * Check if a scene handle is still valid.
-     * @param Handle Scene handle to check
-     * @return true if valid, false if invalid or stale
-     */
-    bool (*IsSceneValid)(AxSceneHandle Handle);
-
-    /**
-     * Acquire an additional reference to a scene.
-     * @param Handle Scene handle
-     * @return Same handle if valid, AX_INVALID_HANDLE if input was invalid
-     */
-    AxSceneHandle (*AcquireScene)(AxSceneHandle Handle);
-
-    /**
-     * Release a reference to a scene.
-     * When refcount hits zero, scene and all referenced models are queued for deletion.
-     * @param Handle Scene handle
-     */
-    void (*ReleaseScene)(AxSceneHandle Handle);
-
-    /**
-     * Get reference count for a scene (debugging).
-     * @param Handle Scene handle
-     * @return Reference count, or 0 if invalid handle
-     */
-    uint32_t (*GetSceneRefCount)(AxSceneHandle Handle);
-
-    /**
-     * Get the model handle for a node's MeshFilter component.
-     * Returns AX_INVALID_HANDLE if the node has no MeshFilter or no loaded model.
-     * @param NodePtr Pointer to a Node (cast to void* to avoid C++ dependency in header)
-     * @return AxModelHandle for the node's mesh, or AX_INVALID_HANDLE
-     */
-    AxModelHandle (*GetNodeModelHandle)(void* NodePtr);
-
-    //=========================================================================
     // Deferred Destruction
     //=========================================================================
 

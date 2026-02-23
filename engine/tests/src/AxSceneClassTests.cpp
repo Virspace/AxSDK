@@ -13,7 +13,7 @@
 #include "gtest/gtest.h"
 #include "AxEngine/AxSceneTree.h"
 #include "AxEngine/AxTypedNodes.h"
-#include "AxEngine/AxRenderTypes.h"
+#include "AxOpenGL/AxOpenGLTypes.h"
 #include "Foundation/AxTypes.h"
 #include "Foundation/AxHashTable.h"
 #include "Foundation/AxAllocator.h"
@@ -406,7 +406,6 @@ TEST_F(SceneTreeClassTest, LightsAndCamerasAccessibleViaGetNodesByType)
   Sun->SetLightType(AX_LIGHT_TYPE_DIRECTIONAL);
   Sun->SetColor({1.0f, 0.95f, 0.8f});
   Sun->SetIntensity(2.5f);
-  Sun->Light.Direction = {0.0f, -1.0f, -0.5f};
 
   Node* FillNode = Tree->CreateNode("Fill", NodeType::Light, nullptr);
   ASSERT_NE(FillNode, nullptr);

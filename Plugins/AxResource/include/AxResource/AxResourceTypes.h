@@ -41,7 +41,6 @@ typedef struct AxResourceHandle AxMeshHandle;
 typedef struct AxResourceHandle AxShaderHandle;
 typedef struct AxResourceHandle AxMaterialHandle;
 typedef struct AxResourceHandle AxModelHandle;
-typedef struct AxResourceHandle AxSceneHandle;
 
 // Invalid handle constant (zero-initialized = invalid)
 #define AX_INVALID_HANDLE ((struct AxResourceHandle){0, 0})
@@ -64,7 +63,6 @@ struct AxResourceInitOptions {
     uint32_t InitialShaderCapacity;    // Initial shader slots (default: 32)
     uint32_t InitialMaterialCapacity;  // Initial material slots (default: 64)
     uint32_t InitialModelCapacity;     // Initial model slots (default: 32)
-    uint32_t InitialSceneCapacity;     // Initial scene slots (default: 8)
 };
 
 #define AX_RESOURCE_DEFAULT_TEXTURE_CAPACITY  64
@@ -72,7 +70,6 @@ struct AxResourceInitOptions {
 #define AX_RESOURCE_DEFAULT_SHADER_CAPACITY   32
 #define AX_RESOURCE_DEFAULT_MATERIAL_CAPACITY 64
 #define AX_RESOURCE_DEFAULT_MODEL_CAPACITY    32
-#define AX_RESOURCE_DEFAULT_SCENE_CAPACITY    8
 
 //=============================================================================
 // Loading Options
@@ -148,7 +145,6 @@ struct AxResourceStats {
     uint32_t ShadersLoaded;
     uint32_t MaterialsLoaded;
     uint32_t ModelsLoaded;
-    uint32_t ScenesLoaded;
     uint32_t PendingDeletions;
     size_t TotalMemoryUsed;
 };

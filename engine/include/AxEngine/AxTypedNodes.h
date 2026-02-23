@@ -12,7 +12,7 @@
  */
 
 #include "AxEngine/AxNode.h"
-#include "AxEngine/AxSceneTypes.h"
+#include "AxOpenGL/AxOpenGLTypes.h"
 #include "Foundation/AxTypes.h"
 #include "Foundation/AxMath.h"
 

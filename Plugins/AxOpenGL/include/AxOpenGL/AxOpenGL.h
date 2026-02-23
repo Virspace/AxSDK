@@ -1,8 +1,6 @@
 #pragma once
 
 #include "Foundation/AxTypes.h"
-#include "AxEngine/AxSceneTypes.h"
-#include "AxEngine/AxRenderTypes.h"
 #include "AxOpenGL/AxOpenGLTypes.h"
 
 // struct AxRenderCommands

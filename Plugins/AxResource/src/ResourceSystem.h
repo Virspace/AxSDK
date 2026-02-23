@@ -27,7 +27,7 @@
 #ifdef __cplusplus
 
 #include "AxResource/AxResourceTypes.h"
-#include "AxEngine/AxRenderTypes.h"
+#include "AxOpenGL/AxOpenGLTypes.h"
 #include "Foundation/AxAllocator.h"
 #include "Foundation/AxAPIRegistry.h"
 
@@ -43,7 +43,6 @@ enum class ResourceType : uint32_t {
     Shader,
     Material,
     Model,
-    Scene,
     Count
 };
 
@@ -153,10 +152,6 @@ struct AxMaterialDesc;
 struct AxVertex;
 struct AxModelData;
 
-class SceneTree;
-
-struct AxSceneParserAPI;
-
 /**
  * ResourceSystem is the main coordinator for all resource management.
  * It owns the slot arrays for each resource type and manages deferred destruction.
@@ -246,50 +241,6 @@ public:
     uint32_t GetModelRefCount(AxModelHandle Handle) const;
 
     //=========================================================================
-    // Scene Management (Handle-based)
-    //=========================================================================
-
-    /**
-     * Load a scene from file (.ats format) and all referenced models.
-     * @param Path Path to the scene file
-     * @return Handle to the loaded scene, or AX_INVALID_HANDLE on failure
-     */
-    AxSceneHandle LoadScene(std::string_view Path);
-
-    /**
-     * Get scene data by handle.
-     * @param Handle Scene handle
-     * @return Pointer to scene data, or NULL if invalid handle
-     */
-    SceneTree* GetScene(AxSceneHandle Handle);
-
-    /**
-     * Check if a scene handle is still valid.
-     */
-    bool IsSceneValid(AxSceneHandle Handle) const;
-
-    /**
-     * Acquire an additional reference to a scene.
-     */
-    AxSceneHandle AcquireScene(AxSceneHandle Handle);
-
-    /**
-     * Release a reference to a scene.
-     */
-    void ReleaseScene(AxSceneHandle Handle);
-
-    /**
-     * Get reference count for a scene.
-     */
-    uint32_t GetSceneRefCount(AxSceneHandle Handle) const;
-
-    /**
-     * Get the model handle for a node's MeshInstance typed node.
-     * Checks the node's type and reads the ModelHandle directly.
-     */
-    AxModelHandle GetNodeModelHandle(void* NodePtr) const;
-
-    //=========================================================================
     // Deferred Destruction
     //=========================================================================
     void QueueForDeletion(ResourceType Type, uint32_t SlotIndex, uint32_t Generation);
@@ -319,9 +270,6 @@ private:
     // Internal model loading helper (populates model data)
     bool LoadModelInternal(std::string_view Path, struct AxModelData* OutModel);
 
-    // Load models for all MeshInstance typed nodes in a scene after parsing
-    void LoadSceneModels(SceneTree* Scene);
-
     // Dependencies
     struct AxAllocator* m_Allocator;
     struct AxAPIRegistry* m_Registry;
@@ -334,10 +282,6 @@ private:
     ResourceSlotArray<AxShaderData> m_Shaders;
     ResourceSlotArray<AxMaterialDesc> m_Materials;
     ResourceSlotArray<AxModelData> m_Models;
-    ResourceSlotArray<SceneTree> m_Scenes;
-
-    // SceneParserAPI for scene loading
-    struct AxSceneParserAPI* m_SceneAPI;
 
     // Pending deletion queue
     PendingDeletion* m_PendingDeletions;

@@ -18,7 +18,7 @@
 
 #include "gtest/gtest.h"
 #include "Foundation/AxTypes.h"
-#include "AxEngine/AxRenderTypes.h"
+#include "AxOpenGL/AxOpenGLTypes.h"
 #include "Foundation/AxAllocatorAPI.h"
 #include "Foundation/AxAllocator.h"
 #include "Foundation/AxAPIRegistry.h"
