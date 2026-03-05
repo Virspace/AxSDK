@@ -31,6 +31,7 @@
 struct AxAPIRegistry;
 struct AxTexture;
 struct AxMesh;
+struct AxVertex;
 struct AxShaderData;
 struct AxMaterialDesc;
 
@@ -322,6 +323,39 @@ struct AxResourceAPI
      * @param Handle Model handle
      */
     void (*ReleaseModel)(AxModelHandle Handle);
+
+    //=========================================================================
+    // Programmatic Resource Creation
+    //=========================================================================
+
+    /**
+     * Create a mesh from pre-built vertex and index data.
+     * Allocates a mesh slot, uploads data to GPU via InitMesh, and returns a handle.
+     * The caller's vertex/index arrays are not freed — the caller owns that memory.
+     *
+     * @param Vertices Array of vertices in AxVertex format
+     * @param Indices Array of triangle indices
+     * @param VertexCount Number of vertices
+     * @param IndexCount Number of indices
+     * @param Name Debug name for the mesh (copied, max 63 chars)
+     * @return Handle to the created mesh, or AX_INVALID_HANDLE on failure
+     */
+    AxMeshHandle (*CreateMeshFromData)(struct AxVertex* Vertices, uint32_t* Indices,
+                                       uint32_t VertexCount, uint32_t IndexCount,
+                                       const char* Name);
+
+    /**
+     * Create a single-mesh model wrapper.
+     * Allocates a model slot and populates it with one mesh, zero textures/materials,
+     * and an identity transform. Used by procedural mesh generators (AxPrimitives).
+     *
+     * @param MeshHandle Handle to the mesh (from CreateMeshFromData or LoadMesh)
+     * @param Name Model name (copied, max 63 chars)
+     * @param Path Synthetic path key for deduplication (e.g., "primitive://box/1.0/1.0/1.0")
+     * @return Handle to the created model, or AX_INVALID_HANDLE on failure
+     */
+    AxModelHandle (*CreateModelFromMesh)(AxMeshHandle MeshHandle,
+                                         const char* Name, const char* Path);
 
     //=========================================================================
     // Deferred Destruction

@@ -103,6 +103,7 @@ void SceneTree::TraverseTopDown(Node* Root, float DeltaT,
   if (Script && Script->IsInitialized_) {
     Script->MainCamera = MainCamera_;
     Script->MouseDelta = MouseDelta_;
+    Script->Tree_ = this;
     (Script->*Callback)(DeltaT);
   }
 
@@ -131,6 +132,7 @@ void SceneTree::TraverseBottomUpInit(Node* Root)
   ScriptBase* Script = Root->GetScript();
   if (Script && !Script->IsInitialized_) {
     Script->MainCamera = MainCamera_;
+    Script->Tree_ = this;
     Script->IsInitialized_ = true;
     Script->OnInit();
 

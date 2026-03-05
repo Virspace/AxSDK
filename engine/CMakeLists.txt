@@ -20,6 +20,7 @@ target_sources(AxEngine
         include/AxEngine/AxSceneTree.h
         include/AxEngine/AxSceneParser.h
         include/AxEngine/AxRenderer.h
+        include/AxEngine/AxPrimitives.h
         src/AxSceneParser.cpp
         src/AxEngine.cpp
         src/AxInput.cpp
@@ -28,6 +29,7 @@ target_sources(AxEngine
         src/AxSceneTree.cpp
         src/AxRenderer.cpp
         src/AxEventBus.cpp
+        src/AxPrimitives.cpp
 )
 
 # Add the standalone bootstrap executable
@@ -107,6 +109,7 @@ target_include_directories(AxEngine
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include/AxEngine
+        ${CMAKE_CURRENT_SOURCE_DIR}/../Plugins/AxResource/src
 )
 
 target_link_libraries(AxEngine

@@ -134,6 +134,7 @@ public:
 
 private:
     // API references (set during Init)
+    AxAPIRegistry* Registry_{nullptr};
     AxAllocatorAPI* AllocatorAPI_{nullptr};
     AxPlatformAPI*  PlatformAPI_{nullptr};
     AxHashTableAPI* HashTableAPI_{nullptr};

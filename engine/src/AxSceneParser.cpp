@@ -8,6 +8,7 @@
 #include "AxEngine/AxSceneTree.h"
 #include "AxEngine/AxNode.h"
 #include "AxEngine/AxTypedNodes.h"
+#include "AxEngine/AxPrimitives.h"
 
 #include <cstring>
 #include <cstdio>
@@ -580,6 +581,162 @@ static void SetNodeProperty(Node* NodePtr, NodeType Type,
 }
 
 ///////////////////////////////////////////////////////////////
+// Primitive Mesh Parsing Helper
+///////////////////////////////////////////////////////////////
+
+/**
+ * Parse a primitive mesh declaration from the token stream.
+ * Called after the "primitive" identifier has been consumed.
+ *
+ * Expected syntax: <shape> { key: value ... }
+ * or: <shape> { }
+ *
+ * Reads the shape name, optional parameter block, calls the
+ * appropriate primitive creation function, and assigns the result
+ * to the MeshInstance's ModelHandle.
+ */
+static bool ParsePrimitiveMesh(Tokenizer* T, MeshInstance* MI, SceneParser* SP)
+{
+    // Read shape name identifier
+    if (!ExpectToken(T, AX_TOKEN_IDENTIFIER)) {
+        SP->SetParserError(T, "Expected primitive shape name at line %d", T->CurrentToken.Line);
+        return (false);
+    }
+
+    char ShapeName[32];
+    CopyTokenString(&T->CurrentToken, ShapeName, sizeof(ShapeName));
+    T->CurrentToken = NextToken(T);
+
+    // Clear MeshPath to indicate this is a primitive, not file-based
+    MI->MeshPath[0] = '\0';
+
+    // Initialize default primitive mesh instances for each shape
+    BoxMesh BoxP;
+    SphereMesh SphereP;
+    PlaneMesh PlaneP;
+    CylinderMesh CylP;
+    CapsuleMesh CapP;
+
+    // Parse optional parameter block { key: value ... }
+    // Skip whitespace/comments first
+    while (T->CurrentToken.Type == AX_TOKEN_COMMENT ||
+           T->CurrentToken.Type == AX_TOKEN_NEWLINE) {
+        T->CurrentToken = NextToken(T);
+    }
+
+    if (T->CurrentToken.Type == AX_TOKEN_LBRACE) {
+        T->CurrentToken = NextToken(T); // consume '{'
+
+        while (T->CurrentToken.Type != AX_TOKEN_RBRACE &&
+               T->CurrentToken.Type != AX_TOKEN_EOF) {
+            // Skip whitespace tokens
+            if (T->CurrentToken.Type == AX_TOKEN_COMMENT ||
+                T->CurrentToken.Type == AX_TOKEN_NEWLINE) {
+                T->CurrentToken = NextToken(T);
+                continue;
+            }
+
+            if (T->CurrentToken.Type != AX_TOKEN_IDENTIFIER) {
+                SP->SetParserError(T, "Expected parameter name in primitive block at line %d",
+                                   T->CurrentToken.Line);
+                return (false);
+            }
+
+            char ParamName[64];
+            CopyTokenString(&T->CurrentToken, ParamName, sizeof(ParamName));
+            T->CurrentToken = NextToken(T);
+
+            // Expect colon
+            if (!ExpectToken(T, AX_TOKEN_COLON)) {
+                SP->SetParserError(T, "Expected ':' after parameter '%s' at line %d",
+                                   ParamName, T->CurrentToken.Line);
+                return (false);
+            }
+            T->CurrentToken = NextToken(T);
+
+            // Read value (number or identifier like true/false)
+            while (T->CurrentToken.Type == AX_TOKEN_COMMENT ||
+                   T->CurrentToken.Type == AX_TOKEN_NEWLINE) {
+                T->CurrentToken = NextToken(T);
+            }
+
+            float FloatVal = 0.0f;
+            bool GotFloat = false;
+            char IdentVal[32] = {};
+
+            if (T->CurrentToken.Type == AX_TOKEN_NUMBER) {
+                ParseFloatToken(&T->CurrentToken, &FloatVal);
+                GotFloat = true;
+                T->CurrentToken = NextToken(T);
+            } else if (T->CurrentToken.Type == AX_TOKEN_IDENTIFIER) {
+                CopyTokenString(&T->CurrentToken, IdentVal, sizeof(IdentVal));
+                T->CurrentToken = NextToken(T);
+            } else {
+                SP->SetParserError(T, "Expected value for parameter '%s' at line %d",
+                                   ParamName, T->CurrentToken.Line);
+                return (false);
+            }
+
+            // Assign parameter to the appropriate shape via fluent setters
+            if (strcmp(ShapeName, "box") == 0) {
+                if (strcmp(ParamName, "width") == 0 && GotFloat)       { BoxP.SetWidth(FloatVal); }
+                else if (strcmp(ParamName, "height") == 0 && GotFloat) { BoxP.SetHeight(FloatVal); }
+                else if (strcmp(ParamName, "depth") == 0 && GotFloat)  { BoxP.SetDepth(FloatVal); }
+            } else if (strcmp(ShapeName, "sphere") == 0) {
+                if (strcmp(ParamName, "radius") == 0 && GotFloat)        { SphereP.SetRadius(FloatVal); }
+                else if (strcmp(ParamName, "rings") == 0 && GotFloat)    { SphereP.SetRings(static_cast<uint32_t>(FloatVal)); }
+                else if (strcmp(ParamName, "segments") == 0 && GotFloat) { SphereP.SetSegments(static_cast<uint32_t>(FloatVal)); }
+            } else if (strcmp(ShapeName, "plane") == 0) {
+                if (strcmp(ParamName, "width") == 0 && GotFloat)              { PlaneP.SetWidth(FloatVal); }
+                else if (strcmp(ParamName, "depth") == 0 && GotFloat)         { PlaneP.SetDepth(FloatVal); }
+                else if (strcmp(ParamName, "subdivisionsX") == 0 && GotFloat) { PlaneP.SetSubdivisionsX(static_cast<uint32_t>(FloatVal)); }
+                else if (strcmp(ParamName, "subdivisionsZ") == 0 && GotFloat) { PlaneP.SetSubdivisionsZ(static_cast<uint32_t>(FloatVal)); }
+            } else if (strcmp(ShapeName, "cylinder") == 0) {
+                if (strcmp(ParamName, "radius") == 0 && GotFloat)        { CylP.SetRadius(FloatVal); }
+                else if (strcmp(ParamName, "height") == 0 && GotFloat)   { CylP.SetHeight(FloatVal); }
+                else if (strcmp(ParamName, "segments") == 0 && GotFloat) { CylP.SetSegments(static_cast<uint32_t>(FloatVal)); }
+                else if (strcmp(ParamName, "capTop") == 0)    { CylP.SetCapTop(strcmp(IdentVal, "true") == 0); }
+                else if (strcmp(ParamName, "capBottom") == 0) { CylP.SetCapBottom(strcmp(IdentVal, "true") == 0); }
+            } else if (strcmp(ShapeName, "capsule") == 0) {
+                if (strcmp(ParamName, "radius") == 0 && GotFloat)        { CapP.SetRadius(FloatVal); }
+                else if (strcmp(ParamName, "height") == 0 && GotFloat)   { CapP.SetHeight(FloatVal); }
+                else if (strcmp(ParamName, "rings") == 0 && GotFloat)    { CapP.SetRings(static_cast<uint32_t>(FloatVal)); }
+                else if (strcmp(ParamName, "segments") == 0 && GotFloat) { CapP.SetSegments(static_cast<uint32_t>(FloatVal)); }
+            }
+        }
+
+        // Expect closing brace
+        if (!ExpectToken(T, AX_TOKEN_RBRACE)) {
+            SP->SetParserError(T, "Expected '}' to close primitive parameter block at line %d",
+                               T->CurrentToken.Line);
+            return (false);
+        }
+        T->CurrentToken = NextToken(T);
+    }
+
+    // Call CreateModel() on the appropriate primitive mesh instance
+    {
+        AxModelHandle Handle = AX_INVALID_HANDLE;
+
+        if (strcmp(ShapeName, "box") == 0) {
+            Handle = BoxP.CreateModel();
+        } else if (strcmp(ShapeName, "sphere") == 0) {
+            Handle = SphereP.CreateModel();
+        } else if (strcmp(ShapeName, "plane") == 0) {
+            Handle = PlaneP.CreateModel();
+        } else if (strcmp(ShapeName, "cylinder") == 0) {
+            Handle = CylP.CreateModel();
+        } else if (strcmp(ShapeName, "capsule") == 0) {
+            Handle = CapP.CreateModel();
+        }
+
+        MI->ModelHandle = Handle;
+    }
+
+    return (true);
+}
+
+///////////////////////////////////////////////////////////////
 // Deep Copy Helper (file-local)
 ///////////////////////////////////////////////////////////////
 
@@ -712,16 +869,30 @@ Node* SceneParser::ParseNodeImpl(Tokenizer* T, SceneTree* Scene, Node* Parent)
                 }
             }
 
-            char ValueStr[256] = {0};
-            float NumericValue = 0.0f;
-            bool IsString = false;
-            bool IsNumeric = false;
-
             // Skip whitespace tokens before the value
             while (T->CurrentToken.Type == AX_TOKEN_COMMENT ||
                    T->CurrentToken.Type == AX_TOKEN_NEWLINE) {
                 T->CurrentToken = NextToken(T);
             }
+
+            // Check for primitive mesh syntax: mesh: primitive <shape> { params }
+            if (Type == NodeType::MeshInstance &&
+                strcmp(PropName, "mesh") == 0 &&
+                T->CurrentToken.Type == AX_TOKEN_IDENTIFIER &&
+                TokenEquals(&T->CurrentToken, "primitive")) {
+                T->CurrentToken = NextToken(T); // consume "primitive"
+
+                MeshInstance* MI = static_cast<MeshInstance*>(NewNode);
+                if (!ParsePrimitiveMesh(T, MI, this)) {
+                    return (nullptr);
+                }
+                continue;
+            }
+
+            char ValueStr[256] = {0};
+            float NumericValue = 0.0f;
+            bool IsString = false;
+            bool IsNumeric = false;
 
             if (T->CurrentToken.Type == AX_TOKEN_STRING) {
                 CopyTokenString(&T->CurrentToken, ValueStr, sizeof(ValueStr));
@@ -831,6 +1002,7 @@ void SceneParser::Init(AxAPIRegistry* Registry)
         return;
     }
 
+    Registry_     = Registry;
     AllocatorAPI_ = static_cast<AxAllocatorAPI*>(Registry->Get(AXON_ALLOCATOR_API_NAME));
     PlatformAPI_  = static_cast<AxPlatformAPI*>(Registry->Get(AXON_PLATFORM_API_NAME));
     HashTableAPI_ = static_cast<AxHashTableAPI*>(Registry->Get(AXON_HASH_TABLE_API_NAME));
@@ -838,6 +1010,7 @@ void SceneParser::Init(AxAPIRegistry* Registry)
 
 void SceneParser::Term()
 {
+    Registry_      = nullptr;
     AllocatorAPI_  = nullptr;
     PlatformAPI_   = nullptr;
     HashTableAPI_  = nullptr;

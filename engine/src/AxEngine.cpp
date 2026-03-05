@@ -13,6 +13,7 @@
 #include "AxEngine/AxScriptBase.h"
 #include "AxEngine/AxNode.h"
 #include "AxEngine/AxTypedNodes.h"
+#include "AxEngine/AxPrimitives.h"
 
 #include "AxResource/AxResource.h"
 #include "Foundation/AxAPIRegistry.h"
@@ -95,6 +96,9 @@ bool AxEngine::LoadPlugins()
 
     // Initialize ResourceAPI with our allocator
     ResourceAPI_->Initialize(APIRegistry_, gResourceAllocator, nullptr);
+
+    // Initialize primitive mesh generation (needs ResourceAPI to be ready)
+    PrimitiveMesh::Init(APIRegistry_);
 
     return (true);
 }

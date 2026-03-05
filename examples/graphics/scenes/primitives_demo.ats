@@ -1,0 +1,87 @@
+# Primitives Demo Scene
+# Demonstrates all five procedural primitive shapes with a light source
+# and camera positioned to view them all.
+
+scene "PrimitivesDemo" {
+    # Main directional-style point light for shading visibility
+    node "MainLight" Light {
+        transform {
+            translation: 0.0, 10.0, 5.0
+        }
+        type: point
+        color: 1.0, 1.0, 0.95
+        intensity: 2.0
+        range: 50.0
+    }
+
+    # Secondary fill light from the opposite side
+    node "FillLight" Light {
+        transform {
+            translation: -5.0, 8.0, -3.0
+        }
+        type: point
+        color: 0.8, 0.85, 1.0
+        intensity: 0.8
+        range: 40.0
+    }
+
+    # Camera positioned to see all primitives arranged in a row
+    node "DemoCamera" Camera {
+        transform {
+            translation: 0.0, 3.0, 8.0
+            rotation: -0.1, 0.0, 0.0, 0.995
+            scale: 1.0, 1.0, 1.0
+        }
+        fov: 60.0
+        near: 0.1
+        far: 100.0
+    }
+
+    # Ground plane at Y=0
+    node "GroundPlane" MeshInstance {
+        transform {
+            translation: 0.0, 0.0, 0.0
+        }
+        mesh: primitive plane { width: 20.0 depth: 20.0 subdivisionsX: 4 subdivisionsZ: 4 }
+    }
+
+    # Box centered above the ground, positioned at X=-4
+    node "DemoBox" MeshInstance {
+        transform {
+            translation: -4.0, 0.75, 0.0
+        }
+        mesh: primitive box { width: 1.0 height: 1.5 depth: 1.0 }
+    }
+
+    # Sphere at X=-2
+    node "DemoSphere" MeshInstance {
+        transform {
+            translation: -2.0, 0.75, 0.0
+        }
+        mesh: primitive sphere { radius: 0.5 rings: 16 segments: 32 }
+    }
+
+    # Cylinder at X=0 (center)
+    node "DemoCylinder" MeshInstance {
+        transform {
+            translation: 0.0, 0.75, 0.0
+        }
+        mesh: primitive cylinder { radius: 0.4 height: 1.5 segments: 24 }
+    }
+
+    # Capsule at X=2
+    node "DemoCapsule" MeshInstance {
+        transform {
+            translation: 2.0, 0.75, 0.0
+        }
+        mesh: primitive capsule { radius: 0.3 height: 1.5 rings: 8 segments: 16 }
+    }
+
+    # Small box at X=4 (second box with different proportions)
+    node "DemoWideBox" MeshInstance {
+        transform {
+            translation: 4.0, 0.25, 0.0
+        }
+        mesh: primitive box { width: 1.5 height: 0.5 depth: 0.8 }
+    }
+}

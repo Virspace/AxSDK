@@ -144,6 +144,13 @@ public:
   AxTransform& GetTransform() { return (Transform_); }
   const AxTransform& GetTransform() const { return (Transform_); }
 
+  /** Fluent transform setters — wrap Foundation helpers, mark dirty automatically. */
+  Node& SetPosition(float X, float Y, float Z);
+  Node& SetPosition(AxVec3 Pos);
+  Node& SetRotation(AxQuat Rot);
+  Node& SetScale(float X, float Y, float Z);
+  Node& SetScale(AxVec3 S);
+
   /**
    * Get the cached world transform matrix.
    * This matrix is populated by SceneTree::UpdateNodeTransforms at the

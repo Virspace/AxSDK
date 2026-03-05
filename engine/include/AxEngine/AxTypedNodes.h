@@ -21,6 +21,9 @@
 #include <cstring>
 #include <cstdint>
 
+// Required for MeshInstance::SetPrimitiveMesh
+#include "AxEngine/AxPrimitives.h"
+
 //=============================================================================
 // Physics Enums
 //=============================================================================
@@ -59,6 +62,8 @@ enum class ShapeType : uint32_t
 class MeshInstance : public Node3D
 {
 public:
+  static constexpr NodeType StaticType = NodeType::MeshInstance;
+
   char MeshPath[256];
   AxModelHandle ModelHandle;
   char MaterialName[64];
@@ -69,6 +74,10 @@ public:
 
   void SetMeshPath(const char* Path);
   void SetMaterialName(const char* MatName);
+
+  /** Assign a primitive mesh, clearing MeshPath. */
+  void SetPrimitiveMesh(PrimitiveMesh& Mesh)  { ModelHandle = Mesh.CreateModel(); MeshPath[0] = '\0'; }
+  void SetPrimitiveMesh(PrimitiveMesh&& Mesh) { SetPrimitiveMesh(Mesh); }
 };
 
 /**
@@ -80,6 +89,8 @@ public:
 class CameraNode : public Node3D
 {
 public:
+  static constexpr NodeType StaticType = NodeType::Camera;
+
   AxCamera Camera;
 
   CameraNode(std::string_view Name, AxHashTableAPI* TableAPI);
@@ -106,6 +117,8 @@ public:
 class LightNode : public Node3D
 {
 public:
+  static constexpr NodeType StaticType = NodeType::Light;
+
   AxLight Light;
 
   LightNode(std::string_view Name, AxHashTableAPI* TableAPI);
@@ -128,6 +141,8 @@ public:
 class RigidBodyNode : public Node3D
 {
 public:
+  static constexpr NodeType StaticType = NodeType::RigidBody;
+
   float Mass;
   AxVec3 LinearVelocity;
   AxVec3 AngularVelocity;
@@ -145,6 +160,8 @@ public:
 class ColliderNode : public Node3D
 {
 public:
+  static constexpr NodeType StaticType = NodeType::Collider;
+
   ShapeType Shape;
   AxVec3 Extents;
   float Radius;
@@ -162,6 +179,8 @@ public:
 class AudioSourceNode : public Node3D
 {
 public:
+  static constexpr NodeType StaticType = NodeType::AudioSource;
+
   char ClipPath[256];
   float Volume;
   float Pitch;
@@ -180,6 +199,8 @@ public:
 class AudioListenerNode : public Node3D
 {
 public:
+  static constexpr NodeType StaticType = NodeType::AudioListener;
+
   AudioListenerNode(std::string_view Name, AxHashTableAPI* TableAPI);
 };
 
@@ -191,6 +212,8 @@ public:
 class AnimatorNode : public Node3D
 {
 public:
+  static constexpr NodeType StaticType = NodeType::Animator;
+
   char AnimationName[64];
   float Speed;
   bool IsPlaying;
@@ -207,6 +230,8 @@ public:
 class ParticleEmitterNode : public Node3D
 {
 public:
+  static constexpr NodeType StaticType = NodeType::ParticleEmitter;
+
   uint32_t MaxParticles;
   float EmissionRate;
   float Lifetime;
@@ -228,6 +253,8 @@ public:
 class SpriteNode : public Node2D
 {
 public:
+  static constexpr NodeType StaticType = NodeType::Sprite;
+
   char TexturePath[256];
   uint32_t TextureHandle;
   AxVec4 Color;

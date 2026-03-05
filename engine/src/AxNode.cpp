@@ -242,6 +242,40 @@ ScriptBase* Node::GetScript() const
 }
 
 //=============================================================================
+// Fluent Transform Setters
+//=============================================================================
+
+Node& Node::SetPosition(float X, float Y, float Z)
+{
+  TransformSetTranslation(&Transform_, {X, Y, Z});
+  return (*this);
+}
+
+Node& Node::SetPosition(AxVec3 Pos)
+{
+  TransformSetTranslation(&Transform_, Pos);
+  return (*this);
+}
+
+Node& Node::SetRotation(AxQuat Rot)
+{
+  TransformSetRotation(&Transform_, Rot);
+  return (*this);
+}
+
+Node& Node::SetScale(float X, float Y, float Z)
+{
+  TransformSetScale(&Transform_, {X, Y, Z});
+  return (*this);
+}
+
+Node& Node::SetScale(AxVec3 S)
+{
+  TransformSetScale(&Transform_, S);
+  return (*this);
+}
+
+//=============================================================================
 // Active State
 //=============================================================================
 

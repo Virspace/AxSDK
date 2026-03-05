@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Foundation/AxTypes.h"
+#include "AxEngine/AxSceneTree.h"
 
 /**
  * AxScriptBase.h - Script Base Class for Node Behavioral Scripting
@@ -87,6 +88,29 @@ protected:
 
   /** Mouse delta this frame — set by SceneTree before each traversal. */
   AxVec2 MouseDelta{0.0f, 0.0f};
+
+  /** The SceneTree this script's node belongs to — set by SceneTree. */
+  SceneTree* Tree_{nullptr};
+
+  /** Access the owning SceneTree (e.g., for runtime node creation). */
+  SceneTree* GetSceneTree() const { return (Tree_); }
+
+  /**
+   * Create a typed node via the SceneTree, returning the correct subclass pointer.
+   * The node is initially parented to Root; call AddChild() to reparent to Owner.
+   */
+  template<typename T>
+  T* CreateNode(std::string_view Name)
+  {
+    if (!Tree_) { return (nullptr); }
+    return (static_cast<T*>(Tree_->CreateNode(Name, T::StaticType)));
+  }
+
+  /** Add a child node to this script's owner node. */
+  void AddChild(Node* Child)
+  {
+    if (Owner_ && Child) { Owner_->AddChild(Child); }
+  }
 
 private:
   Node* Owner_         = nullptr;

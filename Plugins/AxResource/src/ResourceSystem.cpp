@@ -2052,6 +2052,108 @@ AxModelHandle ResourceSystem::LoadModel(std::string_view Path)
     return Handle;
 }
 
+AxModelHandle ResourceSystem::CreateModelSlot()
+{
+    return m_Models.Allocate();
+}
+
+AxMeshHandle ResourceSystem::CreateMeshFromData(struct AxVertex* Vertices, uint32_t* Indices,
+                                                 uint32_t VertexCount, uint32_t IndexCount,
+                                                 const char* Name)
+{
+    if (!Vertices || !Indices || VertexCount == 0 || IndexCount == 0) {
+        return AX_INVALID_HANDLE;
+    }
+
+    AxMeshHandle Handle = m_Meshes.Allocate();
+    if (!AX_HANDLE_IS_VALID(Handle)) {
+        return AX_INVALID_HANDLE;
+    }
+
+    ResourceSlot<AxMesh>* Slot = m_Meshes.GetSlot(Handle);
+    if (!Slot) {
+        return AX_INVALID_HANDLE;
+    }
+
+    AxMesh* Mesh = static_cast<AxMesh*>(AxAlloc(m_Allocator, sizeof(AxMesh)));
+    if (!Mesh) {
+        m_Meshes.Free(Handle.Index);
+        return AX_INVALID_HANDLE;
+    }
+
+    memset(Mesh, 0, sizeof(AxMesh));
+    if (Name) {
+        strncpy(Mesh->Name, Name, sizeof(Mesh->Name) - 1);
+    }
+
+    // Upload to GPU
+    if (m_RenderAPI) {
+        m_RenderAPI->InitMesh(Mesh, Vertices, Indices, VertexCount, IndexCount);
+    }
+
+    Mesh->TransformIndex = 0;
+    Mesh->MaterialIndex = UINT32_MAX;
+    Mesh->BaseColorTexture = UINT32_MAX;
+    Mesh->NormalTexture = UINT32_MAX;
+
+    Slot->Data = Mesh;
+    return Handle;
+}
+
+AxModelHandle ResourceSystem::CreateModelFromMesh(AxMeshHandle MeshHandle,
+                                                   const char* Name, const char* Path)
+{
+    if (!AX_HANDLE_IS_VALID(MeshHandle)) {
+        return AX_INVALID_HANDLE;
+    }
+
+    AxModelHandle Handle = m_Models.Allocate();
+    if (!AX_HANDLE_IS_VALID(Handle)) {
+        return AX_INVALID_HANDLE;
+    }
+
+    ResourceSlot<AxModelData>* Slot = m_Models.GetSlot(Handle);
+    if (!Slot) {
+        return AX_INVALID_HANDLE;
+    }
+
+    AxModelData* Model = static_cast<AxModelData*>(AxAlloc(m_Allocator, sizeof(AxModelData)));
+    if (!Model) {
+        m_Models.Free(Handle.Index);
+        return AX_INVALID_HANDLE;
+    }
+
+    memset(Model, 0, sizeof(AxModelData));
+    if (Name) {
+        strncpy(Model->Name, Name, sizeof(Model->Name) - 1);
+    }
+    if (Path) {
+        strncpy(Model->BasePath, Path, sizeof(Model->BasePath) - 1);
+    }
+
+    Model->MeshCount = 1;
+    Model->Meshes[0] = MeshHandle;
+    Model->TextureCount = 0;
+    Model->MaterialCount = 0;
+    Model->TransformCount = 1;
+    Model->Transforms[0] = Identity();
+    Model->MeshMaterials[0] = -1;
+    Model->MeshTransformIndices[0] = 0;
+
+    Slot->Data = Model;
+    return Handle;
+}
+
+ResourceSlot<AxModelData>* ResourceSystem::GetModelSlot(AxModelHandle Handle)
+{
+    return m_Models.GetSlot(Handle);
+}
+
+const ResourceSlot<AxModelData>* ResourceSystem::GetModelSlot(AxModelHandle Handle) const
+{
+    return m_Models.GetSlot(Handle);
+}
+
 const struct AxModelData* ResourceSystem::GetModel(AxModelHandle Handle) const
 {
     const ResourceSlot<AxModelData>* Slot = m_Models.GetSlot(Handle);

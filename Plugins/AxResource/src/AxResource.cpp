@@ -74,6 +74,13 @@ static bool IsMaterialValid(AxMaterialHandle Handle);
 static AxMaterialHandle AcquireMaterial(AxMaterialHandle Handle);
 static void ReleaseMaterial(AxMaterialHandle Handle);
 
+// Programmatic Resource Creation
+static AxMeshHandle CreateMeshFromData(struct AxVertex* Vertices, uint32_t* Indices,
+                                        uint32_t VertexCount, uint32_t IndexCount,
+                                        const char* Name);
+static AxModelHandle CreateModelFromMesh(AxMeshHandle MeshHandle,
+                                          const char* Name, const char* Path);
+
 // Model (Handle-based - Phase 6)
 static AxModelHandle LoadModel(std::string_view Path);
 static const struct AxModelData* GetModel(AxModelHandle Handle);
@@ -137,6 +144,10 @@ static struct AxResourceAPI s_ResourceAPI = {
     .IsMaterialValid = IsMaterialValid,
     .AcquireMaterial = AcquireMaterial,
     .ReleaseMaterial = ReleaseMaterial,
+
+    // Programmatic Resource Creation
+    .CreateMeshFromData = CreateMeshFromData,
+    .CreateModelFromMesh = CreateModelFromMesh,
 
     // Model (Handle-based - Phase 6)
     .LoadModel = LoadModel,
@@ -368,6 +379,24 @@ static AxMaterialHandle AcquireMaterial(AxMaterialHandle Handle)
 static void ReleaseMaterial(AxMaterialHandle Handle)
 {
     ResourceSystem::Get().ReleaseMaterial(Handle);
+}
+
+//=============================================================================
+// Programmatic Resource Creation Implementation
+//=============================================================================
+
+static AxMeshHandle CreateMeshFromData(struct AxVertex* Vertices, uint32_t* Indices,
+                                        uint32_t VertexCount, uint32_t IndexCount,
+                                        const char* Name)
+{
+    return ResourceSystem::Get().CreateMeshFromData(Vertices, Indices,
+                                                     VertexCount, IndexCount, Name);
+}
+
+static AxModelHandle CreateModelFromMesh(AxMeshHandle MeshHandle,
+                                          const char* Name, const char* Path)
+{
+    return ResourceSystem::Get().CreateModelFromMesh(MeshHandle, Name, Path);
 }
 
 //=============================================================================

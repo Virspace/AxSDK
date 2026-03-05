@@ -228,10 +228,21 @@ public:
     uint32_t GetMaterialCount() const;
 
     //=========================================================================
+    // Programmatic Resource Creation
+    //=========================================================================
+
+    AxMeshHandle CreateMeshFromData(struct AxVertex* Vertices, uint32_t* Indices,
+                                     uint32_t VertexCount, uint32_t IndexCount,
+                                     const char* Name);
+    AxModelHandle CreateModelFromMesh(AxMeshHandle MeshHandle,
+                                       const char* Name, const char* Path);
+
+    //=========================================================================
     // Model Management (Handle-based - Phase 6)
     //=========================================================================
 
     AxModelHandle LoadModel(std::string_view Path);
+    AxModelHandle CreateModelSlot();
     const struct AxModelData* GetModel(AxModelHandle Handle) const;
     bool IsModelValid(AxModelHandle Handle) const;
     uint32_t GetModelCount() const;
@@ -239,6 +250,9 @@ public:
     AxModelHandle AcquireModel(AxModelHandle Handle);
     void ReleaseModel(AxModelHandle Handle);
     uint32_t GetModelRefCount(AxModelHandle Handle) const;
+
+    ResourceSlot<AxModelData>* GetModelSlot(AxModelHandle Handle);
+    const ResourceSlot<AxModelData>* GetModelSlot(AxModelHandle Handle) const;
 
     //=========================================================================
     // Deferred Destruction
