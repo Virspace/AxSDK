@@ -3,10 +3,16 @@
  *
  * Implements the Node base class for the Godot-style typed node hierarchy.
  * Follows the Parent/FirstChild/NextSibling pattern for hierarchy traversal.
+ *
+ * Transform setters notify the owning SceneTree via MarkTransformDirty()
+ * so that only changed subtrees are processed each frame.
+ * Script attach/detach notifies the SceneTree's pending init queue and
+ * script process list via the OwningTree_ back-pointer.
  */
 
 #include "AxEngine/AxNode.h"
 #include "AxEngine/AxScriptBase.h"
+#include "AxEngine/AxSceneTree.h"
 #include "Foundation/AxAllocator.h"
 #include "Foundation/AxHashTable.h"
 #include "Foundation/AxMath.h"
@@ -26,6 +32,8 @@ Node::Node(std::string_view Name, NodeType Type, AxHashTableAPI* TableAPI)
   , Script_(nullptr)
   , IsInitialized_(false)
   , IsActive_(true)
+  , OwningTree_(nullptr)
+  , InDirtyList_(false)
 {
   // Initialize transform to identity
   Transform_ = TransformIdentity();
@@ -209,6 +217,11 @@ void Node::AttachScript(ScriptBase* Script)
 
   // Notify script it has been attached
   Script_->OnAttach();
+
+  // Register with SceneTree's pending init queue
+  if (OwningTree_) {
+    OwningTree_->RegisterPendingInit(this);
+  }
 }
 
 ScriptBase* Node::DetachScript()
@@ -233,6 +246,11 @@ ScriptBase* Node::DetachScript()
   // Release the slot
   Script_ = nullptr;
 
+  // Unregister from SceneTree's script process list
+  if (OwningTree_) {
+    OwningTree_->UnregisterScriptNode(this);
+  }
+
   return (Detached);
 }
 
@@ -248,30 +266,45 @@ ScriptBase* Node::GetScript() const
 Node& Node::SetPosition(float X, float Y, float Z)
 {
   TransformSetTranslation(&Transform_, {X, Y, Z});
+  if (OwningTree_) {
+    OwningTree_->MarkTransformDirty(this);
+  }
   return (*this);
 }
 
 Node& Node::SetPosition(AxVec3 Pos)
 {
   TransformSetTranslation(&Transform_, Pos);
+  if (OwningTree_) {
+    OwningTree_->MarkTransformDirty(this);
+  }
   return (*this);
 }
 
 Node& Node::SetRotation(AxQuat Rot)
 {
   TransformSetRotation(&Transform_, Rot);
+  if (OwningTree_) {
+    OwningTree_->MarkTransformDirty(this);
+  }
   return (*this);
 }
 
 Node& Node::SetScale(float X, float Y, float Z)
 {
   TransformSetScale(&Transform_, {X, Y, Z});
+  if (OwningTree_) {
+    OwningTree_->MarkTransformDirty(this);
+  }
   return (*this);
 }
 
 Node& Node::SetScale(AxVec3 S)
 {
   TransformSetScale(&Transform_, S);
+  if (OwningTree_) {
+    OwningTree_->MarkTransformDirty(this);
+  }
   return (*this);
 }
 

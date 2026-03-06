@@ -20,6 +20,7 @@ struct AxHashTable;
 struct AxHashTableAPI;
 
 class ScriptBase;
+class SceneTree;
 
 /**
  * Node type discriminator for the scene hierarchy.
@@ -105,6 +106,7 @@ public:
    * Attach a behavioral script to this node. Takes ownership.
    * If a script is already attached, it is fully detached and destroyed first.
    * Immediately calls Script->OnAttach().
+   * If OwningTree_ is set, registers the node in the pending init queue.
    * @param Script Script to attach (must not be nullptr).
    */
   void AttachScript(ScriptBase* Script);
@@ -113,6 +115,7 @@ public:
    * Detach the current script from this node and return ownership to caller.
    * Calls OnDisable() if the node is active and the script is initialized,
    * then calls OnDetach() unconditionally. Clears the script's owner.
+   * If OwningTree_ is set, unregisters the node from the script process list.
    * @return The detached script pointer (caller must delete), or nullptr if none.
    */
   ScriptBase* DetachScript();
@@ -144,7 +147,7 @@ public:
   AxTransform& GetTransform() { return (Transform_); }
   const AxTransform& GetTransform() const { return (Transform_); }
 
-  /** Fluent transform setters — wrap Foundation helpers, mark dirty automatically. */
+  /** Fluent transform setters -- wrap Foundation helpers, mark dirty automatically. */
   Node& SetPosition(float X, float Y, float Z);
   Node& SetPosition(AxVec3 Pos);
   Node& SetRotation(AxQuat Rot);
@@ -164,6 +167,9 @@ public:
   Node* GetFirstChild() const { return (FirstChild_); }
   Node* GetNextSibling() const { return (NextSibling_); }
 
+  /** Get the SceneTree that owns this node, or nullptr if standalone. */
+  SceneTree* GetOwningTree() const { return (OwningTree_); }
+
 protected:
   std::string Name_;
   NodeType Type_;
@@ -182,6 +188,19 @@ protected:
   // Flags
   bool IsInitialized_;
   bool IsActive_;
+
+private:
+  // Back-pointer to the owning SceneTree (set by SceneTree::CreateNode,
+  // cleared by SceneTree::DestroyNode). Enables Node to notify SceneTree
+  // of transform changes and script attach/detach without callers passing
+  // SceneTree explicitly.
+  SceneTree* OwningTree_;
+
+  // True if this node is currently in the SceneTree's TransformDirtyRoots_ list.
+  // Used for O(1) duplicate prevention.
+  bool InDirtyList_;
+
+  friend class SceneTree;
 };
 
 /**

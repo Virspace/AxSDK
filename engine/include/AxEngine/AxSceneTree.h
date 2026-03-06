@@ -15,6 +15,11 @@
  * Typed nodes (MeshInstance, CameraNode, LightNode) are tracked in flat
  * arrays for efficient system-level queries via GetNodesByType().
  *
+ * Optimization: Transform propagation, script dispatch, and script init
+ * use flat lists (dirty roots, script process list, pending init queue)
+ * instead of full-tree traversal, reducing per-frame work from
+ * O(total_nodes) to O(changed/active_nodes).
+ *
  * "Scene" as a concept is the serialized file (.ats) and the node subtree
  * it produces, not the runtime container class.
  *
@@ -92,20 +97,20 @@ public:
   //=========================================================================
 
   /**
-   * Variable-rate update: flush transforms, run bottom-up init scan,
-   * then dispatch OnUpdate top-down.
+   * Variable-rate update: flush dirty transforms, process pending inits,
+   * then dispatch OnUpdate to scripted nodes.
    * @param DeltaT Time elapsed since last frame (seconds).
    */
   void Update(float DeltaT);
 
   /**
-   * Fixed-rate update: dispatch OnFixedUpdate top-down.
+   * Fixed-rate update: dispatch OnFixedUpdate to scripted nodes.
    * @param DeltaT Fixed timestep interval (seconds).
    */
   void FixedUpdate(float DeltaT);
 
   /**
-   * Late update: dispatch OnLateUpdate top-down.
+   * Late update: dispatch OnLateUpdate to scripted nodes.
    * @param DeltaT Time elapsed since last frame (seconds).
    */
   void LateUpdate(float DeltaT);
@@ -118,6 +123,7 @@ public:
    * Create a new node in the scene tree.
    * Allocates the correct typed node subclass based on NodeType.
    * Registers the node in the corresponding typed-node tracking array.
+   * Sets the node's OwningTree_ back-pointer.
    * Fires AX_EVENT_NODE_CREATED on the EventBus.
    * @param NodeName Node name.
    * @param Type Node type (determines which subclass to allocate).
@@ -127,7 +133,8 @@ public:
   Node* CreateNode(std::string_view NodeName, NodeType Type, Node* Parent = nullptr);
 
   /**
-   * Destroy a node and all its children, removing from typed-node lists.
+   * Destroy a node and all its children, removing from typed-node lists
+   * and all optimization lists (dirty roots, script nodes, pending inits).
    * Fires AX_EVENT_NODE_DESTROYED on the EventBus.
    * @param Target Node to destroy.
    */
@@ -168,6 +175,36 @@ public:
   void UpdateMouseDelta(AxVec2 Delta);
 
   //=========================================================================
+  // Optimization List Registration (called by Node via OwningTree_)
+  //=========================================================================
+
+  /**
+   * Add a node to the transform dirty roots list if not already present.
+   * Called by Node::SetPosition/SetRotation/SetScale via the OwningTree_
+   * back-pointer. Uses InDirtyList_ flag for O(1) duplicate prevention.
+   */
+  void MarkTransformDirty(Node* DirtyNode);
+
+  /**
+   * Register a node for pending script initialization.
+   * Called by Node::AttachScript via the OwningTree_ back-pointer.
+   */
+  void RegisterPendingInit(Node* PendingNode);
+
+  /**
+   * Register a node in the script process list for per-frame dispatch.
+   * Called after OnInit completes during ProcessPendingInits.
+   */
+  void RegisterScriptNode(Node* ScriptNode);
+
+  /**
+   * Unregister a node from the script process list.
+   * Called by Node::DetachScript via the OwningTree_ back-pointer.
+   * Uses swap-with-last removal for O(1) performance.
+   */
+  void UnregisterScriptNode(Node* ScriptNode);
+
+  //=========================================================================
   // Public Members
   //=========================================================================
 
@@ -183,14 +220,30 @@ public:
 
 private:
   //=========================================================================
-  // Traversal Helpers (moved from ScriptSystem and TransformSystem)
+  // Traversal Helpers
   //=========================================================================
 
-  void TraverseTopDown(Node* Root, float DeltaT,
-                       void (ScriptBase::*Callback)(float));
-  void TraverseBottomUpInit(Node* Root);
   void UpdateNodeTransforms(Node* Current, const AxMat4x4& ParentWorldMatrix,
                             bool ParentWasDirty);
+
+  //=========================================================================
+  // Optimization List Processing
+  //=========================================================================
+
+  /** Process all pending script initializations (bottom-up order). */
+  void ProcessPendingInits();
+
+  /**
+   * Remove a node from all optimization lists (TransformDirtyRoots_,
+   * ScriptNodes_, PendingInitScripts_). Called during DestroyNode.
+   */
+  void UnregisterFromAllLists(Node* Target);
+
+  /**
+   * Recursively unregister a node and its entire subtree from all
+   * optimization lists.
+   */
+  void UnregisterSubtreeFromAllLists(Node* Target);
 
   //=========================================================================
   // Private Helpers
@@ -208,6 +261,9 @@ private:
 
   /** Unregister all typed nodes in a subtree. */
   void UnregisterSubtreeTypedNodes(Node* Target);
+
+  /** Set OwningTree_ on a node and all its descendants recursively. */
+  void SetOwningTreeRecursive(Node* Target, SceneTree* Tree);
 
   //=========================================================================
   // Private Members
@@ -228,6 +284,21 @@ private:
   uint32_t CameraNodeCount_;
   Node* LightNodes_[AX_SCENE_TREE_MAX_TYPED_NODES];
   uint32_t LightNodeCount_;
+
+  // Transform dirty roots -- nodes whose transforms changed since last flush.
+  // Iterated during Update() instead of full-tree traversal.
+  Node* TransformDirtyRoots_[AX_SCENE_TREE_MAX_TYPED_NODES];
+  uint32_t TransformDirtyRootCount_;
+
+  // Script process list -- nodes with initialized scripts for per-frame dispatch.
+  // Iterated during Update/FixedUpdate/LateUpdate instead of full-tree traversal.
+  Node* ScriptNodes_[AX_SCENE_TREE_MAX_TYPED_NODES];
+  uint32_t ScriptNodeCount_;
+
+  // Pending init queue -- nodes with scripts that need OnInit called.
+  // Processed during Update() instead of full-tree bottom-up init scan.
+  Node* PendingInitScripts_[AX_SCENE_TREE_MAX_TYPED_NODES];
+  uint32_t PendingInitCount_;
 
   // Scene-scoped EventBus
   EventBus* Bus_;
