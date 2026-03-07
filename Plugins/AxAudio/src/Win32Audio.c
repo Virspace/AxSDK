@@ -35,12 +35,13 @@ static void Term(void)
 }
 
 // Use a compound literal to construct an unnamed object of API type in-place
-struct AxAudioAPI *WindowAPI = &(struct AxAudioAPI) {
+static struct AxAudioAPI *WindowAPI = &(struct AxAudioAPI) {
     .Init = Init,
     .Update = Update,
     .Term = Term
 };
 
+#if !defined(AX_SHIPPING)
 AXON_DLL_EXPORT void LoadPlugin(struct AxAPIRegistry *APIRegistry, bool Load)
 {
     if (APIRegistry)
@@ -50,3 +51,12 @@ AXON_DLL_EXPORT void LoadPlugin(struct AxAPIRegistry *APIRegistry, bool Load)
         APIRegistry->Set(AXON_AUDIO_API_NAME, WindowAPI, sizeof(struct AxAudioAPI));
     }
 }
+#else
+void InitAxAudio(struct AxAPIRegistry *APIRegistry, bool Load)
+{
+    if (APIRegistry)
+    {
+        APIRegistry->Set(AXON_AUDIO_API_NAME, WindowAPI, sizeof(struct AxAudioAPI));
+    }
+}
+#endif

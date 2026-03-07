@@ -7,42 +7,6 @@ if (CMAKE_GENERATOR MATCHES "Visual Studio")
     set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 endif()
 
-# Get cgltf
-FetchContent_Declare(
-    cgltf
-    GIT_REPOSITORY https://github.com/jkuhlmann/cgltf.git
-    GIT_TAG v1.14
-    GIT_SHALLOW     TRUE
-    GIT_PROGRESS    TRUE
-)
-
-FetchContent_GetProperties(cgltf)
-if(NOT cgltf_POPULATED)
-    FetchContent_Populate(cgltf)
-    message("Fetching cgltf")
-
-    add_library(cgltf INTERFACE ${cgltf_SOURCE_DIR}/cgltf.h)
-    target_include_directories(cgltf INTERFACE ${cgltf_SOURCE_DIR})
-endif()
-
-# Get stb
-FetchContent_Declare(
-    axsdk_stb
-    GIT_REPOSITORY https://github.com/nothings/stb.git
-    GIT_TAG master
-    GIT_SHALLOW     TRUE
-    GIT_PROGRESS    TRUE
-)
-
-FetchContent_GetProperties(axsdk_stb)
-if(NOT axsdk_stb_POPULATED)
-    FetchContent_Populate(axsdk_stb)
-    message("Fetching stb")
-
-    add_library(axsdk_stb INTERFACE)
-    target_include_directories(axsdk_stb INTERFACE ${axsdk_stb_SOURCE_DIR})
-endif()
-
 #
 # Create Target
 #
@@ -114,7 +78,11 @@ target_compile_definitions(OpenGLGame
 include_directories("$<JOIN:$<TARGET_PROPERTY:AxWindow,INCLUDE_DIRECTORIES>,;>")
 include_directories("$<JOIN:$<TARGET_PROPERTY:AxOpenGL,INCLUDE_DIRECTORIES>,;>")
 include_directories("$<JOIN:$<TARGET_PROPERTY:AxResource,INCLUDE_DIRECTORIES>,;>")
-include_directories("$<JOIN:$<TARGET_PROPERTY:AxEngine,INCLUDE_DIRECTORIES>,;>")
+if(AX_BUILD_CONFIG STREQUAL "Shipping")
+    include_directories("$<JOIN:$<TARGET_PROPERTY:AxonEngine,INCLUDE_DIRECTORIES>,;>")
+else()
+    include_directories("$<JOIN:$<TARGET_PROPERTY:AxEngine,INCLUDE_DIRECTORIES>,;>")
+endif()
 
 # Specify include directories to use when compiling a given target
 target_include_directories(OpenGLGame
@@ -126,11 +94,20 @@ target_include_directories(OpenGLGame
 )
 
 # Link dependencies
-target_link_libraries(OpenGLGame
-    PRIVATE
-        Virspace::Foundation
-        Virspace::AxEngine
-)
+if(AX_BUILD_CONFIG STREQUAL "Shipping")
+    # In shipping mode, Game.dll links against the AxonEngine executable's import library
+    target_link_libraries(OpenGLGame
+        PRIVATE
+            Virspace::Foundation
+            AxonEngine
+    )
+else()
+    target_link_libraries(OpenGLGame
+        PRIVATE
+            Virspace::Foundation
+            Virspace::AxEngine
+    )
+endif()
 
 #
 # Install and Export

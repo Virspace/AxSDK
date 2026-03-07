@@ -710,6 +710,7 @@ struct AxOpenGLAPI *AxOpenGLAPI = &(struct AxOpenGLAPI) {
     .SwapBuffers = AxSwapBuffers
 };
 
+#if !defined(AX_SHIPPING)
 AXON_DLL_EXPORT void LoadPlugin(struct AxAPIRegistry *APIRegistry, bool Load)
 {
     if (APIRegistry)
@@ -720,3 +721,15 @@ AXON_DLL_EXPORT void LoadPlugin(struct AxAPIRegistry *APIRegistry, bool Load)
         APIRegistry->Set(AXON_OPENGL_API_NAME, AxOpenGLAPI, sizeof(struct AxOpenGLAPI));
     }
 }
+#else
+void InitAxOpenGL(struct AxAPIRegistry *APIRegistry, bool Load)
+{
+    if (APIRegistry)
+    {
+        WindowAPI = APIRegistry->Get(AXON_WINDOW_API_NAME);
+        PlatformAPI = APIRegistry->Get(AXON_PLATFORM_API_NAME);
+
+        APIRegistry->Set(AXON_OPENGL_API_NAME, AxOpenGLAPI, sizeof(struct AxOpenGLAPI));
+    }
+}
+#endif

@@ -172,7 +172,7 @@ static RECT AxRectToRect(AxRect Rect)
     return (Result);
 }
 
-struct AxPlatformAPI *PlatformAPI;
+static struct AxPlatformAPI *PlatformAPI;
 
 static void CreateKeyTable(AxWindow *Window)
 {
@@ -368,7 +368,7 @@ void InputMouseClick(AxWindow *Window, int Button, int Action, int Mods)
     AXON_ASSERT(Window);
     AXON_ASSERT(Button >= 0);
     AXON_ASSERT(Action == AX_PRESS || Action == AX_RELEASE);
-    AXON_ASSERT(Mods == (Mods & AX_MOD_MASK))
+    AXON_ASSERT(Mods == (Mods & AX_MOD_MASK));
 
     // Update internal button state
     if (Button >= 0 && Button <= AX_MOUSE_BUTTON_LAST) {
@@ -809,7 +809,7 @@ static LRESULT CALLBACK Win32MainWindowCallback(HWND Hwnd, UINT Message, WPARAM 
                 break;
             }
 
-            UINT RawInputSize;
+            UINT RawInputSize = sizeof(RAWINPUT);
             BYTE RawInputData[sizeof(RAWINPUT)] = {0};
             if (!GetRawInputData((HRAWINPUT)LParam, RID_INPUT, RawInputData, &RawInputSize, sizeof(RAWINPUTHEADER))) {
                 break;
@@ -2447,7 +2447,7 @@ static bool ValidatePlatform(enum AxWindowError *Error)
     return true;
 }
 // Use a compound literal to construct an unnamed object of API type in-place
-struct AxWindowAPI *WindowAPI = &(struct AxWindowAPI) {
+static struct AxWindowAPI *WindowAPI = &(struct AxWindowAPI) {
     .Init = Init,
     .CreateWindow = CreateWindow_,
     .CreateWindowWithConfig = CreateWindowWithConfig,
@@ -2499,6 +2499,7 @@ struct AxWindowAPI *WindowAPI = &(struct AxWindowAPI) {
     .ValidatePlatform = ValidatePlatform
 };
 
+#if !defined(AX_SHIPPING)
 AXON_DLL_EXPORT void LoadPlugin(struct AxAPIRegistry *APIRegistry, bool Load)
 {
     HMODULE ShcoreHandle = LoadLibrary("shcore");
@@ -2511,3 +2512,17 @@ AXON_DLL_EXPORT void LoadPlugin(struct AxAPIRegistry *APIRegistry, bool Load)
         APIRegistry->Set(AXON_WINDOW_API_NAME, WindowAPI, sizeof(struct AxWindowAPI));
     }
 }
+#else
+void InitAxWindow(struct AxAPIRegistry *APIRegistry, bool Load)
+{
+    HMODULE ShcoreHandle = LoadLibrary("shcore");
+    GetDpiForMonitor = (GetDpiForMonitorPtr)GetProcAddress(ShcoreHandle, "GetDpiForMonitor");
+
+    if (APIRegistry)
+    {
+        PlatformAPI = APIRegistry->Get(AXON_PLATFORM_API_NAME);
+
+        APIRegistry->Set(AXON_WINDOW_API_NAME, WindowAPI, sizeof(struct AxWindowAPI));
+    }
+}
+#endif

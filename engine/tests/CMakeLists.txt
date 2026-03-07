@@ -32,6 +32,8 @@ add_executable(AxEngineTests)
 target_sources(AxEngineTests
     PRIVATE
         src/main.cpp
+        src/AxBuildConfigTests.cpp
+        src/AxMacroGuardTests.cpp
         src/AxNodeTests.cpp
         src/AxTypedNodeTests.cpp
         src/AxScriptBaseTests.cpp

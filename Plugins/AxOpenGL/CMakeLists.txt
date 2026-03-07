@@ -7,7 +7,11 @@ include(CTest) # Enable unit testing via "make test" once the code has been comp
 #
 
 # Add the library
-add_library(AxOpenGL SHARED)
+if(AX_BUILD_CONFIG STREQUAL "Shipping")
+    add_library(AxOpenGL STATIC)
+else()
+    add_library(AxOpenGL SHARED)
+endif()
 add_library(Virspace::AxOpenGL ALIAS AxOpenGL)
 
 # Add sources to target

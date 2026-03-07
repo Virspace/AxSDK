@@ -2,10 +2,10 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "build",
+            "label": "build-development",
             "type": "shell",
             "command": "cmake",
-            "args": ["--build", "build", "--config", "Debug"],
+            "args": ["--build", "--preset", "development"],
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -19,13 +19,58 @@
                 "clear": false
             },
             "problemMatcher": ["$gcc"],
-            "detail": "CMake build task"
+            "detail": "Build Development (optimized + debug symbols, DLL plugins)"
         },
         {
-            "label": "configure",
+            "label": "build-debug",
             "type": "shell",
             "command": "cmake",
-            "args": ["-B", "build", "-DCMAKE_BUILD_TYPE=Debug"],
+            "args": ["--build", "--preset", "debug"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "silent",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": ["$gcc"],
+            "detail": "Build Debug (unoptimized, full debug symbols, DLL plugins)"
+        },
+        {
+            "label": "build-shipping",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["--build", "--preset", "shipping"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "silent",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": ["$gcc"],
+            "detail": "Build Shipping (monolithic AxonEngine.exe, dev features stripped)"
+        },
+        {
+            "label": "configure-development",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["--preset", "development"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [],
+            "detail": "Configure CMake for Development build"
+        },
+        {
+            "label": "configure-debug",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["--preset", "debug"],
             "group": "build",
             "presentation": {
                 "echo": true,
@@ -35,6 +80,21 @@
             },
             "problemMatcher": [],
             "detail": "Configure CMake for Debug build"
+        },
+        {
+            "label": "configure-shipping",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["--preset", "shipping"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [],
+            "detail": "Configure CMake for Shipping build"
         }
     ]
 }

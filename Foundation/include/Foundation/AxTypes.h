@@ -36,7 +36,10 @@ extern "C" {
   #define AXON_DLL_IMPORT
 #endif
 
-#ifdef AXENGINE_EXPORTS
+/* Engine API export -- in shipping mode, everything is statically linked */
+#if defined(AX_SHIPPING)
+  #define AXENGINE_API
+#elif defined(AXENGINE_EXPORTS)
   #define AXENGINE_API AXON_DLL_EXPORT
 #else
   #define AXENGINE_API AXON_DLL_IMPORT
@@ -44,11 +47,17 @@ extern "C" {
 
 #define AX_PI 3.14159265359f
 
-//#if AXON_SLOW
-#if defined(__clang__)
-#define AXON_ASSERT(Expression) if(!(Expression)) { __builtin_trap(); }
+/* Assertion macro -- active in Debug/Development, stripped in Shipping */
+#if defined(AX_ENABLE_ASSERTS)
+  #if defined(__clang__)
+    #define AXON_ASSERT(Expression) if(!(Expression)) { __builtin_trap(); }
+  #else
+    #define AXON_ASSERT(Expression) if(!(Expression)) { *(volatile int *)0 = 0; }
+  #endif
+  #define AX_ASSERT(Expression) AXON_ASSERT(Expression)
 #else
-#define AXON_ASSERT(Expression) if(!(Expression)) { *(volatile int *)0 = 0; }
+  #define AXON_ASSERT(Expression) ((void)0)
+  #define AX_ASSERT(Expression)   ((void)0)
 #endif
 
 #define AXON_UNUSED(Variable) ((void)(Variable)) // Used to silence "unused variable warnings"

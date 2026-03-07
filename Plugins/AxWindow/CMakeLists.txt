@@ -7,7 +7,11 @@ include(CTest) # Enable unit testing via "make test" once the code has been comp
 #
 
 # Add the library
-add_library(AxWindow SHARED)
+if(AX_BUILD_CONFIG STREQUAL "Shipping")
+    add_library(AxWindow STATIC)
+else()
+    add_library(AxWindow SHARED)
+endif()
 add_library(Virspace::AxWindow ALIAS AxWindow)
 
 # Add sources to target

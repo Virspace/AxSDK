@@ -2,28 +2,23 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug OpenGL Example",
+            "name": "Debug AxStandalone (Development)",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/bin/OpenGLExample.exe",
+            "program": "${workspaceFolder}/build/bin/AxStandalone.exe",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/build/bin",
             "environment": [],
             "externalConsole": true,
             "MIMode": "gdb",
-
-            // Default if nothing else matches
             "miDebuggerPath": "gdb",
-
-            // OS-specific overrides
             "linux": {
                 "miDebuggerPath": "/usr/bin/gdb"
             },
             "windows": {
                 "miDebuggerPath": "C:/msys64/mingw64/bin/gdb.exe"
             },
-
             "setupCommands": [
                 {
                     "description": "Enable pretty-printing for gdb",
@@ -31,7 +26,63 @@
                     "ignoreFailures": true
                 }
             ],
-            "preLaunchTask": "build",
+            "preLaunchTask": "build-development",
+            "internalConsoleOptions": "openOnSessionStart"
+        },
+        {
+            "name": "Debug AxStandalone (Debug)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build-debug/bin/AxStandalone.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build-debug/bin",
+            "environment": [],
+            "externalConsole": true,
+            "MIMode": "gdb",
+            "miDebuggerPath": "gdb",
+            "linux": {
+                "miDebuggerPath": "/usr/bin/gdb"
+            },
+            "windows": {
+                "miDebuggerPath": "C:/msys64/mingw64/bin/gdb.exe"
+            },
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "build-debug",
+            "internalConsoleOptions": "openOnSessionStart"
+        },
+        {
+            "name": "Run AxonEngine (Shipping)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build-shipping/bin/AxonEngine.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build-shipping/bin",
+            "environment": [],
+            "externalConsole": true,
+            "MIMode": "gdb",
+            "miDebuggerPath": "gdb",
+            "linux": {
+                "miDebuggerPath": "/usr/bin/gdb"
+            },
+            "windows": {
+                "miDebuggerPath": "C:/msys64/mingw64/bin/gdb.exe"
+            },
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "build-shipping",
             "internalConsoleOptions": "openOnSessionStart"
         }
     ]

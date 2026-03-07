@@ -46,15 +46,6 @@ typedef struct AxArrayHeader
 #define AxFree(c, p)       free(p)
 #endif
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-extern void *ArrayReserve(void* A, size_t BlockSize, size_t NewCapacity);
-
-#ifdef __cplusplus
-}
-#endif
 
 // Returns the header data.
 #define ArrayHeader(a)         ((AxArrayHeader *)((uint8_t *)(a) - sizeof(AxArrayHeader)))
@@ -118,34 +109,7 @@ extern void *ArrayReserve(void* A, size_t BlockSize, size_t NewCapacity);
 // Shrinks the number of elements to the specificed value. Will not reallocate.
 #define ArrayShrink(a, n)      ((a) ? ArrayHeader(a)->Size = (n) : 0)
 
-#ifdef __cplusplus
-// Reserves storage.
-template<class T> static T* ArrayReserveWrapper(T *A, size_t BlockSize, size_t NewCapacity) {
-    return (T *)ArrayReserve((void *)A, BlockSize, NewCapacity);
-}
-#else
-// Reserves storage.
-#define ArrayReserveWrapper ArrayReserve
-#endif
-
-// [Implementation] ///////////////////////////////////////////
-
-#ifdef AXARRAY_IMPLEMENTATION
-// static inline void *ArraySetCapacity(void *A, size_t BlockSize, size_t NewCapacity
-// {
-//     uint8_t *p = A ? (uint8_t *)ArrayHeader(A) : 0;
-//     const size_t BytesBefore = A ? BlockSize * ArrayCapacity(A) + sizeof(AxArrayHeader) : 0;
-//     const size_t BytesAfter = NewCapacity ? BlockSize * NewCapacity + sizeof(AxArrayHeader) : 0;
-
-//     // If   
-//     if (p && (ArrayCapacity(A) == 0)
-//     {
-//         // Perform a static allocation
-
-//     }
-// }
-
-void *ArrayReserve(void *A, size_t BlockSize, size_t NeededCapacity)
+static inline void *ArrayReserve(void *A, size_t BlockSize, size_t NeededCapacity)
 {
     const size_t Capacity = ArrayCapacity(A);
     if (Capacity >= NeededCapacity) {
@@ -170,4 +134,12 @@ void *ArrayReserve(void *A, size_t BlockSize, size_t NeededCapacity)
     return (B);
 }
 
+#ifdef __cplusplus
+// Reserves storage.
+template<class T> static T* ArrayReserveWrapper(T *A, size_t BlockSize, size_t NewCapacity) {
+    return (T *)ArrayReserve((void *)A, BlockSize, NewCapacity);
+}
+#else
+// Reserves storage.
+#define ArrayReserveWrapper ArrayReserve
 #endif

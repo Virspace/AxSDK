@@ -6,7 +6,11 @@ project(AxLog VERSION 1.0.0 LANGUAGES CXX C)
 #
 
 # Add the library
-add_library(AxLog SHARED)
+if(AX_BUILD_CONFIG STREQUAL "Shipping")
+    add_library(AxLog STATIC)
+else()
+    add_library(AxLog SHARED)
+endif()
 add_library(Virspace::AxLog ALIAS AxLog)
 
 # Add sources to target

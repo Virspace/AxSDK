@@ -3,49 +3,15 @@ project(AxResource VERSION 2.0.0 LANGUAGES C CXX)
 include(CTest)
 
 #
-# Fetch dependencies
-#
-
-include(FetchContent)
-
-# STB for image loading
-FetchContent_Declare(
-    axresource_stb
-    GIT_REPOSITORY https://github.com/nothings/stb.git
-    GIT_TAG master
-)
-
-FetchContent_GetProperties(axresource_stb)
-if(NOT axresource_stb_POPULATED)
-    FetchContent_Populate(axresource_stb)
-    message("Fetching stb for AxResource")
-
-    add_library(axresource_stb INTERFACE)
-    target_include_directories(axresource_stb INTERFACE ${axresource_stb_SOURCE_DIR})
-endif()
-
-# CGLTF for GLTF model loading
-FetchContent_Declare(
-    axresource_cgltf
-    GIT_REPOSITORY https://github.com/jkuhlmann/cgltf.git
-    GIT_TAG master
-)
-
-FetchContent_GetProperties(axresource_cgltf)
-if(NOT axresource_cgltf_POPULATED)
-    FetchContent_Populate(axresource_cgltf)
-    message("Fetching cgltf for AxResource")
-
-    add_library(axresource_cgltf INTERFACE)
-    target_include_directories(axresource_cgltf INTERFACE ${axresource_cgltf_SOURCE_DIR})
-endif()
-
-#
 # Create Target
 #
 
 # Add the library as a shared library (plugin)
-add_library(AxResource SHARED)
+if(AX_BUILD_CONFIG STREQUAL "Shipping")
+    add_library(AxResource STATIC)
+else()
+    add_library(AxResource SHARED)
+endif()
 add_library(Virspace::AxResource ALIAS AxResource)
 
 # Add sources to target
@@ -83,67 +49,69 @@ target_link_libraries(AxResource
     PRIVATE
         Virspace::Foundation
         Virspace::AxLog
-        axresource_stb
-        axresource_cgltf
+        axsdk_stb
+        cgltf
 )
 
 #
-# Install and Export
+# Install and Export (Debug/Development only)
 #
 
-# Set the install destination for cmake files
-set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/AxResource)
+if(NOT AX_BUILD_CONFIG STREQUAL "Shipping")
+    # Set the install destination for cmake files
+    set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/AxResource)
 
-# Install include directory
-include(GNUInstallDirs)
-install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+    # Install include directory
+    include(GNUInstallDirs)
+    install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
-# Specify the name of the export set the targets belongs to
-install(TARGETS AxResource
-    EXPORT AxResourceTargets
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/$<CONFIG>
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/$<CONFIG>
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}/$<CONFIG>
-    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-)
+    # Specify the name of the export set the targets belongs to
+    install(TARGETS AxResource
+        EXPORT AxResourceTargets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/$<CONFIG>
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/$<CONFIG>
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}/$<CONFIG>
+        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    )
 
-# Export the targets to a script
-install(EXPORT AxResourceTargets
-    FILE AxResourceTargets.cmake
-    NAMESPACE Virspace::
-    DESTINATION ${INSTALL_CONFIGDIR}
-)
+    # Export the targets to a script
+    install(EXPORT AxResourceTargets
+        FILE AxResourceTargets.cmake
+        NAMESPACE Virspace::
+        DESTINATION ${INSTALL_CONFIGDIR}
+    )
 
-# Generate a config file that includes the exports
-include(CMakePackageConfigHelpers)
-configure_package_config_file(
-    ${CMAKE_CURRENT_LIST_DIR}/cmake/AxResourceConfig.cmake.in
-    ${CMAKE_CURRENT_BINARY_DIR}/cmake/AxResourceConfig.cmake
-    INSTALL_DESTINATION ${INSTALL_CONFIGDIR}
-    NO_SET_AND_CHECK_MACRO
-    NO_CHECK_REQUIRED_COMPONENTS_MACRO
-)
+    # Generate a config file that includes the exports
+    include(CMakePackageConfigHelpers)
+    configure_package_config_file(
+        ${CMAKE_CURRENT_LIST_DIR}/cmake/AxResourceConfig.cmake.in
+        ${CMAKE_CURRENT_BINARY_DIR}/cmake/AxResourceConfig.cmake
+        INSTALL_DESTINATION ${INSTALL_CONFIGDIR}
+        NO_SET_AND_CHECK_MACRO
+        NO_CHECK_REQUIRED_COMPONENTS_MACRO
+    )
 
-# Generate the version file for the config file
-write_basic_package_version_file(
-    ${CMAKE_CURRENT_BINARY_DIR}/cmake/AxResourceConfigVersion.cmake
-    VERSION ${PROJECT_VERSION}
-    COMPATIBILITY SameMajorVersion
-)
+    # Generate the version file for the config file
+    write_basic_package_version_file(
+        ${CMAKE_CURRENT_BINARY_DIR}/cmake/AxResourceConfigVersion.cmake
+        VERSION ${PROJECT_VERSION}
+        COMPATIBILITY SameMajorVersion
+    )
 
-# Install the Config, ConfigVersion and custom Find Module
-install(FILES
-    #${CMAKE_CURRENT_LIST_DIR}/FindAxResource.cmake
-    ${CMAKE_CURRENT_BINARY_DIR}/cmake/AxResourceConfig.cmake
-    ${CMAKE_CURRENT_BINARY_DIR}/cmake/AxResourceConfigVersion.cmake
-    DESTINATION ${INSTALL_CONFIGDIR}
-)
+    # Install the Config, ConfigVersion and custom Find Module
+    install(FILES
+        #${CMAKE_CURRENT_LIST_DIR}/FindAxResource.cmake
+        ${CMAKE_CURRENT_BINARY_DIR}/cmake/AxResourceConfig.cmake
+        ${CMAKE_CURRENT_BINARY_DIR}/cmake/AxResourceConfigVersion.cmake
+        DESTINATION ${INSTALL_CONFIGDIR}
+    )
 
-# Make this project available from the build directory
-export(EXPORT AxResourceTargets
-    FILE ${CMAKE_CURRENT_BINARY_DIR}/AxResourceTargets.cmake
-    NAMESPACE Virspace::
-)
+    # Make this project available from the build directory
+    export(EXPORT AxResourceTargets
+        FILE ${CMAKE_CURRENT_BINARY_DIR}/AxResourceTargets.cmake
+        NAMESPACE Virspace::
+    )
+endif()
 
 #
 # Testing

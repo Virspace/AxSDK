@@ -44,6 +44,7 @@ static AxEngine* gEngine = nullptr;
 
 bool AxEngine::LoadPlugins()
 {
+#if !defined(AX_SHIPPING)
     AXON_ASSERT(PluginAPI_ && "PluginAPI is NULL in AxEngine::LoadPlugins!");
     if (!WindowAPI_ || !Window_) {
         AX_LOG(ERROR, "WindowAPI or Window is NULL in AxEngine::LoadPlugins!");
@@ -70,6 +71,7 @@ bool AxEngine::LoadPlugins()
         !LoadPluginOrFail("libAxResource.dll", "Failed to load AxResource plugin.")) {
         return false;
     }
+#endif
 
     // Get core APIs
     PlatformAPI_ = static_cast<AxPlatformAPI*>(APIRegistry_->Get(AXON_PLATFORM_API_NAME));
@@ -111,10 +113,12 @@ AxEngine::AxEngine() = default;
 
 bool AxEngine::InitWindow()
 {
+#if !defined(AX_SHIPPING)
     if (!PluginAPI_->Load("libAxWindow.dll", false)) {
         AX_LOG(ERROR, "Failed to load AxWindow plugin");
         return (false);
     }
+#endif
 
     WindowAPI_ = static_cast<AxWindowAPI*>(APIRegistry_->Get(AXON_WINDOW_API_NAME));
     if (!WindowAPI_) {
@@ -184,21 +188,21 @@ bool AxEngine::InitScene()
     return (true);
 }
 
-void AxEngine::InitGameScript()
+bool AxEngine::InitGameScript()
 {
     AxPlatformDLLAPI* DLLAPI = PlatformAPI_->DLLAPI;
     GameDLL_ = DLLAPI->Load("libGame.dll");
     if (!DLLAPI->IsValid(GameDLL_)) {
-        AX_LOG(WARNING, "Failed to load Game DLL");
-        return;
+        AX_LOG(ERROR, "Failed to load Game DLL");
+        return (false);
     }
 
     typedef ScriptBase* (*CreateNodeScriptFn)();
     auto CreateNodeScript = reinterpret_cast<CreateNodeScriptFn>(
         DLLAPI->Symbol(GameDLL_, "CreateNodeScript"));
     if (!CreateNodeScript) {
-        AX_LOG(WARNING, "CreateNodeScript symbol not found in Game DLL");
-        return;
+        AX_LOG(ERROR, "CreateNodeScript symbol not found in Game DLL");
+        return (false);
     }
 
     ScriptBase* GameScript = CreateNodeScript();
@@ -206,6 +210,8 @@ void AxEngine::InitGameScript()
         SceneTree_->GetRootNode()->AttachScript(GameScript);
         AX_LOG(INFO, "Game script attached to root node");
     }
+
+    return (true);
 }
 
 bool AxEngine::Initialize(const AxEngineConfig* config)
@@ -240,7 +246,8 @@ bool AxEngine::Initialize(const AxEngineConfig* config)
     if (!InitScene())
         return (false);
 
-    InitGameScript();
+    if (!InitGameScript())
+        return (false);
 
     WindowAPI_->SetWindowVisible(Window_, true, NULL);
     isRunning_ = true;
@@ -266,11 +273,13 @@ bool AxEngine::Tick()
     // Update input
     AxInput::Get().Update();
 
-    // Check for ESC to exit
+#if !defined(AX_SHIPPING)
+    // Check for ESC to exit (dev-only, shipped games handle quit through their own UI)
     if (AxInput::Get().IsKeyPressed(AX_KEY_ESCAPE)) {
         isRunning_ = false;
         return (false);
     }
+#endif
 
     // Propagate mouse delta to SceneTree for script access
     SceneTree_->UpdateMouseDelta(AxInput::Get().GetMouseDelta());
@@ -488,6 +497,7 @@ static AxEngineAPI gEngineAPI = {
     .IsRunning = IsRunning
 };
 
+#if !defined(AX_SHIPPING)
 extern "C" AXENGINE_API void LoadPlugin(AxAPIRegistry* Registry, bool Load)
 {
     if (Load) {
@@ -502,3 +512,18 @@ extern "C" AXENGINE_API void LoadPlugin(AxAPIRegistry* Registry, bool Load)
         gAPIRegistry = nullptr;
     }
 }
+#else
+extern "C" void InitAxEngine(AxAPIRegistry* Registry, bool Load)
+{
+    if (Load) {
+        gAPIRegistry = Registry;
+        Registry->Set(AX_ENGINE_API_NAME, &gEngineAPI, sizeof(AxEngineAPI));
+    } else {
+        if (gEngine) {
+            delete gEngine;
+            gEngine = nullptr;
+        }
+        gAPIRegistry = nullptr;
+    }
+}
+#endif

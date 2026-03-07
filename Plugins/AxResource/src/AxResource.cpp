@@ -145,10 +145,6 @@ static struct AxResourceAPI s_ResourceAPI = {
     .AcquireMaterial = AcquireMaterial,
     .ReleaseMaterial = ReleaseMaterial,
 
-    // Programmatic Resource Creation
-    .CreateMeshFromData = CreateMeshFromData,
-    .CreateModelFromMesh = CreateModelFromMesh,
-
     // Model (Handle-based - Phase 6)
     .LoadModel = LoadModel,
     .GetModel = GetModel,
@@ -157,6 +153,10 @@ static struct AxResourceAPI s_ResourceAPI = {
     .GetModelByIndex = GetModelByIndex,
     .AcquireModel = AcquireModel,
     .ReleaseModel = ReleaseModel,
+
+    // Programmatic Resource Creation
+    .CreateMeshFromData = CreateMeshFromData,
+    .CreateModelFromMesh = CreateModelFromMesh,
 
     // Deferred Destruction
     .ProcessPendingReleases = ProcessPendingReleases,
@@ -497,10 +497,10 @@ static uint32_t GetModelRefCount(AxModelHandle Handle)
 
 extern "C" {
 
+#if !defined(AX_SHIPPING)
 AXON_DLL_EXPORT void LoadPlugin(struct AxAPIRegistry* APIRegistry, bool Load)
 {
     if (APIRegistry) {
-        // Register the Resource API with the API registry
         APIRegistry->Set(AXON_RESOURCE_API_NAME, &s_ResourceAPI, sizeof(struct AxResourceAPI));
     }
 }
@@ -508,11 +508,27 @@ AXON_DLL_EXPORT void LoadPlugin(struct AxAPIRegistry* APIRegistry, bool Load)
 AXON_DLL_EXPORT void UnloadPlugin(struct AxAPIRegistry* APIRegistry)
 {
     if (APIRegistry) {
-        // Ensure shutdown is called
         if (ResourceSystem::Get().IsInitialized()) {
             ResourceSystem::Get().Shutdown();
         }
     }
 }
+#else
+void InitAxResource(struct AxAPIRegistry* APIRegistry, bool Load)
+{
+    if (APIRegistry) {
+        APIRegistry->Set(AXON_RESOURCE_API_NAME, &s_ResourceAPI, sizeof(struct AxResourceAPI));
+    }
+}
+
+void ShutdownAxResource(struct AxAPIRegistry* APIRegistry)
+{
+    if (APIRegistry) {
+        if (ResourceSystem::Get().IsInitialized()) {
+            ResourceSystem::Get().Shutdown();
+        }
+    }
+}
+#endif
 
 } // extern "C"

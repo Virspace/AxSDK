@@ -72,8 +72,8 @@ int32_t Win32OpenGLAttribs[] =
 };
 
 // API Handles
-struct AxWindowAPI *WindowAPI;
-struct AxPlatformAPI *PlatformAPI;
+static struct AxWindowAPI *WindowAPI;
+static struct AxPlatformAPI *PlatformAPI;
 
 // struct OpenGLData
 // {
@@ -1651,7 +1651,8 @@ struct AxOpenGLAPI *AxOpenGLAPI = &(struct AxOpenGLAPI) {
     .SetCullMode = AxSetCullMode
 };
 
-AXON_DLL_EXPORT void LoadPlugin(struct AxAPIRegistry *APIRegistry)
+#if !defined(AX_SHIPPING)
+AXON_DLL_EXPORT void LoadPlugin(struct AxAPIRegistry *APIRegistry, bool Load)
 {
     if (APIRegistry)
     {
@@ -1669,3 +1670,23 @@ AXON_DLL_EXPORT void UnloadPlugin(struct AxAPIRegistry *APIRegistry)
         PlatformAPI = NULL;
     }
 }
+#else
+void InitAxOpenGL(struct AxAPIRegistry *APIRegistry, bool Load)
+{
+    if (APIRegistry)
+    {
+        PlatformAPI = APIRegistry->Get(AXON_PLATFORM_API_NAME);
+
+        APIRegistry->Set(AXON_OPENGL_API_NAME, AxOpenGLAPI, sizeof(struct AxOpenGLAPI));
+    }
+}
+
+void ShutdownAxOpenGL(struct AxAPIRegistry *APIRegistry)
+{
+    if (APIRegistry)
+    {
+        APIRegistry->Set(AXON_OPENGL_API_NAME, NULL, 0);
+        PlatformAPI = NULL;
+    }
+}
+#endif

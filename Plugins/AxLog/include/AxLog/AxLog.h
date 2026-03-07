@@ -23,8 +23,10 @@
 #define AX_LOG_COMPILE_LEVEL AX_LOG_LEVEL_TRACE
 #endif
 
-/* DLL export/import */
-#ifdef AXLOG_EXPORTS
+/* DLL export/import -- in shipping mode, everything is statically linked */
+#if defined(AX_SHIPPING)
+  #define AXLOG_API
+#elif defined(AXLOG_EXPORTS)
   #ifdef _WIN32
     #define AXLOG_API __declspec(dllexport)
   #else

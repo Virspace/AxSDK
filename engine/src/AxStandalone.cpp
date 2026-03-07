@@ -3,6 +3,76 @@
 #include "AxEngine/AxEngine.h"
 #include "AxLog/AxLog.h"
 
+#if defined(AX_SHIPPING)
+
+// Forward declarations for shipping init functions
+extern "C" void InitAxWindow(struct AxAPIRegistry* APIRegistry, bool Load);
+extern "C" void InitAxOpenGL(struct AxAPIRegistry* APIRegistry, bool Load);
+extern "C" void InitAxResource(struct AxAPIRegistry* APIRegistry, bool Load);
+extern "C" void InitAxEngine(struct AxAPIRegistry* APIRegistry, bool Load);
+#if defined(AX_OS_WINDOWS)
+extern "C" void InitAxAudio(struct AxAPIRegistry* APIRegistry, bool Load);
+#endif
+
+int main(int argc, char** argv)
+{
+    // Initialize Foundation's global API registry
+    AxonInitGlobalAPIRegistry();
+    AxonRegisterAllFoundationAPIs(AxonGlobalAPIRegistry);
+
+    // AxLog -- no LoadPlugin, just open the log file directly
+    AxLogOpenFile("engine.log");
+
+    // Initialize plugins in dependency order
+    InitAxWindow(AxonGlobalAPIRegistry, true);
+    InitAxOpenGL(AxonGlobalAPIRegistry, true);
+    InitAxResource(AxonGlobalAPIRegistry, true);
+#if defined(AX_OS_WINDOWS)
+    InitAxAudio(AxonGlobalAPIRegistry, true);
+#endif
+    InitAxEngine(AxonGlobalAPIRegistry, true);
+
+    // Get the engine API from the registry
+    AxEngineAPI* Engine = static_cast<AxEngineAPI*>(
+        AxonGlobalAPIRegistry->Get(AX_ENGINE_API_NAME)
+    );
+
+    if (!Engine) {
+        AxLogCloseFile();
+        AxonTermGlobalAPIRegistry();
+        return (1);
+    }
+
+    // Configure engine
+    AxEngineConfig Config {
+        .PluginPath = "./plugins/",
+        .ConfigPath = "",
+        .argc = argc,
+        .argv = argv
+    };
+
+    // Initialize engine
+    if (!Engine->Initialize(&Config)) {
+        Engine->Shutdown();
+        AxLogCloseFile();
+        AxonTermGlobalAPIRegistry();
+        return (1);
+    }
+
+    // Run engine (blocks until exit)
+    int ExitCode = Engine->Run();
+
+    // Shutdown engine
+    Engine->Shutdown();
+
+    AxLogCloseFile();
+    AxonTermGlobalAPIRegistry();
+
+    return (ExitCode);
+}
+
+#else // Debug / Development
+
 // Simple bootstrap host that loads AxEngine.dll and delegates to it
 int main(int argc, char** argv)
 {
@@ -92,3 +162,5 @@ int main(int argc, char** argv)
 
     return (ExitCode);
 }
+
+#endif // AX_SHIPPING

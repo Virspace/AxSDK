@@ -64,7 +64,7 @@ private:
     bool InitRenderer();
     void InitInput();
     bool InitScene();
-    void InitGameScript();
+    bool InitGameScript();
 
     // Core APIs
     AxAPIRegistry* APIRegistry_{nullptr};
