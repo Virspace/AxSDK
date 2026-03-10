@@ -12,6 +12,8 @@ set(AXENGINE_SOURCES
     include/AxEngine/AxSceneParser.h
     include/AxEngine/AxRenderer.h
     include/AxEngine/AxPrimitives.h
+    include/AxEngine/AxScriptRegistry.h
+    src/AxScriptRegistry.cpp
     src/AxSceneParser.cpp
     src/AxEngine.cpp
     src/AxInput.cpp
@@ -35,9 +37,15 @@ if(AX_BUILD_CONFIG STREQUAL "Shipping")
 
     add_executable(AxonEngine)
 
+    # Game sources compiled directly into the monolithic executable
+    set(GAME_SOURCES
+        ${CMAKE_SOURCE_DIR}/examples/graphics/src/Game.cpp
+    )
+
     target_sources(AxonEngine
         PRIVATE
             ${AXENGINE_SOURCES}
+            ${GAME_SOURCES}
             src/AxStandalone.cpp
     )
 
@@ -69,11 +77,8 @@ if(AX_BUILD_CONFIG STREQUAL "Shipping")
             shell32
     )
 
-    # Export symbols so Game.dll can link back into the engine
-    target_link_options(AxonEngine PRIVATE -Wl,--export-all-symbols)
     set_target_properties(AxonEngine PROPERTIES
         OUTPUT_NAME "AxonEngine"
-        ENABLE_EXPORTS TRUE
         WIN32_EXECUTABLE TRUE
     )
 

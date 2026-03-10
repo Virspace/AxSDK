@@ -11,6 +11,7 @@
 #include "AxEngine/AxSceneTree.h"
 #include "AxEngine/AxSceneParser.h"
 #include "AxEngine/AxScriptBase.h"
+#include "AxEngine/AxScriptRegistry.h"
 #include "AxEngine/AxNode.h"
 #include "AxEngine/AxTypedNodes.h"
 #include "AxEngine/AxPrimitives.h"
@@ -190,25 +191,31 @@ bool AxEngine::InitScene()
 
 bool AxEngine::InitGameScript()
 {
+#if !defined(AX_SHIPPING)
+    // Development/Debug: load Game DLL (static initializers register scripts on load)
     AxPlatformDLLAPI* DLLAPI = PlatformAPI_->DLLAPI;
     GameDLL_ = DLLAPI->Load("libGame.dll");
     if (!DLLAPI->IsValid(GameDLL_)) {
         AX_LOG(ERROR, "Failed to load Game DLL");
         return (false);
     }
+#endif
 
-    typedef ScriptBase* (*CreateNodeScriptFn)();
-    auto CreateNodeScript = reinterpret_cast<CreateNodeScriptFn>(
-        DLLAPI->Symbol(GameDLL_, "CreateNodeScript"));
-    if (!CreateNodeScript) {
-        AX_LOG(ERROR, "CreateNodeScript symbol not found in Game DLL");
+    // Scripts are now registered (via static initializers in DLL or monolithic)
+    const auto& Scripts = ScriptRegistry::Get().GetAll();
+    if (Scripts.empty()) {
+        AX_LOG(ERROR, "No scripts registered");
         return (false);
     }
 
-    ScriptBase* GameScript = CreateNodeScript();
-    if (GameScript) {
-        SceneTree_->GetRootNode()->AttachScript(GameScript);
-        AX_LOG(INFO, "Game script attached to root node");
+    // Attach all registered scripts to the root node
+    // TODO: When scene files support script references, this moves to the scene parser
+    for (const auto& [Name, Factory] : Scripts) {
+        ScriptBase* Script = Factory();
+        if (Script) {
+            SceneTree_->GetRootNode()->AttachScript(Script);
+            AX_LOG(INFO, "Script '%s' attached to root node", Name.c_str());
+        }
     }
 
     return (true);
@@ -330,17 +337,22 @@ void AxEngine::Shutdown()
     AxInput::Get().Shutdown();
 
     // Detach and destroy the game script while Game DLL is still loaded
-    // (the script's vtable lives in Game.dll, so it must be deleted before unload)
+    // (in DLL mode, the script's vtable lives in Game.dll, so it must be deleted before unload)
     if (SceneTree_ && SceneTree_->GetRootNode()) {
         ScriptBase* Script = SceneTree_->GetRootNode()->DetachScript();
         delete Script;
     }
 
+    // Clear the script registry
+    ScriptRegistry::Get().Clear();
+
+#if !defined(AX_SHIPPING)
     // Unload Game DLL (script is already destroyed)
     if (PlatformAPI_ && PlatformAPI_->DLLAPI && PlatformAPI_->DLLAPI->IsValid(GameDLL_)) {
         PlatformAPI_->DLLAPI->Unload(GameDLL_);
         GameDLL_ = {};
     }
+#endif
 
     // Release scene (unload models, destroy tree)
     UnloadScene();

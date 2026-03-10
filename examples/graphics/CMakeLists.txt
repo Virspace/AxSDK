@@ -2,6 +2,22 @@
 cmake_minimum_required(VERSION 3.15)
 project(OpenGLGame VERSION 1.0.0 LANGUAGES C CXX)
 
+# Create symlink to scenes folder in build directory (needed in all build modes)
+set(SCENES_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/scenes")
+set(SCENES_DESTINATION_DIR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/examples/graphics/scenes")
+add_custom_target(link_scenes ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/examples/graphics"
+    COMMAND ${CMAKE_COMMAND} -E remove ${SCENES_DESTINATION_DIR}
+    COMMAND ${CMAKE_COMMAND} -E create_symlink ${SCENES_SOURCE_DIR} ${SCENES_DESTINATION_DIR}
+    COMMENT "Creating symlink to scenes folder"
+)
+
+# In shipping mode, game sources are compiled directly into AxonEngine
+if(AX_BUILD_CONFIG STREQUAL "Shipping")
+    add_dependencies(AxonEngine link_scenes)
+    return()
+endif()
+
 # Enable folders in IDE Solution
 if (CMAKE_GENERATOR MATCHES "Visual Studio")
     set_property(GLOBAL PROPERTY USE_FOLDERS ON)
@@ -125,19 +141,7 @@ install(TARGETS OpenGLGame
     INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
-# Create symlink to scenes folder in build directory
-set(SCENES_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/scenes")
-set(SCENES_DESTINATION_DIR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/examples/graphics/scenes")
-add_custom_target(link_scenes ALL
-    COMMAND ${CMAKE_COMMAND} -E echo "Creating directory structure for: ${SCENES_DESTINATION_DIR}"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/examples/graphics"
-    COMMAND ${CMAKE_COMMAND} -E echo "Creating graphics example asset symlink: ${SCENES_DESTINATION_DIR} -> ${SCENES_SOURCE_DIR}"
-    COMMAND ${CMAKE_COMMAND} -E remove ${SCENES_DESTINATION_DIR}
-    COMMAND ${CMAKE_COMMAND} -E create_symlink ${SCENES_SOURCE_DIR} ${SCENES_DESTINATION_DIR}
-    COMMENT "Creating symlink to scenes folder"
-)
-
-# Make OpenGLGame depend on symlink creation
+# Make OpenGLGame depend on symlink creation (defined at top of file)
 add_dependencies(OpenGLGame link_scenes)
 
 # TODO(mdeforge): See if we can precompile the shaders

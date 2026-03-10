@@ -122,15 +122,18 @@ private:
 
 //=============================================================================
 // AX_IMPLEMENT_SCRIPT — Place at the bottom of your game script .cpp file.
-// Generates the exported factory function the engine uses to instantiate
-// your script from the Game DLL.
+// Auto-registers the script class with ScriptRegistry via a static initializer.
+// Works in both DLL mode (registration on DLL load) and monolithic shipping
+// (registration at program startup).
 //
 // Example:
 //   class Game : public ScriptBase { ... };
 //   AX_IMPLEMENT_SCRIPT(Game)
 //=============================================================================
+#include "AxEngine/AxScriptRegistry.h"
+
 #define AX_IMPLEMENT_SCRIPT(ClassName) \
-  extern "C" AXON_DLL_EXPORT ScriptBase* CreateNodeScript() \
-  { \
-    return (new ClassName()); \
-  }
+  static ScriptBase* _CreateScript_##ClassName() { return (new ClassName()); } \
+  static struct _ScriptReg_##ClassName { \
+    _ScriptReg_##ClassName() { ScriptRegistry::Get().Register(#ClassName, _CreateScript_##ClassName); } \
+  } _s_scriptReg_##ClassName;
