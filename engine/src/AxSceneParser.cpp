@@ -15,6 +15,7 @@
 #include <cstdlib>
 #include <cstdarg>
 #include <cctype>
+#include <string>
 
 ///////////////////////////////////////////////////////////////
 // Tokenizer (internal parsing state)
@@ -1274,4 +1275,427 @@ void SceneParser::InvokeOnNodeParsed(Node* ParsedNode)
                 static_cast<void*>(ParsedNode), EventHandlers_[i].UserData);
         }
     }
+}
+
+///////////////////////////////////////////////////////////////
+// Scene Serialization (Save)
+///////////////////////////////////////////////////////////////
+
+/**
+ * Map a NodeType enum to the type name string used in .ats files.
+ * Returns nullptr for types that should not appear in serialization
+ * (Root, Base).
+ */
+static const char* NodeTypeToTypeName(NodeType Type)
+{
+    switch (Type) {
+        case NodeType::MeshInstance:    return ("MeshInstance");
+        case NodeType::Camera:         return ("Camera");
+        case NodeType::Light:          return ("Light");
+        case NodeType::RigidBody:      return ("RigidBody");
+        case NodeType::Collider:       return ("Collider");
+        case NodeType::AudioSource:    return ("AudioSource");
+        case NodeType::AudioListener:  return ("AudioListener");
+        case NodeType::Animator:       return ("Animator");
+        case NodeType::ParticleEmitter: return ("ParticleEmitter");
+        case NodeType::Sprite:         return ("Sprite");
+        case NodeType::Node3D:         return ("Node3D");
+        case NodeType::Node2D:         return ("Node2D");
+        default:                       return (nullptr);
+    }
+}
+
+/**
+ * Append indentation (4 spaces per level) to the output string.
+ */
+static void AppendIndent(std::string& Output, int Indent)
+{
+    for (int i = 0; i < Indent; ++i) {
+        Output += "    ";
+    }
+}
+
+/**
+ * Format a float, stripping unnecessary trailing zeros.
+ * Ensures at least one decimal place (e.g. "1.0" not "1").
+ */
+static std::string FormatFloat(float Value)
+{
+    char Buffer[64];
+    snprintf(Buffer, sizeof(Buffer), "%.6f", Value);
+
+    // Strip trailing zeros after decimal point, keeping at least one digit
+    char* Dot = strchr(Buffer, '.');
+    if (Dot) {
+        char* End = Buffer + strlen(Buffer) - 1;
+        while (End > Dot + 1 && *End == '0') {
+            *End = '\0';
+            --End;
+        }
+    }
+
+    return (std::string(Buffer));
+}
+
+/**
+ * Serialize the transform block for a node.
+ * Only writes non-default values to keep output clean.
+ */
+static void SerializeTransform(std::string& Output, const AxTransform& Transform, int Indent)
+{
+    bool HasTranslation = (Transform.Translation.X != 0.0f ||
+                           Transform.Translation.Y != 0.0f ||
+                           Transform.Translation.Z != 0.0f);
+    bool HasRotation = (Transform.Rotation.X != 0.0f ||
+                        Transform.Rotation.Y != 0.0f ||
+                        Transform.Rotation.Z != 0.0f ||
+                        Transform.Rotation.W != 1.0f);
+    bool HasScale = (Transform.Scale.X != 1.0f ||
+                     Transform.Scale.Y != 1.0f ||
+                     Transform.Scale.Z != 1.0f);
+
+    if (!HasTranslation && !HasRotation && !HasScale) {
+        return;
+    }
+
+    AppendIndent(Output, Indent);
+    Output += "transform {\n";
+
+    if (HasTranslation) {
+        AppendIndent(Output, Indent + 1);
+        Output += "translation: ";
+        Output += FormatFloat(Transform.Translation.X) + ", ";
+        Output += FormatFloat(Transform.Translation.Y) + ", ";
+        Output += FormatFloat(Transform.Translation.Z) + "\n";
+    }
+
+    if (HasRotation) {
+        AppendIndent(Output, Indent + 1);
+        Output += "rotation: ";
+        Output += FormatFloat(Transform.Rotation.X) + ", ";
+        Output += FormatFloat(Transform.Rotation.Y) + ", ";
+        Output += FormatFloat(Transform.Rotation.Z) + ", ";
+        Output += FormatFloat(Transform.Rotation.W) + "\n";
+    }
+
+    if (HasScale) {
+        AppendIndent(Output, Indent + 1);
+        Output += "scale: ";
+        Output += FormatFloat(Transform.Scale.X) + ", ";
+        Output += FormatFloat(Transform.Scale.Y) + ", ";
+        Output += FormatFloat(Transform.Scale.Z) + "\n";
+    }
+
+    AppendIndent(Output, Indent);
+    Output += "}\n";
+}
+
+/**
+ * Serialize typed-node properties for a given node.
+ */
+static void SerializeTypedNodeProperties(std::string& Output, Node* Current, int Indent)
+{
+    switch (Current->GetType()) {
+        case NodeType::MeshInstance: {
+            MeshInstance* MI = static_cast<MeshInstance*>(Current);
+            if (MI->MeshPath[0] != '\0') {
+                AppendIndent(Output, Indent);
+                Output += "mesh: \"";
+                Output += MI->MeshPath;
+                Output += "\"\n";
+            }
+            if (MI->MaterialName[0] != '\0') {
+                AppendIndent(Output, Indent);
+                Output += "material: \"";
+                Output += MI->MaterialName;
+                Output += "\"\n";
+            }
+            if (MI->RenderLayer != 0) {
+                AppendIndent(Output, Indent);
+                Output += "renderLayer: " + FormatFloat(static_cast<float>(MI->RenderLayer)) + "\n";
+            }
+            break;
+        }
+        case NodeType::Camera: {
+            CameraNode* Cam = static_cast<CameraNode*>(Current);
+            if (Cam->GetFOV() != 60.0f) {
+                AppendIndent(Output, Indent);
+                Output += "fov: " + FormatFloat(Cam->GetFOV()) + "\n";
+            }
+            if (Cam->GetNear() != 0.1f) {
+                AppendIndent(Output, Indent);
+                Output += "near: " + FormatFloat(Cam->GetNear()) + "\n";
+            }
+            if (Cam->GetFar() != 1000.0f) {
+                AppendIndent(Output, Indent);
+                Output += "far: " + FormatFloat(Cam->GetFar()) + "\n";
+            }
+            if (Cam->IsOrthographic()) {
+                AppendIndent(Output, Indent);
+                Output += "projection: orthographic\n";
+            }
+            break;
+        }
+        case NodeType::Light: {
+            LightNode* LN = static_cast<LightNode*>(Current);
+            // Type
+            AppendIndent(Output, Indent);
+            Output += "type: ";
+            switch (LN->GetLightType()) {
+                case AX_LIGHT_TYPE_DIRECTIONAL: Output += "directional\n"; break;
+                case AX_LIGHT_TYPE_POINT:       Output += "point\n"; break;
+                case AX_LIGHT_TYPE_SPOT:        Output += "spot\n"; break;
+                default:                        Output += "point\n"; break;
+            }
+            // Color
+            AppendIndent(Output, Indent);
+            Output += "color: ";
+            Output += FormatFloat(LN->Light.Color.X) + ", ";
+            Output += FormatFloat(LN->Light.Color.Y) + ", ";
+            Output += FormatFloat(LN->Light.Color.Z) + "\n";
+            // Intensity
+            AppendIndent(Output, Indent);
+            Output += "intensity: " + FormatFloat(LN->GetIntensity()) + "\n";
+            // Range (for point/spot)
+            if (LN->Light.Range > 0.0f) {
+                AppendIndent(Output, Indent);
+                Output += "range: " + FormatFloat(LN->Light.Range) + "\n";
+            }
+            // Cone angles (for spot)
+            if (LN->GetLightType() == AX_LIGHT_TYPE_SPOT) {
+                if (LN->Light.InnerConeAngle > 0.0f) {
+                    AppendIndent(Output, Indent);
+                    Output += "innerCone: " + FormatFloat(LN->Light.InnerConeAngle) + "\n";
+                }
+                if (LN->Light.OuterConeAngle > 0.0f) {
+                    AppendIndent(Output, Indent);
+                    Output += "outerCone: " + FormatFloat(LN->Light.OuterConeAngle) + "\n";
+                }
+            }
+            break;
+        }
+        case NodeType::RigidBody: {
+            RigidBodyNode* RB = static_cast<RigidBodyNode*>(Current);
+            if (RB->Mass != 1.0f) {
+                AppendIndent(Output, Indent);
+                Output += "mass: " + FormatFloat(RB->Mass) + "\n";
+            }
+            if (RB->Drag != 0.0f) {
+                AppendIndent(Output, Indent);
+                Output += "drag: " + FormatFloat(RB->Drag) + "\n";
+            }
+            AppendIndent(Output, Indent);
+            Output += "bodyType: ";
+            switch (RB->Type) {
+                case BodyType::Static:    Output += "static\n"; break;
+                case BodyType::Dynamic:   Output += "dynamic\n"; break;
+                case BodyType::Kinematic: Output += "kinematic\n"; break;
+                default:                  Output += "dynamic\n"; break;
+            }
+            break;
+        }
+        case NodeType::Collider: {
+            ColliderNode* Col = static_cast<ColliderNode*>(Current);
+            AppendIndent(Output, Indent);
+            Output += "shape: ";
+            switch (Col->Shape) {
+                case ShapeType::Box:     Output += "box\n"; break;
+                case ShapeType::Sphere:  Output += "sphere\n"; break;
+                case ShapeType::Capsule: Output += "capsule\n"; break;
+                case ShapeType::Mesh:    Output += "mesh\n"; break;
+                default:                 Output += "box\n"; break;
+            }
+            if (Col->Radius > 0.0f) {
+                AppendIndent(Output, Indent);
+                Output += "radius: " + FormatFloat(Col->Radius) + "\n";
+            }
+            if (Col->Height > 0.0f) {
+                AppendIndent(Output, Indent);
+                Output += "height: " + FormatFloat(Col->Height) + "\n";
+            }
+            if (Col->IsTrigger) {
+                AppendIndent(Output, Indent);
+                Output += "isTrigger: true\n";
+            }
+            break;
+        }
+        case NodeType::AudioSource: {
+            AudioSourceNode* AS = static_cast<AudioSourceNode*>(Current);
+            if (AS->ClipPath[0] != '\0') {
+                AppendIndent(Output, Indent);
+                Output += "clip: \"";
+                Output += AS->ClipPath;
+                Output += "\"\n";
+            }
+            if (AS->Volume != 1.0f) {
+                AppendIndent(Output, Indent);
+                Output += "volume: " + FormatFloat(AS->Volume) + "\n";
+            }
+            if (AS->Pitch != 1.0f) {
+                AppendIndent(Output, Indent);
+                Output += "pitch: " + FormatFloat(AS->Pitch) + "\n";
+            }
+            break;
+        }
+        case NodeType::Animator: {
+            AnimatorNode* Anim = static_cast<AnimatorNode*>(Current);
+            if (Anim->AnimationName[0] != '\0') {
+                AppendIndent(Output, Indent);
+                Output += "animation: \"";
+                Output += Anim->AnimationName;
+                Output += "\"\n";
+            }
+            if (Anim->Speed != 1.0f) {
+                AppendIndent(Output, Indent);
+                Output += "speed: " + FormatFloat(Anim->Speed) + "\n";
+            }
+            break;
+        }
+        case NodeType::ParticleEmitter: {
+            ParticleEmitterNode* PE = static_cast<ParticleEmitterNode*>(Current);
+            if (PE->MaxParticles != 100) {
+                AppendIndent(Output, Indent);
+                Output += "maxParticles: " + FormatFloat(static_cast<float>(PE->MaxParticles)) + "\n";
+            }
+            if (PE->EmissionRate != 10.0f) {
+                AppendIndent(Output, Indent);
+                Output += "emissionRate: " + FormatFloat(PE->EmissionRate) + "\n";
+            }
+            if (PE->Lifetime != 2.0f) {
+                AppendIndent(Output, Indent);
+                Output += "lifetime: " + FormatFloat(PE->Lifetime) + "\n";
+            }
+            if (PE->Speed != 1.0f) {
+                AppendIndent(Output, Indent);
+                Output += "speed: " + FormatFloat(PE->Speed) + "\n";
+            }
+            break;
+        }
+        case NodeType::Sprite: {
+            SpriteNode* Spr = static_cast<SpriteNode*>(Current);
+            if (Spr->TexturePath[0] != '\0') {
+                AppendIndent(Output, Indent);
+                Output += "texture: \"";
+                Output += Spr->TexturePath;
+                Output += "\"\n";
+            }
+            if (Spr->SortOrder != 0) {
+                AppendIndent(Output, Indent);
+                Output += "sortOrder: " + FormatFloat(static_cast<float>(Spr->SortOrder)) + "\n";
+            }
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+void SceneParser::SerializeNode(std::string& Output, Node* Current, int Indent)
+{
+    if (!Current) {
+        return;
+    }
+
+    // Skip the root node itself -- its children are top-level scene nodes
+    if (Current->GetType() == NodeType::Root) {
+        Node* Child = Current->GetFirstChild();
+        while (Child) {
+            SerializeNode(Output, Child, Indent);
+            Child = Child->GetNextSibling();
+        }
+        return;
+    }
+
+    const char* TypeName = NodeTypeToTypeName(Current->GetType());
+    if (!TypeName) {
+        TypeName = "Node3D";
+    }
+
+    // Node header: node "Name" TypeName {
+    AppendIndent(Output, Indent);
+    Output += "node \"";
+    Output += std::string(Current->GetName());
+    Output += "\" ";
+    Output += TypeName;
+    Output += " {\n";
+
+    // Transform block
+    SerializeTransform(Output, Current->GetTransform(), Indent + 1);
+
+    // Typed node properties
+    SerializeTypedNodeProperties(Output, Current, Indent + 1);
+
+    // Recurse to children (nested inside parent node block)
+    Node* Child = Current->GetFirstChild();
+    while (Child) {
+        Output += "\n";
+        SerializeNode(Output, Child, Indent + 1);
+        Child = Child->GetNextSibling();
+    }
+
+    // Close node block
+    AppendIndent(Output, Indent);
+    Output += "}\n";
+}
+
+std::string SceneParser::SaveSceneToString(SceneTree* Scene)
+{
+    if (!Scene) {
+        SetError("Cannot save NULL scene");
+        return (std::string());
+    }
+
+    std::string Output;
+    Output.reserve(4096);
+
+    // Scene header
+    Output += "scene \"";
+    Output += Scene->Name.empty() ? "Untitled" : Scene->Name;
+    Output += "\" {\n";
+
+    // Serialize all children of the root node
+    if (Scene->GetRootNode()) {
+        SerializeNode(Output, static_cast<Node*>(Scene->GetRootNode()), 1);
+    }
+
+    Output += "}\n";
+
+    return (Output);
+}
+
+bool SceneParser::SaveSceneToFile(SceneTree* Scene, const char* FilePath)
+{
+    if (!Scene || !FilePath) {
+        SetError("Invalid arguments: Scene and FilePath cannot be NULL");
+        return (false);
+    }
+
+    if (!PlatformAPI_) {
+        SetError("PlatformAPI not available (SceneParser not initialized)");
+        return (false);
+    }
+
+    std::string Content = SaveSceneToString(Scene);
+    if (Content.empty()) {
+        return (false);
+    }
+
+    const AxPlatformFileAPI* FileAPI = PlatformAPI_->FileAPI;
+    AxFile File = FileAPI->OpenForWrite(FilePath);
+    if (!FileAPI->IsValid(File)) {
+        SetError("Failed to open file for writing: %s", FilePath);
+        return (false);
+    }
+
+    uint64_t BytesWritten = FileAPI->Write(File,
+        const_cast<void*>(static_cast<const void*>(Content.c_str())),
+        static_cast<uint32_t>(Content.size()));
+    FileAPI->Close(File);
+
+    if (BytesWritten != Content.size()) {
+        SetError("Failed to write complete scene to file: %s", FilePath);
+        return (false);
+    }
+
+    return (true);
 }

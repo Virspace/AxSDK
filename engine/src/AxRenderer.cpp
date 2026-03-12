@@ -5,6 +5,10 @@
  * Traverses the Node hierarchy via GetFirstChild/GetNextSibling and checks
  * NodeType::MeshInstance for model rendering. Lights are collected from
  * LightNode typed nodes via SceneTree::GetNodesByType().
+ *
+ * Supports two camera modes:
+ *   - Scene camera: uses MainCameraNode_ (Play mode / standalone)
+ *   - Editor camera: uses stored view/projection matrices (Edit mode)
  */
 
 #include "AxEngine/AxRenderer.h"
@@ -18,6 +22,8 @@
 #include "Foundation/AxAPIRegistry.h"
 #include "Foundation/AxMath.h"
 #include "AxLog/AxLog.h"
+
+#include <cmath>
 
 AxRenderer::~AxRenderer()
 {
@@ -51,6 +57,11 @@ bool AxRenderer::Initialize(AxAPIRegistry* Registry, uint64_t WindowHandle, int3
     Viewport_->Depth = { 0.0f, 1.0f };
     Viewport_->IsActive = true;
     Viewport_->ClearColor = { 0.42f, 0.51f, 0.54f, 0.0f };
+
+    // Initialize editor camera matrices to identity
+    EditorViewMatrix_ = Identity();
+    EditorProjectionMatrix_ = Identity();
+    EditorCameraPosition_ = {0.0f, 0.0f, 0.0f};
 
     // Load default shaders
     AxShaderHandle ShaderHandle = ResourceAPI_->LoadShader(
@@ -112,20 +123,81 @@ void AxRenderer::SetMainCamera(CameraNode* Camera)
     }
 }
 
-void AxRenderer::RenderScene(SceneTree* Scene)
+void AxRenderer::Resize(int32_t Width, int32_t Height)
 {
-    if (!Scene || !ShaderData_ || !MainCameraNode_) {
+    if (!Viewport_) {
         return;
     }
 
+    Viewport_->Size = { static_cast<float>(Width), static_cast<float>(Height) };
+
+    // Update camera aspect ratio if a main camera is set
+    if (MainCameraNode_ && Height > 0) {
+        MainCameraNode_->Camera.AspectRatio =
+            static_cast<float>(Width) / static_cast<float>(Height);
+    }
+
+    AX_LOG(DEBUG, "Viewport resized to %dx%d", Width, Height);
+}
+
+void AxRenderer::SetEditorCameraView(AxVec3 Position, AxVec3 Target,
+                                     float FOV, float Near, float Far)
+{
+    if (!Viewport_ || !RenderAPI_) {
+        return;
+    }
+
+    EditorCameraPosition_ = Position;
+
+    // Build a temporary transform oriented toward the target, then
+    // compute the view matrix from it using the existing CreateViewMatrix.
+    AxTransform CamTransform = {};
+    CamTransform.Translation = Position;
+    CamTransform.Scale = {1.0f, 1.0f, 1.0f};
+    CamTransform.Rotation = QuatIdentity();
+    TransformLookAt(&CamTransform, Target, (AxVec3){0.0f, 1.0f, 0.0f});
+    EditorViewMatrix_ = CreateViewMatrix(&CamTransform);
+
+    // Build the projection matrix using a temporary AxCamera
+    AxCamera TempCam = {};
+    TempCam.IsOrthographic = false;
+    TempCam.FieldOfView = FOV;
+    TempCam.NearClipPlane = Near;
+    TempCam.FarClipPlane = Far;
+    TempCam.AspectRatio = Viewport_->Size.X / Viewport_->Size.Y;
+    EditorProjectionMatrix_ = RenderAPI_->CameraGetProjectionMatrix(&TempCam);
+}
+
+void AxRenderer::RenderScene(SceneTree* Scene)
+{
+    if (!Scene || !ShaderData_) {
+        return;
+    }
+
+    // Determine which camera to use for view/projection
+    AxMat4x4 ViewMatrix;
+    AxMat4x4 ProjectionMatrix;
+    AxVec3 ViewPos;
+
+    if (UseEditorCamera_) {
+        ViewMatrix = EditorViewMatrix_;
+        ProjectionMatrix = EditorProjectionMatrix_;
+        ViewPos = EditorCameraPosition_;
+    } else {
+        // Scene camera mode -- requires a MainCameraNode
+        if (!MainCameraNode_) {
+            return;
+        }
+        ViewMatrix = CreateViewMatrix(&MainCameraNode_->GetTransform());
+        ProjectionMatrix = RenderAPI_->CameraGetProjectionMatrix(&MainCameraNode_->Camera);
+        ViewPos = MainCameraNode_->GetTransform().Translation;
+    }
+
     // Set up shared state once
-    AxMat4x4 ViewMatrix = CreateViewMatrix(&MainCameraNode_->GetTransform());
-    AxMat4x4 ProjectionMatrix = RenderAPI_->CameraGetProjectionMatrix(&MainCameraNode_->Camera);
     RenderAPI_->SetUniform(ShaderData_, "view", &ViewMatrix);
     RenderAPI_->SetUniform(ShaderData_, "projection", &ProjectionMatrix);
 
-    // Set lighting uniforms from scene's LightNode typed nodes
-    AxVec3 ViewPos = MainCameraNode_->GetTransform().Translation;
+    // Set lighting uniforms
     RenderAPI_->SetUniform(ShaderData_, "viewPos", &ViewPos);
 
     // Collect lights from typed LightNode nodes into a flat AxLight array

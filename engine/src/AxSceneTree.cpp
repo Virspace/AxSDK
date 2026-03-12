@@ -332,7 +332,7 @@ void SceneTree::Update(float DeltaT)
     return;
   }
 
-  // Step 1: Flush dirty transform roots
+  // Step 1: Flush dirty transform roots (ALWAYS runs, even in Edit mode)
   // Process only nodes whose transforms changed since last frame.
   // On initial load, all nodes are dirty and the dirty list contains all
   // of them, gracefully degrading to equivalent of full traversal.
@@ -367,6 +367,11 @@ void SceneTree::Update(float DeltaT)
     TransformDirtyRootCount_ = 0;
   }
 
+  // Steps 2-3: Script processing -- skipped when scripts are disabled (Edit mode)
+  if (!ScriptsEnabled_) {
+    return;
+  }
+
   // Step 2: Process pending script initializations (bottom-up order)
   ProcessPendingInits();
 
@@ -391,7 +396,7 @@ void SceneTree::Update(float DeltaT)
 
 void SceneTree::FixedUpdate(float DeltaT)
 {
-  if (!Root_) {
+  if (!Root_ || !ScriptsEnabled_) {
     return;
   }
 
@@ -414,7 +419,7 @@ void SceneTree::FixedUpdate(float DeltaT)
 
 void SceneTree::LateUpdate(float DeltaT)
 {
-  if (!Root_) {
+  if (!Root_ || !ScriptsEnabled_) {
     return;
   }
 

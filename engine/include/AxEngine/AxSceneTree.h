@@ -99,6 +99,12 @@ public:
   /**
    * Variable-rate update: flush dirty transforms, process pending inits,
    * then dispatch OnUpdate to scripted nodes.
+   *
+   * When scripts are disabled (Edit mode), only transform propagation
+   * runs -- pending init processing and OnUpdate dispatch are skipped.
+   * This allows the viewport to render correctly while the scene
+   * remains static.
+   *
    * @param DeltaT Time elapsed since last frame (seconds).
    */
   void Update(float DeltaT);
@@ -173,6 +179,24 @@ public:
 
   /** Store the mouse delta for propagation to scripts this frame. */
   void UpdateMouseDelta(AxVec2 Delta);
+
+  //=========================================================================
+  // Script Execution Control
+  //=========================================================================
+
+  /**
+   * Enable or disable script execution for this scene tree.
+   * When disabled (Edit mode), Update() only propagates transforms --
+   * pending init processing and per-frame script dispatch are skipped.
+   * FixedUpdate() and LateUpdate() also skip script dispatch when
+   * scripts are disabled.
+   *
+   * Enabled by default (Play mode behavior).
+   */
+  void SetScriptsEnabled(bool Enabled) { ScriptsEnabled_ = Enabled; }
+
+  /** Query whether script execution is currently enabled. */
+  bool AreScriptsEnabled() const { return (ScriptsEnabled_); }
 
   //=========================================================================
   // Optimization List Registration (called by Node via OwningTree_)
@@ -306,4 +330,9 @@ private:
   // Engine state propagated to scripts during traversal
   CameraNode* MainCamera_{nullptr};
   AxVec2 MouseDelta_;
+
+  // Script execution control -- when false, Update() only propagates
+  // transforms and skips script init/dispatch. Set by AxEngine based
+  // on the current AxEngineMode (Edit disables, Play enables).
+  bool ScriptsEnabled_{true};
 };

@@ -3,6 +3,8 @@
 #include "Foundation/AxTypes.h"
 #include "AxOpenGL/AxOpenGLTypes.h"
 
+#include <string>
+
 class SceneTree;
 class Node;
 struct Tokenizer;
@@ -103,6 +105,26 @@ public:
      */
     SceneTree* LoadSceneFromString(const char* SceneData);
 
+    // === Scene Serialization (Save) ===
+
+    /**
+     * Serialize a scene tree to a .ats file.
+     * Traverses the tree recursively and writes node type, name, transform,
+     * and typed-node properties in the .ats text format.
+     * @param Scene The scene tree to serialize.
+     * @param FilePath Path to the output .ats file.
+     * @return true on success, false on failure (check GetLastError()).
+     */
+    bool SaveSceneToFile(SceneTree* Scene, const char* FilePath);
+
+    /**
+     * Serialize a scene tree to an in-memory string in .ats format.
+     * Used by snapshot/restore for play mode.
+     * @param Scene The scene tree to serialize.
+     * @return The serialized .ats content as a string, or empty string on failure.
+     */
+    std::string SaveSceneToString(SceneTree* Scene);
+
     // === Prefab Loading and Instantiation ===
 
     /**
@@ -154,6 +176,9 @@ private:
     // Internal parsing (implementation in AxSceneParser.cpp)
     Node* ParseNodeImpl(Tokenizer* T, SceneTree* Scene, Node* Parent);
     SceneTree* ParseSceneImpl(Tokenizer* T);
+
+    // Internal serialization helpers
+    void SerializeNode(std::string& Output, Node* Current, int Indent);
 
     // Internal helpers
     void SetError(const char* Format, ...);

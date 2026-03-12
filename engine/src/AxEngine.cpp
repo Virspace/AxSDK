@@ -3,6 +3,11 @@
  *
  * Engine orchestrates plugins, window, input, scripting, and rendering.
  * Rendering is delegated to AxRender. Input is managed by AxInput singleton.
+ *
+ * Supports two hosting modes:
+ *   - Standalone: engine creates its own window and runs the frame loop
+ *   - Editor-hosted: editor supplies an HWND, engine skips window creation,
+ *     and the editor drives Tick() externally
  */
 
 #include "AxEngine/AxEngine.h"
@@ -47,19 +52,19 @@ bool AxEngine::LoadPlugins()
 {
 #if !defined(AX_SHIPPING)
     AXON_ASSERT(PluginAPI_ && "PluginAPI is NULL in AxEngine::LoadPlugins!");
-    if (!WindowAPI_ || !Window_) {
-        AX_LOG(ERROR, "WindowAPI or Window is NULL in AxEngine::LoadPlugins!");
-        return false;
-    }
 
+    // In editor-hosted mode, WindowAPI and Window are not available.
+    // Only show message box errors when we have a window.
     auto ShowPluginLoadError = [&](const char* PluginName, const char* ErrorMessage) {
         AX_LOG(ERROR, "Failed to load %s plugin", PluginName);
-        WindowAPI_->CreateMessageBox(
-            Window_,
-            "Error",
-            ErrorMessage,
-            static_cast<AxMessageBoxFlags>(AX_MESSAGE_BOX_ICON_ERROR | AX_MESSAGE_BOX_TYPE_OK)
-        );
+        if (WindowAPI_ && Window_) {
+            WindowAPI_->CreateMessageBox(
+                Window_,
+                "Error",
+                ErrorMessage,
+                static_cast<AxMessageBoxFlags>(AX_MESSAGE_BOX_ICON_ERROR | AX_MESSAGE_BOX_TYPE_OK)
+            );
+        }
     };
 
     auto LoadPluginOrFail = [&](const char* pluginName, const char* errorMessage) {
@@ -78,8 +83,14 @@ bool AxEngine::LoadPlugins()
     PlatformAPI_ = static_cast<AxPlatformAPI*>(APIRegistry_->Get(AXON_PLATFORM_API_NAME));
     ResourceAPI_ = static_cast<AxResourceAPI*>(APIRegistry_->Get(AXON_RESOURCE_API_NAME));
 
-    if (!WindowAPI_ || !PlatformAPI_ || !ResourceAPI_) {
+    if (!PlatformAPI_ || !ResourceAPI_) {
         AX_LOG(ERROR, "Failed to get required APIs from registry");
+        return (false);
+    }
+
+    // WindowAPI may be nullptr in editor-hosted mode -- that is expected
+    if (!WindowAPI_ && !IsEditorHosted()) {
+        AX_LOG(ERROR, "WindowAPI is NULL in standalone mode");
         return (false);
     }
 
@@ -148,15 +159,40 @@ bool AxEngine::InitWindow()
 
 bool AxEngine::InitRenderer()
 {
-    AxWindowPlatformData WindowPlatformData = WindowAPI_->GetPlatformData(Window_);
+    uint64_t WindowHandle = 0;
+    int32_t Width = DefaultWindowWidth;
+    int32_t Height = DefaultWindowHeight;
+
+    if (IsEditorHosted()) {
+        // Editor-hosted: use the externally-provided window handle and dimensions
+        WindowHandle = ExternalWindowHandle_;
+        Width = ViewportWidth_;
+        Height = ViewportHeight_;
+    } else {
+        // Standalone: extract handle from AxWindow
+        AxWindowPlatformData WindowPlatformData = WindowAPI_->GetPlatformData(Window_);
+        WindowHandle = WindowPlatformData.Win32.Handle;
+    }
+
     Renderer_ = new AxRenderer();
-    if (!Renderer_->Initialize(APIRegistry_, WindowPlatformData.Win32.Handle, DefaultWindowWidth, DefaultWindowHeight)) {
+    if (!Renderer_->Initialize(APIRegistry_, WindowHandle, Width, Height)) {
         AX_LOG(ERROR, "Failed to initialize renderer");
         return (false);
     }
 
-    AxWindowError Error = AX_WINDOW_ERROR_NONE;
-    WindowAPI_->SetCursorMode(Window_, AX_CURSOR_DISABLED, &Error);
+    // Only set cursor mode in standalone mode (editor owns cursor)
+    if (!IsEditorHosted() && WindowAPI_ && Window_) {
+        AxWindowError Error = AX_WINDOW_ERROR_NONE;
+        WindowAPI_->SetCursorMode(Window_, AX_CURSOR_DISABLED, &Error);
+    }
+
+    // In editor-hosted mode, set default editor camera view and enable it
+    if (IsEditorHosted()) {
+        Renderer_->SetEditorCameraView(
+            EditorCamera_.Position, EditorCamera_.Target,
+            EditorCamera_.FOV, EditorCamera_.Near, EditorCamera_.Far);
+        Renderer_->SetUseEditorCamera(true);
+    }
 
     AX_LOG(INFO, "Renderer initialized");
     return (true);
@@ -164,12 +200,16 @@ bool AxEngine::InitRenderer()
 
 void AxEngine::InitInput()
 {
-    AxInput::Get().Initialize(APIRegistry_, Window_);
+    if (IsEditorHosted()) {
+        // Editor-hosted: initialize with nullptr -- AxInput will no-op on Update()
+        AxInput::Get().Initialize(APIRegistry_, nullptr);
+    } else {
+        AxInput::Get().Initialize(APIRegistry_, Window_);
+    }
 }
 
 bool AxEngine::InitScene()
 {
-    SceneParser_.Init(APIRegistry_);
 
     SceneTree_ = LoadScene("examples/graphics/scenes/sponza_atrium.ats");
     if (!SceneTree_) {
@@ -229,6 +269,19 @@ bool AxEngine::Initialize(const AxEngineConfig* config)
 
     gEngine = this;
 
+    // Store editor-hosted mode state from config
+    ExternalWindowHandle_ = config->ExternalWindowHandle;
+    ViewportWidth_ = config->ViewportWidth;
+    ViewportHeight_ = config->ViewportHeight;
+
+    // Set default mode based on hosting mode:
+    // Editor-hosted defaults to Edit; standalone defaults to Play
+    if (IsEditorHosted()) {
+        Mode_ = AxEngineMode::Edit;
+    } else {
+        Mode_ = AxEngineMode::Play;
+    }
+
     APIRegistry_ = gAPIRegistry;
     if (!APIRegistry_) {
         AX_LOG(ERROR, "Failed to get API registry");
@@ -241,23 +294,39 @@ bool AxEngine::Initialize(const AxEngineConfig* config)
         return (false);
     }
 
-    if (!InitWindow())
-        return (false);
+    // Window initialization: skip when editor provides an external handle
+    if (!IsEditorHosted()) {
+        if (!InitWindow())
+            return (false);
+    }
+
     if (!LoadPlugins())
         return (false);
     if (!InitRenderer())
         return (false);
 
-        InitInput();
+    InitInput();
 
-    if (!InitScene())
-        return (false);
+    // Initialize scene parser for all modes (editor will call LoadScene/NewScene/SaveScene)
+    SceneParser_.Init(APIRegistry_);
 
-    if (!InitGameScript())
-        return (false);
+    // Scene loading: skip in editor-hosted mode (editor calls LoadScene/NewScene explicitly)
+    if (!IsEditorHosted()) {
+        if (!InitScene())
+            return (false);
 
-    WindowAPI_->SetWindowVisible(Window_, true, NULL);
+        if (!InitGameScript())
+            return (false);
+
+        WindowAPI_->SetWindowVisible(Window_, true, NULL);
+    }
+
     isRunning_ = true;
+
+    // Initialize LastFrameTime_ so the first Tick() call produces a valid delta.
+    // In standalone mode, Run() also sets this, but for editor-hosted mode
+    // where Tick() is called directly (without Run()), this is essential.
+    LastFrameTime_ = PlatformAPI_->TimeAPI->WallTime();
 
     AX_LOG(INFO, "Initialization complete");
     return (true);
@@ -270,43 +339,64 @@ bool AxEngine::Tick()
     float DeltaT = PlatformAPI_->TimeAPI->ElapsedWallTime(LastFrameTime_, CurrentTime);
     LastFrameTime_ = CurrentTime;
 
-    // Poll window events
-    WindowAPI_->PollEvents(Window_);
-    if (WindowAPI_->HasRequestedClose(Window_)) {
-        isRunning_ = false;
-        return (false);
+    // Poll window events -- only when AxWindow is available (standalone mode)
+    if (WindowAPI_ && Window_) {
+        WindowAPI_->PollEvents(Window_);
+        if (WindowAPI_->HasRequestedClose(Window_)) {
+            isRunning_ = false;
+            return (false);
+        }
     }
 
     // Update input
     AxInput::Get().Update();
 
 #if !defined(AX_SHIPPING)
-    // Check for ESC to exit (dev-only, shipped games handle quit through their own UI)
-    if (AxInput::Get().IsKeyPressed(AX_KEY_ESCAPE)) {
+    // Check for ESC to exit (dev-only, standalone only)
+    if (!IsEditorHosted() && AxInput::Get().IsKeyPressed(AX_KEY_ESCAPE)) {
         isRunning_ = false;
         return (false);
     }
 #endif
 
     // Propagate mouse delta to SceneTree for script access
-    SceneTree_->UpdateMouseDelta(AxInput::Get().GetMouseDelta());
-
-    // Fixed-timestep update
-    FixedAccumulator_ += DeltaT;
-    while (FixedAccumulator_ >= FixedTimestep_) {
-        // PhysicsServer::Tick — stub placeholder (runs BEFORE scripts, Godot ordering)
-        SceneTree_->FixedUpdate(FixedTimestep_);
-        FixedAccumulator_ -= FixedTimestep_;
+    if (SceneTree_) {
+        SceneTree_->UpdateMouseDelta(AxInput::Get().GetMouseDelta());
     }
 
-    // Variable-rate update
-    SceneTree_->Update(DeltaT);
-    SceneTree_->LateUpdate(DeltaT);
+    // In Edit mode, skip fixed-update and late-update entirely.
+    // SceneTree::Update() internally skips script dispatch when
+    // scripts are disabled, but still propagates transforms.
+    if (Mode_ == AxEngineMode::Play) {
+        // Fixed-timestep update (Play mode only)
+        FixedAccumulator_ += DeltaT;
+        while (FixedAccumulator_ >= FixedTimestep_) {
+            // PhysicsServer::Tick -- stub placeholder (runs BEFORE scripts, Godot ordering)
+            if (SceneTree_) {
+                SceneTree_->FixedUpdate(FixedTimestep_);
+            }
+            FixedAccumulator_ -= FixedTimestep_;
+        }
+    }
+
+    // Variable-rate update (always runs -- transform propagation needed for rendering)
+    if (SceneTree_) {
+        SceneTree_->Update(DeltaT);
+    }
+
+    if (Mode_ == AxEngineMode::Play) {
+        // Late update (Play mode only)
+        if (SceneTree_) {
+            SceneTree_->LateUpdate(DeltaT);
+        }
+    }
 
     // Render
-    Renderer_->BeginFrame();
-    Renderer_->RenderScene(SceneTree_);
-    Renderer_->EndFrame();
+    if (Renderer_) {
+        Renderer_->BeginFrame();
+        Renderer_->RenderScene(SceneTree_);
+        Renderer_->EndFrame();
+    }
 
     // Process pending resource releases
     if (ResourceAPI_ && ResourceAPI_->IsInitialized()) {
@@ -327,6 +417,30 @@ int AxEngine::Run()
     }
 
     return (0);
+}
+
+void AxEngine::Resize(int32_t Width, int32_t Height)
+{
+    if (Renderer_) {
+        Renderer_->Resize(Width, Height);
+
+        // Update editor camera projection if active
+        if (Renderer_->IsUsingEditorCamera()) {
+            Renderer_->SetEditorCameraView(
+                EditorCamera_.Position, EditorCamera_.Target,
+                EditorCamera_.FOV, EditorCamera_.Near, EditorCamera_.Far);
+        }
+    }
+}
+
+void AxEngine::SetMode(AxEngineMode Mode)
+{
+    Mode_ = Mode;
+
+    // Propagate script execution state to SceneTree
+    if (SceneTree_) {
+        SceneTree_->SetScriptsEnabled(Mode == AxEngineMode::Play);
+    }
 }
 
 void AxEngine::Shutdown()
@@ -357,6 +471,9 @@ void AxEngine::Shutdown()
     // Release scene (unload models, destroy tree)
     UnloadScene();
 
+    // Discard any scene snapshot
+    SceneSnapshot_.clear();
+
     // Shutdown renderer
     if (Renderer_) {
         Renderer_->Shutdown();
@@ -378,7 +495,7 @@ void AxEngine::Shutdown()
         gResourceAllocator = nullptr;
     }
 
-    // Destroy window
+    // Destroy window (only in standalone mode)
     if (Window_ && WindowAPI_) {
         WindowAPI_->DestroyWindow(Window_);
         Window_ = nullptr;
@@ -395,7 +512,7 @@ AxEngine::~AxEngine()
 }
 
 //=============================================================================
-// Scene Loading (Engine-owned)
+// Scene Loading (Internal helper)
 //=============================================================================
 
 SceneTree* AxEngine::LoadScene(const char* FilePath)
@@ -469,6 +586,244 @@ void AxEngine::UnloadScene()
 }
 
 //=============================================================================
+// Runtime Scene Management API
+//=============================================================================
+
+bool AxEngine::LoadSceneFromPath(const char* Path)
+{
+    if (!Path) {
+        AX_LOG(ERROR, "LoadSceneFromPath: NULL path");
+        return (false);
+    }
+
+    // Cleanup existing scene
+    UnloadScene();
+
+    // Load the new scene
+    SceneTree_ = LoadScene(Path);
+    if (!SceneTree_) {
+        AX_LOG(ERROR, "Failed to load scene from '%s'", Path);
+        return (false);
+    }
+
+    // Set up the main camera from the loaded scene
+    uint32_t CamCount = 0;
+    Node** CamNodes = SceneTree_->GetNodesByType(NodeType::Camera, &CamCount);
+    if (CamNodes && CamCount > 0) {
+        CameraNode* SceneCam = static_cast<CameraNode*>(CamNodes[0]);
+        if (Renderer_) {
+            Renderer_->SetMainCamera(SceneCam);
+        }
+        SceneTree_->SetMainCamera(SceneCam);
+    }
+
+    // Propagate current mode to the new scene tree
+    SceneTree_->SetScriptsEnabled(Mode_ == AxEngineMode::Play);
+
+    AX_LOG(INFO, "Scene loaded from '%s'", Path);
+    return (true);
+}
+
+void AxEngine::UnloadCurrentScene()
+{
+    // Clear main camera from renderer before unloading
+    if (Renderer_) {
+        Renderer_->SetMainCamera(nullptr);
+    }
+
+    UnloadScene();
+
+    AX_LOG(INFO, "Scene unloaded");
+}
+
+void AxEngine::NewScene()
+{
+    // Cleanup existing scene
+    if (Renderer_) {
+        Renderer_->SetMainCamera(nullptr);
+    }
+    UnloadScene();
+
+    // Get the HashTableAPI for creating the new SceneTree
+    AxHashTableAPI* HashTableAPI = static_cast<AxHashTableAPI*>(
+        APIRegistry_->Get(AXON_HASH_TABLE_API_NAME));
+    if (!HashTableAPI) {
+        AX_LOG(ERROR, "NewScene: Failed to get HashTableAPI");
+        return;
+    }
+
+    // Create a fresh scene tree with just a root node
+    SceneTree_ = new SceneTree(HashTableAPI, nullptr);
+    SceneTree_->Name = "NewScene";
+
+    // Propagate current mode to the new scene tree
+    SceneTree_->SetScriptsEnabled(Mode_ == AxEngineMode::Play);
+
+    AX_LOG(INFO, "New empty scene created");
+}
+
+bool AxEngine::SaveCurrentScene(const char* Path)
+{
+    if (!Path) {
+        AX_LOG(ERROR, "SaveCurrentScene: NULL path");
+        return (false);
+    }
+
+    if (!SceneTree_) {
+        AX_LOG(ERROR, "SaveCurrentScene: No scene loaded");
+        return (false);
+    }
+
+    bool Result = SceneParser_.SaveSceneToFile(SceneTree_, Path);
+    if (Result) {
+        AX_LOG(INFO, "Scene saved to '%s'", Path);
+    } else {
+        AX_LOG(ERROR, "Failed to save scene to '%s': %s", Path,
+               SceneParser_.GetLastError() ? SceneParser_.GetLastError() : "Unknown error");
+    }
+
+    return (Result);
+}
+
+//=============================================================================
+// Play Mode Scene Snapshot & Restore
+//=============================================================================
+
+void AxEngine::SnapshotScene()
+{
+    if (!SceneTree_) {
+        AX_LOG(ERROR, "SnapshotScene: No scene loaded");
+        SceneSnapshot_.clear();
+        return;
+    }
+
+    SceneSnapshot_ = SceneParser_.SaveSceneToString(SceneTree_);
+    if (SceneSnapshot_.empty()) {
+        AX_LOG(ERROR, "SnapshotScene: Failed to serialize scene");
+    } else {
+        AX_LOG(INFO, "Scene snapshot captured (%zu bytes)", SceneSnapshot_.size());
+    }
+}
+
+void AxEngine::RestoreSnapshot()
+{
+    if (SceneSnapshot_.empty()) {
+        AX_LOG(ERROR, "RestoreSnapshot: No snapshot to restore");
+        return;
+    }
+
+    // Clear main camera from renderer before unloading
+    if (Renderer_) {
+        Renderer_->SetMainCamera(nullptr);
+    }
+
+    // Unload the current scene (releases model handles, destroys tree)
+    UnloadScene();
+
+    // Re-parse the scene from the snapshot string
+    SceneTree_ = SceneParser_.LoadSceneFromString(SceneSnapshot_.c_str());
+    if (!SceneTree_) {
+        AX_LOG(ERROR, "RestoreSnapshot: Failed to parse snapshot");
+        return;
+    }
+
+    // Reload models for the restored scene (handles were released during unload)
+    LoadSceneModels(SceneTree_);
+
+    // Set up the main camera from the restored scene
+    uint32_t CamCount = 0;
+    Node** CamNodes = SceneTree_->GetNodesByType(NodeType::Camera, &CamCount);
+    if (CamNodes && CamCount > 0) {
+        CameraNode* SceneCam = static_cast<CameraNode*>(CamNodes[0]);
+        if (Renderer_) {
+            Renderer_->SetMainCamera(SceneCam);
+        }
+        SceneTree_->SetMainCamera(SceneCam);
+    }
+
+    // Propagate current mode to the restored scene tree
+    SceneTree_->SetScriptsEnabled(Mode_ == AxEngineMode::Play);
+
+    AX_LOG(INFO, "Scene restored from snapshot");
+}
+
+void AxEngine::EnterPlayMode()
+{
+    if (Mode_ == AxEngineMode::Play) {
+        AX_LOG(WARNING, "EnterPlayMode: Already in Play mode");
+        return;
+    }
+
+    // Snapshot the current scene before entering play
+    SnapshotScene();
+
+    // Reset fixed-timestep accumulator
+    FixedAccumulator_ = 0.0f;
+
+    // Initialize LastFrameTime_ to avoid a large first-frame delta
+    if (PlatformAPI_) {
+        LastFrameTime_ = PlatformAPI_->TimeAPI->WallTime();
+    }
+
+    // Switch renderer to use scene's game camera instead of editor camera
+    if (Renderer_) {
+        Renderer_->SetUseEditorCamera(false);
+    }
+
+    // Switch to Play mode (enables scripts in SceneTree)
+    SetMode(AxEngineMode::Play);
+
+    AX_LOG(INFO, "Entered Play mode");
+}
+
+void AxEngine::ExitPlayMode()
+{
+    if (Mode_ == AxEngineMode::Edit) {
+        AX_LOG(WARNING, "ExitPlayMode: Already in Edit mode");
+        return;
+    }
+
+    // Switch to Edit mode (disables scripts in SceneTree)
+    SetMode(AxEngineMode::Edit);
+
+    // Restore the scene from the snapshot (discards play-time modifications)
+    RestoreSnapshot();
+
+    // Discard the snapshot
+    SceneSnapshot_.clear();
+
+    // Switch renderer back to editor camera
+    if (Renderer_) {
+        Renderer_->SetUseEditorCamera(true);
+        Renderer_->SetEditorCameraView(
+            EditorCamera_.Position, EditorCamera_.Target,
+            EditorCamera_.FOV, EditorCamera_.Near, EditorCamera_.Far);
+    }
+
+    AX_LOG(INFO, "Exited Play mode");
+}
+
+//=============================================================================
+// Editor Camera
+//=============================================================================
+
+void AxEngine::SetEditorCamera(float PosX, float PosY, float PosZ,
+                               float TargetX, float TargetY, float TargetZ,
+                               float FOV)
+{
+    EditorCamera_.Position = {PosX, PosY, PosZ};
+    EditorCamera_.Target = {TargetX, TargetY, TargetZ};
+    EditorCamera_.FOV = FOV;
+
+    // Update the renderer's editor camera matrices if it exists
+    if (Renderer_) {
+        Renderer_->SetEditorCameraView(
+            EditorCamera_.Position, EditorCamera_.Target,
+            EditorCamera_.FOV, EditorCamera_.Near, EditorCamera_.Far);
+    }
+}
+
+//=============================================================================
 // Static API Functions
 //=============================================================================
 
@@ -488,6 +843,14 @@ static int Run()
     return (gEngine->Run());
 }
 
+static bool Tick()
+{
+    if (!gEngine) {
+        return (false);
+    }
+    return (gEngine->Tick());
+}
+
 static void Shutdown()
 {
     if (gEngine) {
@@ -502,11 +865,88 @@ static bool IsRunning()
     return (gEngine && gEngine->IsRunning());
 }
 
+static void Resize(int32_t Width, int32_t Height)
+{
+    if (gEngine) {
+        gEngine->Resize(Width, Height);
+    }
+}
+
+static void SetMode(AxEngineMode Mode)
+{
+    if (gEngine) {
+        gEngine->SetMode(Mode);
+    }
+}
+
+static bool LoadSceneAPI(const char* Path)
+{
+    if (!gEngine) {
+        return (false);
+    }
+    return (gEngine->LoadSceneFromPath(Path));
+}
+
+static void UnloadSceneAPI()
+{
+    if (gEngine) {
+        gEngine->UnloadCurrentScene();
+    }
+}
+
+static void NewSceneAPI()
+{
+    if (gEngine) {
+        gEngine->NewScene();
+    }
+}
+
+static bool SaveSceneAPI(const char* Path)
+{
+    if (!gEngine) {
+        return (false);
+    }
+    return (gEngine->SaveCurrentScene(Path));
+}
+
+static void EnterPlayModeAPI()
+{
+    if (gEngine) {
+        gEngine->EnterPlayMode();
+    }
+}
+
+static void ExitPlayModeAPI()
+{
+    if (gEngine) {
+        gEngine->ExitPlayMode();
+    }
+}
+
+static void SetEditorCameraAPI(float PosX, float PosY, float PosZ,
+                               float TargetX, float TargetY, float TargetZ,
+                               float FOV)
+{
+    if (gEngine) {
+        gEngine->SetEditorCamera(PosX, PosY, PosZ, TargetX, TargetY, TargetZ, FOV);
+    }
+}
+
 static AxEngineAPI gEngineAPI = {
     .Initialize = Initialize,
     .Run = Run,
+    .Tick = Tick,
     .Shutdown = Shutdown,
-    .IsRunning = IsRunning
+    .IsRunning = IsRunning,
+    .Resize = Resize,
+    .SetMode = SetMode,
+    .LoadScene = LoadSceneAPI,
+    .UnloadScene = UnloadSceneAPI,
+    .NewScene = NewSceneAPI,
+    .SaveScene = SaveSceneAPI,
+    .EnterPlayMode = EnterPlayModeAPI,
+    .ExitPlayMode = ExitPlayModeAPI,
+    .SetEditorCamera = SetEditorCameraAPI
 };
 
 #if !defined(AX_SHIPPING)
