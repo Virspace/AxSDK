@@ -63,6 +63,9 @@ dkms.conf
 .history/
 
 build/*
+build-debug/*
+build-development/*
+build-shipping/*
 vsbuild/*
 
 # Assets
