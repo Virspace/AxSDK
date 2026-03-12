@@ -1,0 +1,58 @@
+{
+    "version": 6,
+    "configurePresets": [
+        {
+            "name": "debug",
+            "displayName": "Debug",
+            "description": "Unoptimized, full debug symbols, DLL plugins, assertions enabled",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build-debug",
+            "cacheVariables": {
+                "AX_BUILD_CONFIG": "Debug",
+                "CMAKE_C_COMPILER": "C:/msys64/mingw64/bin/gcc.exe",
+                "CMAKE_CXX_COMPILER": "C:/msys64/mingw64/bin/g++.exe"
+            }
+        },
+        {
+            "name": "development",
+            "displayName": "Development",
+            "description": "Optimized with debug symbols, DLL plugins, assertions enabled (default)",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": {
+                "AX_BUILD_CONFIG": "Development",
+                "CMAKE_C_COMPILER": "C:/msys64/mingw64/bin/gcc.exe",
+                "CMAKE_CXX_COMPILER": "C:/msys64/mingw64/bin/g++.exe"
+            }
+        },
+        {
+            "name": "shipping",
+            "displayName": "Shipping",
+            "description": "Fully optimized, monolithic AxonEngine.exe, dev features stripped",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build-shipping",
+            "cacheVariables": {
+                "AX_BUILD_CONFIG": "Shipping",
+                "CMAKE_C_COMPILER": "C:/msys64/mingw64/bin/gcc.exe",
+                "CMAKE_CXX_COMPILER": "C:/msys64/mingw64/bin/g++.exe"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "debug",
+            "displayName": "Debug",
+            "configurePreset": "debug"
+        },
+        {
+            "name": "development",
+            "displayName": "Development",
+            "configurePreset": "development"
+        },
+        {
+            "name": "shipping",
+            "displayName": "Shipping",
+            "configurePreset": "shipping"
+        }
+    ]
+}

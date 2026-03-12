@@ -1,0 +1,54 @@
+# DPI Scaling Test
+[ ] App respects DPI settings by scaling correctly
+
+# Multi-Display DPI Scaling Test
+Setup: Configure two monitors, each with different DPI settings
+[ ] App moves from display to display and accounts for DPI changes between monitors
+
+# Custom cursor
+[ ] Normal windows cursor is replaced with custom cursor
+
+# Normal Cursor
+Setup: Create decorated resizable window
+[ ] Cursor is visible inside the client area
+[ ] Cursor position at the left most pixel of the window equals zero
+[ ] Cursor position at the right most pixel of the window equals its width
+[ ] Cursor position at the top most pixel of the window equals zero
+[ ] Cursor position at the bottom most pixel of the window equals its height
+[ ] Cursor position stops updating when outside of the window (no negative values)
+[ ] Cursor position keeps updating even when not in focus
+[ ] Cursor position does not keep updating when minimized
+[ ] Delta is negative in the X and Y axis when going left and up respectively
+[ ] Delta is positive in the X and Z axis when going right and down respectively
+
+# Hidden Cursor Test
+[ ] Cursor is invisible while inside the client area but visible again when not
+[ ] Cursor position at the left most pixel of the window equals zero
+[ ] Cursor position at the right most pixel of the window equals its width
+[ ] Cursor position at the top most pixel of the window equals zero
+[ ] Cursor position at the bottom most pixel of the window equals its height
+[ ] Cursor position stops updating when outside of the window (no negative values)
+[ ] Cursor position keeps updating even when not in focus
+[ ] Cursor position does not keep updating when minimized
+[ ] Delta is negative in the X and Y axis when going left and up respectively
+[ ] Delta is positive in the X and Z axis when going right and down respectively
+
+# Disabled Cursor
+[ ] Cursor X position keeps decreasing as it dragged past the left most pixel on the display
+[ ] Cursor X position keeps increasing as it dragged past the right most pixel on the display
+[ ] Cursor Y position keeps decreasing as it dragged past the top most pixel on the display
+[ ] Cursor Y position keeps increasing as it dragged past the bottom most pixel on the display
+[ ] Cursor position stops updating when minimized
+[ ] Cursor position stops updating when not in focus
+[ ] Clicking well outside the expected client area does not cause window to lose focus
+[ ] Setting mouse at known position, alt-tabbing into window, moving, and then alt-tabbing back does not move mouse position
+[ ] Only way to get mouse back is to alt-tab
+
+# Losing a monitor at runtime
+Setup: Connect multiple monitors and run, then unplug one at runtime.
+[ ] Display list updates
+[ ] Window moves over correct to remaining monitor
+
+# Adding on a monitor at runtime
+[ ] Display list updates
+[ ] Application continues normally

@@ -1,0 +1,44 @@
+# Sponza Atrium Scene
+# Default scene for the graphics example
+
+scene "SponzaAtrium" {
+    # Main light source positioned above the atrium
+    node "MainLight" Light {
+        transform {
+            translation: 50.0, 80.0, 30.0
+        }
+        type: point
+        color: 1.0, 1.0, 0.9
+        intensity: 1.2
+        range: 200.0
+    }
+
+    # Secondary warm light for atmosphere
+    node "AtmosphereLight" Light {
+        transform {
+            translation: -30.0, 60.0, -20.0
+        }
+        type: point
+        color: 1.0, 0.8, 0.6
+        intensity: 0.8
+        range: 150.0
+    }
+
+    node "MainEnvironment" MeshInstance {
+        transform {
+            translation: 0.0, 0.0, 0.0
+            rotation: 0.0, 0.0, 0.0, 1.0
+            scale: 1.0, 1.0, 1.0
+        }
+        mesh: "examples/graphics/scenes/models/atrium.glb"
+        material: "DefaultMaterial"
+    }
+
+    node "DefaultCamera" Camera {
+        transform {
+            translation: 11.12, 1.7, 1.83
+            rotation: -0.064447, 0.381751, 0.026695, 0.921629
+            scale: 1.0, 1.0, 1.0
+        }
+    }
+}
