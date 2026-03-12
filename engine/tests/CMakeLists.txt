@@ -73,10 +73,10 @@ target_include_directories(AxEngineTests
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/../include
         ${CMAKE_CURRENT_SOURCE_DIR}/../src
-        ${CMAKE_CURRENT_SOURCE_DIR}/../../Plugins/AxOpenGL/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/../../Plugins/AxResource/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/../../Plugins/AxResource/src
-        ${CMAKE_CURRENT_SOURCE_DIR}/../../Plugins/AxWindow/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../plugins/AxOpenGL/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../plugins/AxResource/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../plugins/AxResource/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../plugins/AxWindow/include
 )
 
 # Link dependencies

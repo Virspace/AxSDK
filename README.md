@@ -130,11 +130,11 @@ You'll need to grab the Sponza Atrium GLTF (.glb) and textures from [CGTrader](h
 
 ```
 AxSDK/
-├── Foundation/          # Pure C11 core library
+├── foundation/          # Pure C11 core library
 │   ├── include/         # Public headers
 │   ├── src/             # Implementation
 │   └── tests/           # Foundation tests
-├── Plugins/             # Modular plugin system
+├── plugins/             # Modular plugin system
 │   ├── AxWindow/        # Windowing & input (C)
 │   ├── AxOpenGL/        # OpenGL rendering (C)
 │   ├── AxResource/      # Asset management (C++)

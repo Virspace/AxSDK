@@ -6,9 +6,9 @@
                 "${workspaceFolder}/**",
                 "${workspaceFolder}/foundation/include",
                 "${workspaceFolder}/foundation/include/Foundation",
-                "${workspaceFolder}/Plugins/AxWindow/include",
-                "${workspaceFolder}/Plugins/AxOpenGL/include",
-                "${workspaceFolder}/Plugins/AxAudio/include"
+                "${workspaceFolder}/plugins/AxWindow/include",
+                "${workspaceFolder}/plugins/AxOpenGL/include",
+                "${workspaceFolder}/plugins/AxAudio/include"
             ],
             "defines": [
                 "_DEBUG",
@@ -30,9 +30,9 @@
                 "${workspaceFolder}/**",
                 "${workspaceFolder}/foundation/include",
                 "${workspaceFolder}/foundation/include/Foundation",
-                "${workspaceFolder}/Plugins/AxWindow/include",
-                "${workspaceFolder}/Plugins/AxOpenGL/include",
-                "${workspaceFolder}/Plugins/AxAudio/include"
+                "${workspaceFolder}/plugins/AxWindow/include",
+                "${workspaceFolder}/plugins/AxOpenGL/include",
+                "${workspaceFolder}/plugins/AxAudio/include"
             ],
             "defines": [
                 "_DEBUG",
@@ -51,9 +51,9 @@
                 "${workspaceFolder}/**",
                 "${workspaceFolder}/foundation/include",
                 "${workspaceFolder}/foundation/include/Foundation",
-                "${workspaceFolder}/Plugins/AxWindow/include",
-                "${workspaceFolder}/Plugins/AxOpenGL/include",
-                "${workspaceFolder}/Plugins/AxAudio/include"
+                "${workspaceFolder}/plugins/AxWindow/include",
+                "${workspaceFolder}/plugins/AxOpenGL/include",
+                "${workspaceFolder}/plugins/AxAudio/include"
             ],
             "defines": [
                 "_DEBUG",

@@ -60,7 +60,7 @@ if(AX_BUILD_CONFIG STREQUAL "Shipping")
             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/include/AxEngine
-            ${CMAKE_CURRENT_SOURCE_DIR}/../Plugins/AxResource/src
+            ${CMAKE_CURRENT_SOURCE_DIR}/../plugins/AxResource/src
     )
 
     target_link_libraries(AxonEngine
@@ -115,7 +115,7 @@ else()
             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/include/AxEngine
-            ${CMAKE_CURRENT_SOURCE_DIR}/../Plugins/AxResource/src
+            ${CMAKE_CURRENT_SOURCE_DIR}/../plugins/AxResource/src
     )
 
     target_link_libraries(AxEngine

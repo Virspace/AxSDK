@@ -174,7 +174,7 @@ TEST_F(AxLogTest, FormatOutputContainsExpectedFields)
         << "Output should contain filename without full path";
 
     /* Check that full path is NOT present (should be stripped) */
-    EXPECT_EQ(Contents.find("Plugins/AxLog/tests/src/AxLogTests.cpp"), std::string::npos)
+    EXPECT_EQ(Contents.find("plugins/AxLog/tests/src/AxLogTests.cpp"), std::string::npos)
         << "Output should NOT contain full path";
 
     /* Check line number appears (colon after filename) */
