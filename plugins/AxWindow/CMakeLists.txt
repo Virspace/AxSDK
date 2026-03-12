@@ -109,6 +109,6 @@ export(EXPORT AxWindowTargets
 # Testing
 #
 
-if(BUILD_TESTING)
+if(BUILD_TESTING AND AX_BUILD_GPU_TESTS)
     add_subdirectory(tests)
 endif()

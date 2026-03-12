@@ -3,12 +3,15 @@ cmake_minimum_required(VERSION 3.15)
 project(AxSDK VERSION 1.0.0)
 include(CTest)
 
-# Set compiler flags for x64 architecture
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64|x86_64")
+# Verify x64 architecture
+if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64|x86_64")
+    message(FATAL_ERROR "This project requires x64 architecture")
+endif()
+
+# Set x64 flag for GCC/Clang (MSVC handles this via generator platform)
+if(NOT MSVC)
     set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS}   -m64")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m64")
-else()
-    message(FATAL_ERROR "This project requires x64 architecture")
 endif()
 
 # =============================================================================
@@ -50,14 +53,19 @@ message(STATUS "AxSDK build configuration: ${AX_BUILD_CONFIG} (CMAKE_BUILD_TYPE=
 # =============================================================================
 
 enable_testing()
+option(AX_BUILD_GPU_TESTS "Build tests that require a GPU/display (AxOpenGL, AxWindow)" OFF)
 
 if (WIN32)
     add_definitions(-DAX_OS_WINDOWS)
     add_definitions(-DWINVER=0x0A00)
 endif()
 
-# Generate debug symbols on all non-MSVC toolchains
-add_compile_options(-g)
+# Generate debug symbols
+if(MSVC)
+    add_compile_options(/Zi)
+else()
+    add_compile_options(-g)
+endif()
 
 # Basic directory setup
 set(CMAKE_INSTALL_PREFIX           ${CMAKE_BINARY_DIR}/install)

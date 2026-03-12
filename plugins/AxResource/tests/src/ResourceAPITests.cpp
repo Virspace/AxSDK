@@ -27,6 +27,7 @@
 #include "AxResource/AxResourceTypes.h"
 
 #include <cstring>
+#include <string>
 
 //=============================================================================
 // Test Fixture
@@ -54,8 +55,9 @@ protected:
         AllocatorAPI = (struct AxAllocatorAPI*)AxonGlobalAPIRegistry->Get(AXON_ALLOCATOR_API_NAME);
         ASSERT_NE(AllocatorAPI, nullptr) << "AllocatorAPI not available";
 
-        // Load the Resource plugin
-        PluginAPI->Load("libAxResource.dll", false);
+        // Load the Resource plugin using the known binary output directory
+        std::string PluginPath = std::string(AX_TEST_BIN_DIR) + "/libAxResource.dll";
+        PluginAPI->Load(PluginPath.c_str(), false);
 
         // Get the ResourceAPI from the global registry
         API = (struct AxResourceAPI*)AxonGlobalAPIRegistry->Get(AXON_RESOURCE_API_NAME);

@@ -39,7 +39,7 @@ static void Shutdown(void);
 static bool IsInitialized(void);
 
 // Texture
-static AxTextureHandle LoadTexture(std::string_view Path,
+static AxTextureHandle LoadTexture(const char* Path,
                                     const struct AxTextureLoadOptions* Options);
 static const struct AxTexture* GetTexture(AxTextureHandle Handle);
 static bool GetTextureInfo(AxTextureHandle Handle, struct AxTextureInfo* OutInfo);
@@ -48,7 +48,7 @@ static AxTextureHandle AcquireTexture(AxTextureHandle Handle);
 static void ReleaseTexture(AxTextureHandle Handle);
 
 // Mesh
-static AxMeshHandle LoadMesh(std::string_view Path,
+static AxMeshHandle LoadMesh(const char* Path,
                               const struct AxMeshLoadOptions* Options);
 static const struct AxMesh* GetMesh(AxMeshHandle Handle);
 static bool GetMeshInfo(AxMeshHandle Handle, struct AxMeshInfo* OutInfo);
@@ -57,8 +57,8 @@ static AxMeshHandle AcquireMesh(AxMeshHandle Handle);
 static void ReleaseMesh(AxMeshHandle Handle);
 
 // Shader
-static AxShaderHandle LoadShader(std::string_view VertexPath,
-                                  std::string_view FragmentPath,
+static AxShaderHandle LoadShader(const char* VertexPath,
+                                  const char* FragmentPath,
                                   const struct AxShaderLoadOptions* Options);
 static const struct AxShaderData* GetShader(AxShaderHandle Handle);
 static uint32_t GetShaderProgram(AxShaderHandle Handle);
@@ -82,7 +82,7 @@ static AxModelHandle CreateModelFromMesh(AxMeshHandle MeshHandle,
                                           const char* Name, const char* Path);
 
 // Model (Handle-based - Phase 6)
-static AxModelHandle LoadModel(std::string_view Path);
+static AxModelHandle LoadModel(const char* Path);
 static const struct AxModelData* GetModel(AxModelHandle Handle);
 static bool IsModelValid(AxModelHandle Handle);
 static uint32_t GetModelCount(void);
@@ -199,9 +199,10 @@ static bool IsInitialized(void)
 // Texture Implementation
 //=============================================================================
 
-static AxTextureHandle LoadTexture(std::string_view Path,
+static AxTextureHandle LoadTexture(const char* Path,
                                     const struct AxTextureLoadOptions* Options)
 {
+    if (!Path) { return AX_INVALID_HANDLE; }
     return ResourceSystem::Get().LoadTexture(Path, Options);
 }
 
@@ -250,9 +251,10 @@ static void ReleaseTexture(AxTextureHandle Handle)
 // Mesh Implementation
 //=============================================================================
 
-static AxMeshHandle LoadMesh(std::string_view Path,
+static AxMeshHandle LoadMesh(const char* Path,
                               const struct AxMeshLoadOptions* Options)
 {
+    if (!Path) { return AX_INVALID_HANDLE; }
     return ResourceSystem::Get().LoadMesh(Path, Options);
 }
 
@@ -300,10 +302,11 @@ static void ReleaseMesh(AxMeshHandle Handle)
 // Shader Implementation
 //=============================================================================
 
-static AxShaderHandle LoadShader(std::string_view VertexPath,
-                                  std::string_view FragmentPath,
+static AxShaderHandle LoadShader(const char* VertexPath,
+                                  const char* FragmentPath,
                                   const struct AxShaderLoadOptions* Options)
 {
+    if (!VertexPath || !FragmentPath) { return AX_INVALID_HANDLE; }
     return ResourceSystem::Get().LoadShader(VertexPath, FragmentPath, Options);
 }
 
@@ -403,8 +406,9 @@ static AxModelHandle CreateModelFromMesh(AxMeshHandle MeshHandle,
 // Model Implementation (Handle-based - Phase 6)
 //=============================================================================
 
-static AxModelHandle LoadModel(std::string_view Path)
+static AxModelHandle LoadModel(const char* Path)
 {
+    if (!Path) { return AX_INVALID_HANDLE; }
     return ResourceSystem::Get().LoadModel(Path);
 }
 

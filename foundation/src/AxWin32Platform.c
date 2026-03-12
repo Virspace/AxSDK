@@ -46,36 +46,39 @@ static const char *BasePath(const char *Path)
 {
     // Handle NULL or empty path
     if (!Path || *Path == '\0') {
-        return (".");  // Return current directory for empty paths
+        return (".");
     }
 
-    // Find the last occurrence of both '/' and '\\'
-    const char *LastSlash = strrchr(Path, '/');
-    const char *LastBackslash = strrchr(Path, '\\');
+    static char BasePath[MAX_PATH];
 
-    // Use the latter of the two separators
-    const char *LastSeparator = (LastSlash > LastBackslash) ? LastSlash : LastBackslash;
+    // Copy path and strip trailing separators
+    size_t Len = strlen(Path);
+    while (Len > 1 && (Path[Len - 1] == '/' || Path[Len - 1] == '\\')) {
+        Len--;
+    }
+
+    // Find the last separator in the trimmed path
+    const char *LastSeparator = NULL;
+    for (size_t i = Len; i > 0; i--) {
+        if (Path[i - 1] == '/' || Path[i - 1] == '\\') {
+            LastSeparator = &Path[i - 1];
+            break;
+        }
+    }
 
     if (LastSeparator == NULL) {
-        // No directory separator found, return the full path
         return (".");
     }
 
     // Handle root path cases ("/" or "\\")
     if (LastSeparator == Path) {
-        static char RootPath[MAX_PATH];
-        RootPath[0] = *Path;
-        RootPath[1] = '\0';
-        return RootPath;
+        BasePath[0] = *Path;
+        BasePath[1] = '\0';
+        return (BasePath);
     }
 
-    // Calculate the length of the base path
-    size_t BaseLength = LastSeparator - Path + 1;
-
-    // Create a static buffer to store the base path
-    static char BasePath[MAX_PATH];
-
-    // Copy the base path
+    // Copy up to (but not including) the last separator
+    size_t BaseLength = LastSeparator - Path;
     strncpy(BasePath, Path, BaseLength);
     BasePath[BaseLength] = '\0';
 

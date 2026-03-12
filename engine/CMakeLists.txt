@@ -124,8 +124,12 @@ else()
             Virspace::AxLog
             axsdk_stb
             cgltf
-            -Wl,--export-all-symbols
     )
+
+    # Export all symbols for dynamic plugin loading (GCC/Clang only; MSVC uses __declspec)
+    if(NOT MSVC)
+        target_link_options(AxEngine PRIVATE -Wl,--export-all-symbols)
+    endif()
 
     # AxStandalone settings
     target_compile_features(AxStandalone PRIVATE cxx_std_23)

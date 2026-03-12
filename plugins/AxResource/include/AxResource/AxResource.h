@@ -25,7 +25,6 @@
 
 #include "AxResourceTypes.h"
 #include <Foundation/AxAllocator.h>
-#include <string_view>
 
 // Forward declarations
 struct AxAPIRegistry;
@@ -82,7 +81,7 @@ struct AxResourceAPI
      * @param Options Loading options (NULL for defaults)
      * @return Handle to the loaded texture, or AX_INVALID_HANDLE on failure
      */
-    AxTextureHandle (*LoadTexture)(std::string_view Path,
+    AxTextureHandle (*LoadTexture)(const char* Path,
                                     const struct AxTextureLoadOptions* Options);
 
     /**
@@ -132,7 +131,7 @@ struct AxResourceAPI
      * @param Options Loading options (NULL for defaults)
      * @return Handle to the loaded mesh, or AX_INVALID_HANDLE on failure
      */
-    AxMeshHandle (*LoadMesh)(std::string_view Path,
+    AxMeshHandle (*LoadMesh)(const char* Path,
                               const struct AxMeshLoadOptions* Options);
 
     /**
@@ -181,8 +180,8 @@ struct AxResourceAPI
      * @param Options Loading options (NULL for defaults)
      * @return Handle to the shader, or AX_INVALID_HANDLE on failure
      */
-    AxShaderHandle (*LoadShader)(std::string_view VertexPath,
-                                  std::string_view FragmentPath,
+    AxShaderHandle (*LoadShader)(const char* VertexPath,
+                                  const char* FragmentPath,
                                   const struct AxShaderLoadOptions* Options);
 
     /**
@@ -278,7 +277,7 @@ struct AxResourceAPI
      * @param Path Path to the GLTF file
      * @return Handle to the loaded model, or AX_INVALID_HANDLE on failure
      */
-    AxModelHandle (*LoadModel)(std::string_view Path);
+    AxModelHandle (*LoadModel)(const char* Path);
 
     /**
      * Get model data by handle.

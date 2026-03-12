@@ -45,6 +45,7 @@ target_compile_features(AxResourceTests PRIVATE cxx_std_11)
 target_compile_definitions(AxResourceTests
     PRIVATE
         AXON_LINKS_FOUNDATION
+        AX_TEST_BIN_DIR="$<TARGET_FILE_DIR:AxResourceTests>"
 )
 
 # Include directories for AxResource and Engine headers

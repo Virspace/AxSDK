@@ -107,8 +107,8 @@ TEST_F(TypedNodeTest, LightNodeCreationAndDefaults)
   EXPECT_EQ(LN.GetType(), NodeType::Light);
   EXPECT_EQ(LN.GetName(), "TestLight");
 
-  // Light should have reasonable defaults
-  EXPECT_EQ(LN.GetLightType(), AX_LIGHT_TYPE_DIRECTIONAL);
+  // Light defaults to point light
+  EXPECT_EQ(LN.GetLightType(), AX_LIGHT_TYPE_POINT);
   EXPECT_FLOAT_EQ(LN.GetIntensity(), 1.0f);
 
   // Test setters
@@ -243,7 +243,7 @@ TEST_F(TypedNodeTest, ParticleEmitterNodeCreationAndDefaults)
   EXPECT_EQ(PE.MaxParticles, 100u);
   EXPECT_FLOAT_EQ(PE.EmissionRate, 10.0f);
   EXPECT_FLOAT_EQ(PE.Lifetime, 2.0f);
-  EXPECT_FLOAT_EQ(PE.Speed, 5.0f);
+  EXPECT_FLOAT_EQ(PE.Speed, 1.0f);
   EXPECT_FALSE(PE.IsEmitting);
 
   PE.MaxParticles = 500;

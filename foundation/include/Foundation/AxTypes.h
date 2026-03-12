@@ -12,7 +12,7 @@ extern "C" {
 #define COMPILER_LLVM 0
 #endif
 
-#if !COMPILER_MVC && !COMPILER_LLVM
+#if !COMPILER_MSVC && !COMPILER_LLVM
 #if _MSC_VER
 #undef COMPILER_MSVC
 #define COMPILER_MSVC 1
@@ -49,7 +49,9 @@ extern "C" {
 
 /* Assertion macro -- active in Debug/Development, stripped in Shipping */
 #if defined(AX_ENABLE_ASSERTS)
-  #if defined(__clang__)
+  #if defined(_MSC_VER)
+    #define AXON_ASSERT(Expression) if(!(Expression)) { __debugbreak(); }
+  #elif defined(__clang__) || defined(__GNUC__)
     #define AXON_ASSERT(Expression) if(!(Expression)) { __builtin_trap(); }
   #else
     #define AXON_ASSERT(Expression) if(!(Expression)) { *(volatile int *)0 = 0; }

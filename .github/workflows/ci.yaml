@@ -1,6 +1,10 @@
 name: C++ CI
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
   build:
@@ -10,39 +14,31 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up CMake
+    - name: Set up MSVC
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: x64
+
+    - name: Set up CMake and Ninja
       uses: lukka/get-cmake@latest
       with:
         cmakeVersion: '3.29.2'
 
-    - name: Install LLVM and Clang
+    - name: Configure CMake
       run: |
-        # Download and install LLVM 19.0.0 from GitHub releases
-        $llvmVersion = "20.1.7"
-        $downloadUrl = "https://github.com/llvm/llvm-project/releases/download/llvmorg-$llvmVersion/LLVM-$llvmVersion-win64.exe"
-        $installerPath = "LLVM-$llvmVersion-windows-x64.exe"
-
-        Invoke-WebRequest -Uri $downloadUrl -OutFile $installerPath
-        Start-Process -FilePath $installerPath -ArgumentList "/S" -Wait
-
-        echo "C:\Program Files\LLVM\bin" >> $GITHUB_PATH
-        # Check what version was installed
-        clang --version
-      shell: pwsh
-
-    - name: Configure CMake with Clang
-      run: |
-        cmake -S . -B build -G "Ninja" `
-        -DCMAKE_C_COMPILER=clang `
-        -DCMAKE_CXX_COMPILER=clang++ `
-        -DCMAKE_BUILD_TYPE=Release `
-        -DCMAKE_VERBOSE_MAKEFILE=ON
-      shell: pwsh
+        cmake -S . -B build -G "Ninja" -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DAX_BUILD_CONFIG=Development
 
     - name: Build
       run: cmake --build build
-      shell: pwsh
 
-    - name: Run tests
-      run: ctest --test-dir build --output-on-failure
-      shell: pwsh
+    - name: Run FoundationTests
+      run: build\bin\FoundationTests.exe --gtest_output=xml:build\test-results\foundation.xml
+
+    - name: Run AxEngineTests
+      run: build\bin\AxEngineTests.exe --gtest_output=xml:build\test-results\engine.xml
+
+    - name: Run AxLogTests
+      run: build\bin\AxLogTests.exe --gtest_output=xml:build\test-results\log.xml
+
+    - name: Run AxResourceTests
+      run: build\bin\AxResourceTests.exe --gtest_output=xml:build\test-results\resource.xml

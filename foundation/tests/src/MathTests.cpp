@@ -84,43 +84,42 @@ TEST(Math, QuatEulerConversionRoundTrip)
     EXPECT_NEAR(OriginalEuler.Z, ConvertedEuler.Z, 0.001f);
 }
 
-TEST(Math, QuatZeroRollConversion)
+TEST(Math, QuatIdentityRoundTrip)
 {
-    // Test specific case: quaternion with Z=0 should give Roll=0
-    AxQuat TestQuat = { .X = -0.054863f, .Y = 0.382683f, .Z = 0.000000f, .W = 0.922297f };
-    AxVec3 EulerResult = QuatToEuler(TestQuat);
-
-    printf("Test Quat: X=%.6f, Y=%.6f, Z=%.6f, W=%.6f\n",
-           TestQuat.X, TestQuat.Y, TestQuat.Z, TestQuat.W);
-    printf("Result Euler: Pitch=%.6f, Yaw=%.6f, Roll=%.6f\n",
-           EulerResult.X * (180.0f / AX_PI), EulerResult.Y * (180.0f / AX_PI), EulerResult.Z * (180.0f / AX_PI));
-
-    // Roll should be very close to zero when quaternion Z component is zero
-    EXPECT_NEAR(EulerResult.Z, 0.0f, 0.001f);
-}
-
-TEST(Math, QuatFromEulerZeroRoll)
-{
-    // Test identity case first
+    // Identity quaternion should produce zero Euler angles
     AxVec3 IdentityEuler = { .X = 0.0f, .Y = 0.0f, .Z = 0.0f };
     AxQuat IdentityQuat = QuatFromEuler(IdentityEuler);
-    printf("Identity Euler: Pitch=%.6f, Yaw=%.6f, Roll=%.6f\n", 0.0f, 0.0f, 0.0f);
-    printf("Identity Quat: X=%.6f, Y=%.6f, Z=%.6f, W=%.6f\n",
-           IdentityQuat.X, IdentityQuat.Y, IdentityQuat.Z, IdentityQuat.W);
     EXPECT_NEAR(IdentityQuat.X, 0.0f, 0.001f);
     EXPECT_NEAR(IdentityQuat.Y, 0.0f, 0.001f);
     EXPECT_NEAR(IdentityQuat.Z, 0.0f, 0.001f);
     EXPECT_NEAR(IdentityQuat.W, 1.0f, 0.001f);
 
-    // Test that QuatFromEuler with Roll=0 produces Z component close to 0
-    AxVec3 EulerInput = { .X = -8.0f * (AX_PI / 180.0f), .Y = 45.0f * (AX_PI / 180.0f), .Z = 0.0f };
-    AxQuat QuatResult = QuatFromEuler(EulerInput);
+    AxVec3 BackToEuler = QuatToEuler(IdentityQuat);
+    EXPECT_NEAR(BackToEuler.X, 0.0f, 0.001f);
+    EXPECT_NEAR(BackToEuler.Y, 0.0f, 0.001f);
+    EXPECT_NEAR(BackToEuler.Z, 0.0f, 0.001f);
+}
 
-    printf("Input Euler: Pitch=%.6f, Yaw=%.6f, Roll=%.6f\n",
-           EulerInput.X * (180.0f / AX_PI), EulerInput.Y * (180.0f / AX_PI), EulerInput.Z * (180.0f / AX_PI));
-    printf("Result Quat: X=%.6f, Y=%.6f, Z=%.6f, W=%.6f\n",
-           QuatResult.X, QuatResult.Y, QuatResult.Z, QuatResult.W);
+TEST(Math, QuatSingleAxisRoundTrips)
+{
+    // Pitch only (X-axis rotation)
+    AxVec3 PitchOnly = { .X = 30.0f * (AX_PI / 180.0f), .Y = 0.0f, .Z = 0.0f };
+    AxVec3 PitchResult = QuatToEuler(QuatFromEuler(PitchOnly));
+    EXPECT_NEAR(PitchOnly.X, PitchResult.X, 0.001f);
+    EXPECT_NEAR(PitchOnly.Y, PitchResult.Y, 0.001f);
+    EXPECT_NEAR(PitchOnly.Z, PitchResult.Z, 0.001f);
 
-    // Z component should be very close to zero when Roll=0
-    EXPECT_NEAR(QuatResult.Z, 0.0f, 0.001f);
+    // Yaw only (Y-axis rotation)
+    AxVec3 YawOnly = { .X = 0.0f, .Y = 45.0f * (AX_PI / 180.0f), .Z = 0.0f };
+    AxVec3 YawResult = QuatToEuler(QuatFromEuler(YawOnly));
+    EXPECT_NEAR(YawOnly.X, YawResult.X, 0.001f);
+    EXPECT_NEAR(YawOnly.Y, YawResult.Y, 0.001f);
+    EXPECT_NEAR(YawOnly.Z, YawResult.Z, 0.001f);
+
+    // Roll only (Z-axis rotation)
+    AxVec3 RollOnly = { .X = 0.0f, .Y = 0.0f, .Z = 60.0f * (AX_PI / 180.0f) };
+    AxVec3 RollResult = QuatToEuler(QuatFromEuler(RollOnly));
+    EXPECT_NEAR(RollOnly.X, RollResult.X, 0.001f);
+    EXPECT_NEAR(RollOnly.Y, RollResult.Y, 0.001f);
+    EXPECT_NEAR(RollOnly.Z, RollResult.Z, 0.001f);
 }

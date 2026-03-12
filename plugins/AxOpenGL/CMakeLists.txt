@@ -128,4 +128,6 @@ export(EXPORT AxOpenGLTargets
     NAMESPACE Virspace::
 )
 
-#add_subdirectory(tests)
+if(BUILD_TESTING AND AX_BUILD_GPU_TESTS)
+    add_subdirectory(tests)
+endif()
