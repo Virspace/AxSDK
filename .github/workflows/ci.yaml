@@ -9,41 +9,39 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up MSVC
-      uses: ilammy/msvc-dev-cmd@v1
+    - name: Set up MSYS2 (MINGW64 + Clang)
+      uses: msys2/setup-msys2@v2
       with:
-        arch: x64
-
-    - name: Install LLVM/Clang
-      uses: KyleMayes/install-llvm-action@v2
-      with:
-        version: '17'
-
-    - name: Set up CMake and Ninja
-      uses: lukka/get-cmake@latest
-      with:
-        cmakeVersion: '3.29.2'
+        msystem: MINGW64
+        update: false
+        install: >-
+          mingw-w64-x86_64-clang
+          mingw-w64-x86_64-lld
+          mingw-w64-x86_64-cmake
+          mingw-w64-x86_64-ninja
 
     - name: Configure CMake
-      run: |
-        cmake -S . -B build -G "Ninja" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DAX_BUILD_CONFIG=Development
+      run: cmake -S . -B build -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DAX_BUILD_CONFIG=Development
 
     - name: Build
       run: cmake --build build
 
     - name: Run FoundationTests
-      run: build\bin\FoundationTests.exe --gtest_output=xml:build\test-results\foundation.xml
+      run: build/bin/FoundationTests.exe --gtest_output=xml:build/test-results/foundation.xml
 
     - name: Run AxEngineTests
-      run: build\bin\AxEngineTests.exe --gtest_output=xml:build\test-results\engine.xml
+      run: build/bin/AxEngineTests.exe --gtest_output=xml:build/test-results/engine.xml
 
     - name: Run AxLogTests
-      run: build\bin\AxLogTests.exe --gtest_output=xml:build\test-results\log.xml
+      run: build/bin/AxLogTests.exe --gtest_output=xml:build/test-results/log.xml
 
     - name: Run AxResourceTests
-      run: build\bin\AxResourceTests.exe --gtest_output=xml:build\test-results\resource.xml
+      run: build/bin/AxResourceTests.exe --gtest_output=xml:build/test-results/resource.xml
