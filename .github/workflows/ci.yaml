@@ -19,6 +19,11 @@ jobs:
       with:
         arch: x64
 
+    - name: Install LLVM/Clang
+      uses: KyleMayes/install-llvm-action@v2
+      with:
+        version: '17'
+
     - name: Set up CMake and Ninja
       uses: lukka/get-cmake@latest
       with:
@@ -26,7 +31,7 @@ jobs:
 
     - name: Configure CMake
       run: |
-        cmake -S . -B build -G "Ninja" -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DAX_BUILD_CONFIG=Development
+        cmake -S . -B build -G "Ninja" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DAX_BUILD_CONFIG=Development
 
     - name: Build
       run: cmake --build build
