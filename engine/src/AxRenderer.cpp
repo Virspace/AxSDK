@@ -149,23 +149,15 @@ void AxRenderer::SetEditorCameraView(AxVec3 Position, AxVec3 Target,
 
     EditorCameraPosition_ = Position;
 
-    // Build a temporary transform oriented toward the target, then
-    // compute the view matrix from it using the existing CreateViewMatrix.
-    AxTransform CamTransform = {};
-    CamTransform.Translation = Position;
-    CamTransform.Scale = {1.0f, 1.0f, 1.0f};
-    CamTransform.Rotation = QuatIdentity();
-    TransformLookAt(&CamTransform, Target, (AxVec3){0.0f, 1.0f, 0.0f});
-    EditorViewMatrix_ = CreateViewMatrix(&CamTransform);
+    // Build a temporary transform oriented toward the target
+    Transform CamTransform;
+    CamTransform.SetTranslation(Vec3(Position));
+    CamTransform.LookAt(Vec3(Target), Vec3::Up());
+    EditorViewMatrix_ = CamTransform.GetViewMatrix();
 
-    // Build the projection matrix using a temporary AxCamera
-    AxCamera TempCam = {};
-    TempCam.IsOrthographic = false;
-    TempCam.FieldOfView = FOV;
-    TempCam.NearClipPlane = Near;
-    TempCam.FarClipPlane = Far;
-    TempCam.AspectRatio = Viewport_->Size.X / Viewport_->Size.Y;
-    EditorProjectionMatrix_ = RenderAPI_->CameraGetProjectionMatrix(&TempCam);
+    // Compute projection matrix
+    float AspectRatio = Viewport_->Size.X / Viewport_->Size.Y;
+    EditorProjectionMatrix_ = Mat4::Perspective(FOV, AspectRatio, Near, Far);
 }
 
 void AxRenderer::RenderScene(SceneTree* Scene)
@@ -188,8 +180,8 @@ void AxRenderer::RenderScene(SceneTree* Scene)
         if (!MainCameraNode_) {
             return;
         }
-        ViewMatrix = CreateViewMatrix(&MainCameraNode_->GetTransform());
-        ProjectionMatrix = RenderAPI_->CameraGetProjectionMatrix(&MainCameraNode_->Camera);
+        ViewMatrix = MainCameraNode_->GetViewMatrix();
+        ProjectionMatrix = MainCameraNode_->GetProjectionMatrix();
         ViewPos = MainCameraNode_->GetTransform().Translation;
     }
 
@@ -215,7 +207,7 @@ void AxRenderer::RenderScene(SceneTree* Scene)
             TempLights[i] = LN->Light;
 
             // Copy the node's world position into the light's position
-            const AxMat4x4& WorldMat = LN->GetWorldTransform();
+            const Mat4& WorldMat = LN->GetWorldTransform();
             TempLights[i].Position = {WorldMat.E[3][0], WorldMat.E[3][1], WorldMat.E[3][2]};
         }
 
@@ -232,16 +224,9 @@ void AxRenderer::RenderNode(Node* NodePtr, const AxMat4x4* ParentTransform)
 {
     if (!NodePtr) return;
 
-    // Get the node's local transform
-    const AxTransform& Transform = NodePtr->GetTransform();
-
-    // Compute local transform matrix (TRS: Translation * Rotation * Scale)
-    AxMat4x4 ScaleMatrix = Mat4x4Scale(Transform.Scale);
-    AxMat4x4 RotMatrix = QuatToMat4x4(Transform.Rotation);
-    AxMat4x4 LocalTransform = Mat4x4Mul(RotMatrix, ScaleMatrix);
-    LocalTransform.E[3][0] = Transform.Translation.X;
-    LocalTransform.E[3][1] = Transform.Translation.Y;
-    LocalTransform.E[3][2] = Transform.Translation.Z;
+    // Get the node's local forward matrix
+    const Transform& T = NodePtr->GetTransform();
+    AxMat4x4 LocalTransform = T.GetForwardMatrix();
 
     AxMat4x4 WorldTransform;
     if (ParentTransform) {

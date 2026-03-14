@@ -518,8 +518,7 @@ static void SetNodeProperty(Node* NodePtr, NodeType Type,
         case NodeType::AudioSource: {
             AudioSourceNode* AS = static_cast<AudioSourceNode*>(NodePtr);
             if (strcmp(PropName, "clip") == 0 && IsString) {
-                strncpy(AS->ClipPath, ValueStr, sizeof(AS->ClipPath) - 1);
-                AS->ClipPath[sizeof(AS->ClipPath) - 1] = '\0';
+                AS->SetClipPath(ValueStr);
             } else if (strcmp(PropName, "volume") == 0 && IsNumeric) {
                 AS->Volume = NumericValue;
             } else if (strcmp(PropName, "pitch") == 0 && IsNumeric) {
@@ -546,8 +545,7 @@ static void SetNodeProperty(Node* NodePtr, NodeType Type,
         case NodeType::Animator: {
             AnimatorNode* Anim = static_cast<AnimatorNode*>(NodePtr);
             if (strcmp(PropName, "animation") == 0 && IsString) {
-                strncpy(Anim->AnimationName, ValueStr, sizeof(Anim->AnimationName) - 1);
-                Anim->AnimationName[sizeof(Anim->AnimationName) - 1] = '\0';
+                Anim->SetAnimationName(ValueStr);
             } else if (strcmp(PropName, "speed") == 0 && IsNumeric) {
                 Anim->Speed = NumericValue;
             }
@@ -569,8 +567,7 @@ static void SetNodeProperty(Node* NodePtr, NodeType Type,
         case NodeType::Sprite: {
             SpriteNode* Spr = static_cast<SpriteNode*>(NodePtr);
             if (strcmp(PropName, "texture") == 0 && IsString) {
-                strncpy(Spr->TexturePath, ValueStr, sizeof(Spr->TexturePath) - 1);
-                Spr->TexturePath[sizeof(Spr->TexturePath) - 1] = '\0';
+                Spr->SetTexturePath(ValueStr);
             } else if (strcmp(PropName, "sortOrder") == 0 && IsNumeric) {
                 Spr->SortOrder = static_cast<int32_t>(NumericValue);
             }
@@ -609,7 +606,7 @@ static bool ParsePrimitiveMesh(Tokenizer* T, MeshInstance* MI, SceneParser* SP)
     T->CurrentToken = NextToken(T);
 
     // Clear MeshPath to indicate this is a primitive, not file-based
-    MI->MeshPath[0] = '\0';
+    MI->SetMeshPath("");
 
     // Initialize default primitive mesh instances for each shape
     BoxMesh BoxP;
@@ -1398,16 +1395,16 @@ static void SerializeTypedNodeProperties(std::string& Output, Node* Current, int
     switch (Current->GetType()) {
         case NodeType::MeshInstance: {
             MeshInstance* MI = static_cast<MeshInstance*>(Current);
-            if (MI->MeshPath[0] != '\0') {
+            if (!MI->GetMeshPath().empty()) {
                 AppendIndent(Output, Indent);
                 Output += "mesh: \"";
-                Output += MI->MeshPath;
+                Output += MI->GetMeshPath();
                 Output += "\"\n";
             }
-            if (MI->MaterialName[0] != '\0') {
+            if (!MI->GetMaterialName().empty()) {
                 AppendIndent(Output, Indent);
                 Output += "material: \"";
-                Output += MI->MaterialName;
+                Output += MI->GetMaterialName();
                 Output += "\"\n";
             }
             if (MI->RenderLayer != 0) {
@@ -1521,10 +1518,10 @@ static void SerializeTypedNodeProperties(std::string& Output, Node* Current, int
         }
         case NodeType::AudioSource: {
             AudioSourceNode* AS = static_cast<AudioSourceNode*>(Current);
-            if (AS->ClipPath[0] != '\0') {
+            if (!AS->GetClipPath().empty()) {
                 AppendIndent(Output, Indent);
                 Output += "clip: \"";
-                Output += AS->ClipPath;
+                Output += AS->GetClipPath();
                 Output += "\"\n";
             }
             if (AS->Volume != 1.0f) {
@@ -1539,10 +1536,10 @@ static void SerializeTypedNodeProperties(std::string& Output, Node* Current, int
         }
         case NodeType::Animator: {
             AnimatorNode* Anim = static_cast<AnimatorNode*>(Current);
-            if (Anim->AnimationName[0] != '\0') {
+            if (!Anim->GetAnimationName().empty()) {
                 AppendIndent(Output, Indent);
                 Output += "animation: \"";
-                Output += Anim->AnimationName;
+                Output += Anim->GetAnimationName();
                 Output += "\"\n";
             }
             if (Anim->Speed != 1.0f) {
@@ -1573,10 +1570,10 @@ static void SerializeTypedNodeProperties(std::string& Output, Node* Current, int
         }
         case NodeType::Sprite: {
             SpriteNode* Spr = static_cast<SpriteNode*>(Current);
-            if (Spr->TexturePath[0] != '\0') {
+            if (!Spr->GetTexturePath().empty()) {
                 AppendIndent(Output, Indent);
                 Output += "texture: \"";
-                Output += Spr->TexturePath;
+                Output += Spr->GetTexturePath();
                 Output += "\"\n";
             }
             if (Spr->SortOrder != 0) {
@@ -1620,7 +1617,8 @@ void SceneParser::SerializeNode(std::string& Output, Node* Current, int Indent)
     Output += " {\n";
 
     // Transform block
-    SerializeTransform(Output, Current->GetTransform(), Indent + 1);
+    AxTransform AxT = Current->GetTransform();
+    SerializeTransform(Output, AxT, Indent + 1);
 
     // Typed node properties
     SerializeTypedNodeProperties(Output, Current, Indent + 1);

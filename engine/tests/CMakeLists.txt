@@ -47,6 +47,8 @@ target_sources(AxEngineTests
         src/MaterialTests.cpp
         src/AxPrimitivesTests.cpp
         src/AxEditorReadinessTests.cpp
+        src/AxMathTypesTests.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxTransformType.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxNode.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxTypedNodes.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxSceneTree.cpp

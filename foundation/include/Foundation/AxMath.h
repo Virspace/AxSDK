@@ -255,7 +255,7 @@ static inline AxVec3 Vec3WeightedAvg3(AxVec3 A, AxVec3 B, AxVec3 C, float Alpha,
     return (Result);
 }
 
-static AxVec4 Transform(AxMat4x4 A, AxVec4 P)
+static inline AxVec4 Mat4x4MulVec4(AxMat4x4 A, AxVec4 P)
 {
     // NOTE(mdeforge): Column-major matrix transformation
     AxVec4 R;
@@ -265,12 +265,6 @@ static AxVec4 Transform(AxMat4x4 A, AxVec4 P)
     R.W = P.X * A.E[0][3] + P.Y * A.E[1][3] + P.Z * A.E[2][3] + P.W * A.E[3][3];
 
     return (R);
-}
-
-static inline AxVec4 Mat4x4MulVec4(AxMat4x4 A, AxVec4 P)
-{
-    AxVec4 R = Transform(A, P);
-    return(R);
 }
 
 static AxMat4x4 Mat4x4Mul(AxMat4x4 A, AxMat4x4 B)

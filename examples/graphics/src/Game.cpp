@@ -17,12 +17,12 @@ public:
     void OnInit() override
     {
         // Set initial camera position using inherited MainCamera (CameraNode*)
-        MainCamera->GetTransform().Translation = { 11.12f, 1.7f, 1.83f };
-        MainCamera->GetTransform().Rotation = QuatFromEuler({
+        MainCamera->SetPosition(11.12f, 1.7f, 1.83f);
+        MainCamera->SetRotation(
             -2.06f * (AX_PI / 180.0f),
             76.10f * (AX_PI / 180.0f),
             0.0f
-        });
+        );
 
         // Spawn five primitive shapes
         SpawnPrimitives();
@@ -35,14 +35,14 @@ public:
         float V = AxInput::Get().GetAxis(AX_KEY_W, AX_KEY_S);
         float UD = AxInput::Get().GetAxis(AX_KEY_E, AX_KEY_Q);
 
-        AxVec3 Movement = {
+        Vec3 Movement(
             H * CameraSpeed * DeltaT,
             UD * CameraSpeed * DeltaT,
             -V * CameraSpeed * DeltaT
-        };
+        );
 
-        TransformTranslate(&MainCamera->GetTransform(), Movement, false);
-        TransformRotateFromMouseDelta(&MainCamera->GetTransform(), MouseDelta, MouseSensitivity);
+        MainCamera->GetTransform().Translate(Movement);
+        MainCamera->GetTransform().RotateFromMouseDelta(MouseDelta, MouseSensitivity);
 
         // Rotate spawned primitives
         RotatePrimitives(DeltaT);
@@ -97,12 +97,12 @@ private:
     void RotatePrimitives(float DeltaT)
     {
         float Angle = RotationSpeed * DeltaT;
-        AxQuat YRot = QuatFromAxisAngle({ 0.0f, 1.0f, 0.0f }, Angle);
+        Quat YRot = Quat::FromAxisAngle(Vec3::Up(), Angle);
 
         MeshInstance* Nodes[] = { BoxNode_, SphereNode_, PlaneNode_, CylinderNode_, CapsuleNode_ };
         for (MeshInstance* N : Nodes) {
             if (N) {
-                N->SetRotation(QuatMultiply(N->GetTransform().Rotation, YRot));
+                N->SetRotation(N->GetTransform().Rotation * YRot);
             }
         }
     }

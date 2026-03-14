@@ -64,20 +64,25 @@ class MeshInstance : public Node3D
 public:
   static constexpr NodeType StaticType = NodeType::MeshInstance;
 
-  char MeshPath[256];
   AxModelHandle ModelHandle;
-  char MaterialName[64];
   uint32_t MaterialHandle;
   int32_t RenderLayer;
 
   MeshInstance(std::string_view Name, AxHashTableAPI* TableAPI);
 
-  void SetMeshPath(const char* Path);
-  void SetMaterialName(const char* MatName);
+  std::string_view GetMeshPath() const { return (MeshPath_); }
+  void SetMeshPath(std::string_view Path) { MeshPath_ = Path; }
+
+  std::string_view GetMaterialName() const { return (MaterialName_); }
+  void SetMaterialName(std::string_view MatName) { MaterialName_ = MatName; }
 
   /** Assign a primitive mesh, clearing MeshPath. */
-  void SetPrimitiveMesh(PrimitiveMesh& Mesh)  { ModelHandle = Mesh.CreateModel(); MeshPath[0] = '\0'; }
+  void SetPrimitiveMesh(PrimitiveMesh& Mesh)  { ModelHandle = Mesh.CreateModel(); MeshPath_.clear(); }
   void SetPrimitiveMesh(PrimitiveMesh&& Mesh) { SetPrimitiveMesh(Mesh); }
+
+private:
+  std::string MeshPath_;
+  std::string MaterialName_;
 };
 
 /**
@@ -94,6 +99,9 @@ public:
   AxCamera Camera;
 
   CameraNode(std::string_view Name, AxHashTableAPI* TableAPI);
+
+  Mat4 GetViewMatrix() const { return (GetTransform().GetViewMatrix()); }
+  Mat4 GetProjectionMatrix() const { return (Mat4(Camera.ProjectionMatrix)); }
 
   float GetFOV() const { return (Camera.FieldOfView); }
   void SetFOV(float FOV) { Camera.FieldOfView = FOV; }
@@ -181,7 +189,6 @@ class AudioSourceNode : public Node3D
 public:
   static constexpr NodeType StaticType = NodeType::AudioSource;
 
-  char ClipPath[256];
   float Volume;
   float Pitch;
   bool IsLooping;
@@ -189,6 +196,12 @@ public:
   float MaxDistance;
 
   AudioSourceNode(std::string_view Name, AxHashTableAPI* TableAPI);
+
+  std::string_view GetClipPath() const { return (ClipPath_); }
+  void SetClipPath(std::string_view Path) { ClipPath_ = Path; }
+
+private:
+  std::string ClipPath_;
 };
 
 /**
@@ -214,12 +227,17 @@ class AnimatorNode : public Node3D
 public:
   static constexpr NodeType StaticType = NodeType::Animator;
 
-  char AnimationName[64];
   float Speed;
   bool IsPlaying;
   float CurrentTime;
 
   AnimatorNode(std::string_view Name, AxHashTableAPI* TableAPI);
+
+  std::string_view GetAnimationName() const { return (AnimationName_); }
+  void SetAnimationName(std::string_view AName) { AnimationName_ = AName; }
+
+private:
+  std::string AnimationName_;
 };
 
 /**
@@ -255,10 +273,15 @@ class SpriteNode : public Node2D
 public:
   static constexpr NodeType StaticType = NodeType::Sprite;
 
-  char TexturePath[256];
   uint32_t TextureHandle;
   AxVec4 Color;
   int32_t SortOrder;
 
   SpriteNode(std::string_view Name, AxHashTableAPI* TableAPI);
+
+  std::string_view GetTexturePath() const { return (TexturePath_); }
+  void SetTexturePath(std::string_view Path) { TexturePath_ = Path; }
+
+private:
+  std::string TexturePath_;
 };

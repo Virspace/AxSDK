@@ -328,7 +328,7 @@ TEST_F(SceneTreeClassTest, SceneTreeStoresLightsAndCamerasViaTypedNodes)
   Cam->SetFar(500.0f);
 
   // Set camera transform via the node's transform
-  Cam->GetTransform().Translation = {0.0f, 5.0f, -10.0f};
+  Cam->GetTransform().Translation = Vec3(0.0f, 5.0f, -10.0f);
 
   // Verify camera is tracked
   Node** Cameras = Tree->GetNodesByType(NodeType::Camera, &CameraCount);
@@ -381,8 +381,8 @@ TEST_F(SceneTreeClassTest, GetNodesByTypeFindsMeshInstanceReferences)
   // Verify we can read MeshPath from the typed nodes (resource loading approach)
   MeshInstance* MI0 = static_cast<MeshInstance*>(MeshNodes[0]);
   MeshInstance* MI1 = static_cast<MeshInstance*>(MeshNodes[1]);
-  EXPECT_STREQ(MI0->MeshPath, "models/cube.gltf");
-  EXPECT_STREQ(MI1->MeshPath, "models/sphere.gltf");
+  EXPECT_EQ(MI0->GetMeshPath(), "models/cube.gltf");
+  EXPECT_EQ(MI1->GetMeshPath(), "models/sphere.gltf");
 
   // Verify the empty node is not in the MeshInstance list
   EXPECT_EQ(EmptyNode->GetType(), NodeType::Node3D);
@@ -434,7 +434,7 @@ TEST_F(SceneTreeClassTest, LightsAndCamerasAccessibleViaGetNodesByType)
   Cam->SetFOV(60.0f);
   Cam->SetNear(0.1f);
   Cam->SetFar(200.0f);
-  Cam->GetTransform().Translation = {0.0f, 2.0f, 5.0f};
+  Cam->GetTransform().Translation = Vec3(0.0f, 2.0f, 5.0f);
 
   // Verify cameras are accessible
   uint32_t CameraCount = 0;

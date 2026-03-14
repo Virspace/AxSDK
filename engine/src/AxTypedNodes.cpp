@@ -20,24 +20,6 @@ MeshInstance::MeshInstance(std::string_view Name, AxHashTableAPI* TableAPI)
   , RenderLayer(0)
 {
   Type_ = NodeType::MeshInstance;
-  MeshPath[0] = '\0';
-  MaterialName[0] = '\0';
-}
-
-void MeshInstance::SetMeshPath(const char* Path)
-{
-  if (Path) {
-    strncpy(MeshPath, Path, sizeof(MeshPath) - 1);
-    MeshPath[sizeof(MeshPath) - 1] = '\0';
-  }
-}
-
-void MeshInstance::SetMaterialName(const char* MatName)
-{
-  if (MatName) {
-    strncpy(MaterialName, MatName, sizeof(MaterialName) - 1);
-    MaterialName[sizeof(MaterialName) - 1] = '\0';
-  }
 }
 
 //=============================================================================
@@ -121,7 +103,6 @@ AudioSourceNode::AudioSourceNode(std::string_view Name, AxHashTableAPI* TableAPI
   , MaxDistance(100.0f)
 {
   Type_ = NodeType::AudioSource;
-  ClipPath[0] = '\0';
 }
 
 //=============================================================================
@@ -145,7 +126,6 @@ AnimatorNode::AnimatorNode(std::string_view Name, AxHashTableAPI* TableAPI)
   , CurrentTime(0.0f)
 {
   Type_ = NodeType::Animator;
-  AnimationName[0] = '\0';
 }
 
 //=============================================================================
@@ -173,6 +153,5 @@ SpriteNode::SpriteNode(std::string_view Name, AxHashTableAPI* TableAPI)
   , SortOrder(0)
 {
   Type_ = NodeType::Sprite;
-  TexturePath[0] = '\0';
   Color = {1.0f, 1.0f, 1.0f, 1.0f};
 }

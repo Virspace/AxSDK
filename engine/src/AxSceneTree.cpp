@@ -141,59 +141,28 @@ void SceneTree::UpdateMouseDelta(AxVec2 Delta)
 //=============================================================================
 
 void SceneTree::UpdateNodeTransforms(Node* Current,
-                                     const AxMat4x4& ParentWorldMatrix,
+                                     const Mat4& ParentWorldMatrix,
                                      bool ParentWasDirty)
 {
   if (!Current) {
     return;
   }
 
-  AxTransform& Transform = Current->GetTransform();
-
-  // If parent was dirty, this node is also dirty
-  if (ParentWasDirty) {
-    Transform.ForwardMatrixDirty = true;
-  }
-
-  bool ThisNodeDirty = Transform.ForwardMatrixDirty;
+  Transform& T = Current->Transform_;
+  bool ThisNodeDirty = T.IsDirty() || ParentWasDirty;
 
   if (ThisNodeDirty) {
-    // Compute local TRS matrix using Foundation math
-    AxMat4x4 LocalMatrix = {0};
-
-    // Build the TRS matrix: Scale -> Rotate -> Translate
-    AxMat4x4 RotMatrix = QuatToMat4x4(Transform.Rotation);
-
-    // Apply scale to rotation columns
-    LocalMatrix.E[0][0] = RotMatrix.E[0][0] * Transform.Scale.X;
-    LocalMatrix.E[0][1] = RotMatrix.E[0][1] * Transform.Scale.X;
-    LocalMatrix.E[0][2] = RotMatrix.E[0][2] * Transform.Scale.X;
-    LocalMatrix.E[0][3] = 0.0f;
-
-    LocalMatrix.E[1][0] = RotMatrix.E[1][0] * Transform.Scale.Y;
-    LocalMatrix.E[1][1] = RotMatrix.E[1][1] * Transform.Scale.Y;
-    LocalMatrix.E[1][2] = RotMatrix.E[1][2] * Transform.Scale.Y;
-    LocalMatrix.E[1][3] = 0.0f;
-
-    LocalMatrix.E[2][0] = RotMatrix.E[2][0] * Transform.Scale.Z;
-    LocalMatrix.E[2][1] = RotMatrix.E[2][1] * Transform.Scale.Z;
-    LocalMatrix.E[2][2] = RotMatrix.E[2][2] * Transform.Scale.Z;
-    LocalMatrix.E[2][3] = 0.0f;
-
-    LocalMatrix.E[3][0] = Transform.Translation.X;
-    LocalMatrix.E[3][1] = Transform.Translation.Y;
-    LocalMatrix.E[3][2] = Transform.Translation.Z;
-    LocalMatrix.E[3][3] = 1.0f;
+    // Get the local TRS matrix (lazy-evaluated by Transform)
+    const Mat4& LocalMatrix = T.GetForwardMatrix();
 
     // WorldMatrix = Parent.WorldMatrix * Local.TRS
-    Transform.CachedForwardMatrix = Mat4x4Mul(ParentWorldMatrix, LocalMatrix);
-    Transform.ForwardMatrixDirty = false;
+    Current->WorldMatrix_ = ParentWorldMatrix * LocalMatrix;
   }
 
   // Recurse to children, passing this node's world matrix
   Node* Child = Current->GetFirstChild();
   while (Child) {
-    UpdateNodeTransforms(Child, Transform.CachedForwardMatrix, ThisNodeDirty);
+    UpdateNodeTransforms(Child, Current->WorldMatrix_, ThisNodeDirty);
     Child = Child->GetNextSibling();
   }
 }
@@ -336,13 +305,10 @@ void SceneTree::Update(float DeltaT)
   // Process only nodes whose transforms changed since last frame.
   // On initial load, all nodes are dirty and the dirty list contains all
   // of them, gracefully degrading to equivalent of full traversal.
+  // Ensure root's world matrix is identity
   RootNode* RootPtr = Root_;
-  AxTransform& RootTransform = RootPtr->GetTransform();
-
-  if (RootTransform.ForwardMatrixDirty) {
-    RootTransform.CachedForwardMatrix = Identity();
-    RootTransform.ForwardMatrixDirty = false;
-  }
+  static const Mat4 IdentityMatrix = Mat4::Identity();
+  RootPtr->WorldMatrix_ = IdentityMatrix;
 
   if (TransformDirtyRootCount_ > 0) {
     for (uint32_t i = 0; i < TransformDirtyRootCount_; ++i) {
@@ -352,9 +318,9 @@ void SceneTree::Update(float DeltaT)
       }
 
       // Determine parent world matrix for this dirty root
-      const AxMat4x4& ParentMatrix = DirtyRoot->GetParent()
+      const Mat4& ParentMatrix = DirtyRoot->GetParent()
         ? DirtyRoot->GetParent()->GetWorldTransform()
-        : RootTransform.CachedForwardMatrix;
+        : IdentityMatrix;
 
       UpdateNodeTransforms(DirtyRoot, ParentMatrix, false);
 

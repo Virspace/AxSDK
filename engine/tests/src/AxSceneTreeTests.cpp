@@ -102,7 +102,7 @@ struct SceneTreeCountingScript : public ScriptBase
 
 struct SceneTreeTransformCheckScript : public ScriptBase
 {
-  AxMat4x4 CapturedWorldTransform;
+  Mat4 CapturedWorldTransform;
   bool WasCalled = false;
 
   void OnUpdate(float) override
@@ -361,13 +361,11 @@ TEST_F(SceneTreeTest, UpdateFlushesTransformsBeforeScriptDispatch)
   Node* Parent = Tree_->CreateNode("Parent", NodeType::Node3D, nullptr);
   Node* Child  = Tree_->CreateNode("Child",  NodeType::Node3D, Parent);
 
-  // Set parent translation to (10, 0, 0) and mark dirty
-  Parent->GetTransform().Translation = {10.0f, 0.0f, 0.0f};
-  Parent->GetTransform().ForwardMatrixDirty = true;
+  // Set parent translation to (10, 0, 0) -- SetTranslation auto-marks dirty
+  Parent->GetTransform().SetTranslation(Vec3(10.0f, 0.0f, 0.0f));
 
-  // Set child translation to (0, 5, 0) and mark dirty
-  Child->GetTransform().Translation = {0.0f, 5.0f, 0.0f};
-  Child->GetTransform().ForwardMatrixDirty = true;
+  // Set child translation to (0, 5, 0) -- SetTranslation auto-marks dirty
+  Child->GetTransform().SetTranslation(Vec3(0.0f, 5.0f, 0.0f));
 
   // Attach a script that captures GetWorldTransform during OnUpdate
   auto* Script = new SceneTreeTransformCheckScript();

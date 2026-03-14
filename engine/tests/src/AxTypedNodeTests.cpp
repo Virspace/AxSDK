@@ -18,6 +18,8 @@
 #include "AxEngine/AxSceneTree.h"
 
 #include <cstring>
+#include <string>
+#include <string_view>
 
 //=============================================================================
 // Test Fixture
@@ -51,17 +53,17 @@ TEST_F(TypedNodeTest, MeshInstanceCreationAndDefaults)
 
   EXPECT_EQ(MI.GetType(), NodeType::MeshInstance);
   EXPECT_EQ(MI.GetName(), "TestMesh");
-  EXPECT_STREQ(MI.MeshPath, "");
-  EXPECT_STREQ(MI.MaterialName, "");
+  EXPECT_EQ(MI.GetMeshPath(), "");
+  EXPECT_EQ(MI.GetMaterialName(), "");
   EXPECT_EQ(MI.MaterialHandle, 0u);
   EXPECT_EQ(MI.RenderLayer, 0);
 
   // Test setters
   MI.SetMeshPath("models/cube.glb");
-  EXPECT_STREQ(MI.MeshPath, "models/cube.glb");
+  EXPECT_EQ(MI.GetMeshPath(), "models/cube.glb");
 
   MI.SetMaterialName("DefaultMat");
-  EXPECT_STREQ(MI.MaterialName, "DefaultMat");
+  EXPECT_EQ(MI.GetMaterialName(), "DefaultMat");
 
   MI.RenderLayer = 5;
   EXPECT_EQ(MI.RenderLayer, 5);
@@ -183,17 +185,17 @@ TEST_F(TypedNodeTest, AudioSourceNodeCreationAndDefaults)
 
   EXPECT_EQ(AS.GetType(), NodeType::AudioSource);
   EXPECT_EQ(AS.GetName(), "TestAudio");
-  EXPECT_STREQ(AS.ClipPath, "");
+  EXPECT_EQ(AS.GetClipPath(), "");
   EXPECT_FLOAT_EQ(AS.Volume, 1.0f);
   EXPECT_FLOAT_EQ(AS.Pitch, 1.0f);
   EXPECT_FALSE(AS.IsLooping);
   EXPECT_TRUE(AS.Is3D);
   EXPECT_FLOAT_EQ(AS.MaxDistance, 100.0f);
 
-  strncpy(AS.ClipPath, "sounds/explosion.wav", sizeof(AS.ClipPath) - 1);
+  AS.SetClipPath("sounds/explosion.wav");
   AS.Volume = 0.5f;
   AS.IsLooping = true;
-  EXPECT_STREQ(AS.ClipPath, "sounds/explosion.wav");
+  EXPECT_EQ(AS.GetClipPath(), "sounds/explosion.wav");
   EXPECT_FLOAT_EQ(AS.Volume, 0.5f);
   EXPECT_TRUE(AS.IsLooping);
 }
@@ -218,15 +220,15 @@ TEST_F(TypedNodeTest, AnimatorNodeCreationAndDefaults)
 
   EXPECT_EQ(Anim.GetType(), NodeType::Animator);
   EXPECT_EQ(Anim.GetName(), "TestAnimator");
-  EXPECT_STREQ(Anim.AnimationName, "");
+  EXPECT_EQ(Anim.GetAnimationName(), "");
   EXPECT_FLOAT_EQ(Anim.Speed, 1.0f);
   EXPECT_FALSE(Anim.IsPlaying);
   EXPECT_FLOAT_EQ(Anim.CurrentTime, 0.0f);
 
-  strncpy(Anim.AnimationName, "idle", sizeof(Anim.AnimationName) - 1);
+  Anim.SetAnimationName("idle");
   Anim.Speed = 2.0f;
   Anim.IsPlaying = true;
-  EXPECT_STREQ(Anim.AnimationName, "idle");
+  EXPECT_EQ(Anim.GetAnimationName(), "idle");
   EXPECT_FLOAT_EQ(Anim.Speed, 2.0f);
   EXPECT_TRUE(Anim.IsPlaying);
 }
@@ -263,17 +265,17 @@ TEST_F(TypedNodeTest, SpriteNodeCreationAndDefaults)
 
   EXPECT_EQ(Spr.GetType(), NodeType::Sprite);
   EXPECT_EQ(Spr.GetName(), "TestSprite");
-  EXPECT_STREQ(Spr.TexturePath, "");
+  EXPECT_EQ(Spr.GetTexturePath(), "");
   EXPECT_EQ(Spr.TextureHandle, 0u);
   EXPECT_EQ(Spr.SortOrder, 0);
 
   // SpriteNode inherits from Node2D
   EXPECT_FLOAT_EQ(Spr.GetTransform().Scale.X, 1.0f);
 
-  strncpy(Spr.TexturePath, "textures/hero.png", sizeof(Spr.TexturePath) - 1);
+  Spr.SetTexturePath("textures/hero.png");
   Spr.SortOrder = 10;
   Spr.Color = {1.0f, 0.0f, 0.0f, 1.0f};
-  EXPECT_STREQ(Spr.TexturePath, "textures/hero.png");
+  EXPECT_EQ(Spr.GetTexturePath(), "textures/hero.png");
   EXPECT_EQ(Spr.SortOrder, 10);
   EXPECT_FLOAT_EQ(Spr.Color.R, 1.0f);
 }
@@ -309,7 +311,7 @@ TEST_F(TypedNodeTest, TypedNodesWorkInHierarchy)
   // Cast to typed node and modify data
   MeshInstance* MI = static_cast<MeshInstance*>(MeshNode);
   MI->SetMeshPath("models/player.glb");
-  EXPECT_STREQ(MI->MeshPath, "models/player.glb");
+  EXPECT_EQ(MI->GetMeshPath(), "models/player.glb");
 
   ::LightNode* LN = static_cast<::LightNode*>(LightNode);
   LN->SetIntensity(3.0f);
@@ -401,8 +403,8 @@ TEST_F(TypedNodeTest, TypedNodeInheritsTransformOperations)
   MeshInstance MI("TransformTest", TableAPI_);
 
   // Set transform
-  MI.GetTransform().Translation = {1.0f, 2.0f, 3.0f};
-  MI.GetTransform().Scale = {2.0f, 2.0f, 2.0f};
+  MI.GetTransform().Translation = Vec3(1.0f, 2.0f, 3.0f);
+  MI.GetTransform().Scale = Vec3(2.0f, 2.0f, 2.0f);
 
   EXPECT_FLOAT_EQ(MI.GetTransform().Translation.X, 1.0f);
   EXPECT_FLOAT_EQ(MI.GetTransform().Translation.Y, 2.0f);
@@ -425,10 +427,73 @@ TEST_F(TypedNodeTest, TypeDispatchViaStaticCast)
   if (NodePtr->GetType() == NodeType::MeshInstance) {
     MeshInstance* MI = static_cast<MeshInstance*>(NodePtr);
     MI->SetMeshPath("dispatch_test.glb");
-    EXPECT_STREQ(MI->MeshPath, "dispatch_test.glb");
+    EXPECT_EQ(MI->GetMeshPath(), "dispatch_test.glb");
   } else {
     FAIL() << "Expected NodeType::MeshInstance";
   }
 
   delete Tree;
+}
+
+//=============================================================================
+// Test 16: String path setters accept long paths without truncation
+//=============================================================================
+TEST_F(TypedNodeTest, StringPathsAcceptLongPaths)
+{
+  MeshInstance MI("LongPathTest", TableAPI_);
+
+  // Build a path longer than the old 256-char limit
+  std::string LongPath(512, 'a');
+  LongPath = "models/" + LongPath + ".glb";
+  MI.SetMeshPath(LongPath);
+  EXPECT_EQ(MI.GetMeshPath(), LongPath);
+  EXPECT_EQ(MI.GetMeshPath().size(), LongPath.size());
+
+  // Same for material name (old limit was 64)
+  std::string LongMat(128, 'm');
+  MI.SetMaterialName(LongMat);
+  EXPECT_EQ(MI.GetMaterialName(), LongMat);
+}
+
+//=============================================================================
+// Test 17: String path getters return string_view
+//=============================================================================
+TEST_F(TypedNodeTest, StringPathGettersReturnStringView)
+{
+  MeshInstance MI("ViewTest", TableAPI_);
+  MI.SetMeshPath("models/test.glb");
+
+  std::string_view Path = MI.GetMeshPath();
+  EXPECT_EQ(Path, "models/test.glb");
+
+  AudioSourceNode AS("AudioView", TableAPI_);
+  AS.SetClipPath("sounds/test.wav");
+  EXPECT_EQ(AS.GetClipPath(), "sounds/test.wav");
+
+  AnimatorNode Anim("AnimView", TableAPI_);
+  Anim.SetAnimationName("walk");
+  EXPECT_EQ(Anim.GetAnimationName(), "walk");
+
+  SpriteNode Spr("SpriteView", TableAPI_);
+  Spr.SetTexturePath("textures/test.png");
+  EXPECT_EQ(Spr.GetTexturePath(), "textures/test.png");
+}
+
+//=============================================================================
+// Test 18: Default string paths are empty
+//=============================================================================
+TEST_F(TypedNodeTest, DefaultStringPathsAreEmpty)
+{
+  MeshInstance MI("EmptyTest", TableAPI_);
+  EXPECT_TRUE(MI.GetMeshPath().empty());
+  EXPECT_TRUE(MI.GetMaterialName().empty());
+
+  AudioSourceNode AS("EmptyAudio", TableAPI_);
+  EXPECT_TRUE(AS.GetClipPath().empty());
+
+  AnimatorNode Anim("EmptyAnim", TableAPI_);
+  EXPECT_TRUE(Anim.GetAnimationName().empty());
+
+  SpriteNode Spr("EmptySprite", TableAPI_);
+  EXPECT_TRUE(Spr.GetTexturePath().empty());
 }

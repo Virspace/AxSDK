@@ -13,6 +13,8 @@
  */
 
 #include "Foundation/AxTypes.h"
+#include "AxEngine/AxMathTypes.h"
+#include "AxEngine/AxTransformType.h"
 #include <string>
 #include <string_view>
 
@@ -144,24 +146,24 @@ public:
    */
   void SetActive(bool Active);
 
-  AxTransform& GetTransform() { return (Transform_); }
-  const AxTransform& GetTransform() const { return (Transform_); }
+  Transform& GetTransform() { return (Transform_); }
+  const Transform& GetTransform() const { return (Transform_); }
 
-  /** Fluent transform setters -- wrap Foundation helpers, mark dirty automatically. */
+  /** Fluent transform setters -- delegate to Transform, which auto-notifies SceneTree. */
   Node& SetPosition(float X, float Y, float Z);
-  Node& SetPosition(AxVec3 Pos);
-  Node& SetRotation(AxQuat Rot);
+  Node& SetPosition(const Vec3& Pos);
+  Node& SetRotation(const Quat& Rot);
+  Node& SetRotation(float PitchRad, float YawRad, float RollRad);
   Node& SetScale(float X, float Y, float Z);
-  Node& SetScale(AxVec3 S);
+  Node& SetScale(const Vec3& S);
 
   /**
    * Get the cached world transform matrix.
    * This matrix is populated by SceneTree::UpdateNodeTransforms at the
-   * top of each Update() call. Returns the CachedForwardMatrix from
-   * the node's transform.
+   * top of each Update() call.
    * @return Reference to the cached world matrix.
    */
-  const AxMat4x4& GetWorldTransform() const { return (Transform_.CachedForwardMatrix); }
+  const Mat4& GetWorldTransform() const { return (WorldMatrix_); }
 
   Node* GetParent() const { return (Parent_); }
   Node* GetFirstChild() const { return (FirstChild_); }
@@ -173,7 +175,8 @@ public:
 protected:
   std::string Name_;
   NodeType Type_;
-  AxTransform Transform_;
+  Transform Transform_;
+  Mat4 WorldMatrix_;
   uint32_t NodeID_;
 
   Node* Parent_;

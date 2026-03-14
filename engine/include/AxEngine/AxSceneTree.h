@@ -247,7 +247,7 @@ private:
   // Traversal Helpers
   //=========================================================================
 
-  void UpdateNodeTransforms(Node* Current, const AxMat4x4& ParentWorldMatrix,
+  void UpdateNodeTransforms(Node* Current, const Mat4& ParentWorldMatrix,
                             bool ParentWasDirty);
 
   //=========================================================================

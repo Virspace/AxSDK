@@ -268,7 +268,7 @@ TEST_F(EditorReadinessTest, EditModeRunsTransformsButSkipsScripts)
   Tree_->Update(0.016f);
 
   // Transform should have been propagated
-  const AxMat4x4& WorldTransform = TestNode->GetWorldTransform();
+  const Mat4& WorldTransform = TestNode->GetWorldTransform();
   EXPECT_NEAR(WorldTransform.E[3][0], 5.0f, 0.001f);
   EXPECT_NEAR(WorldTransform.E[3][1], 10.0f, 0.001f);
   EXPECT_NEAR(WorldTransform.E[3][2], 15.0f, 0.001f);
@@ -292,7 +292,7 @@ TEST_F(EditorReadinessTest, PlayModeRunsEverything)
   Tree_->Update(0.016f);
 
   // Transform should have been propagated
-  const AxMat4x4& WorldTransform = TestNode->GetWorldTransform();
+  const Mat4& WorldTransform = TestNode->GetWorldTransform();
   EXPECT_NEAR(WorldTransform.E[3][0], 1.0f, 0.001f);
   EXPECT_NEAR(WorldTransform.E[3][1], 2.0f, 0.001f);
   EXPECT_NEAR(WorldTransform.E[3][2], 3.0f, 0.001f);
@@ -401,7 +401,7 @@ TEST_F(EditorReadinessTest, EditModeTransformPropagationWithHierarchy)
   Tree_->Update(0.016f);
 
   // Child's world position should be parent + child
-  const AxMat4x4& ChildWorld = Child->GetWorldTransform();
+  const Mat4& ChildWorld = Child->GetWorldTransform();
   EXPECT_NEAR(ChildWorld.E[3][0], 10.0f, 0.001f);
   EXPECT_NEAR(ChildWorld.E[3][1], 5.0f, 0.001f);
   EXPECT_NEAR(ChildWorld.E[3][2], 0.0f, 0.001f);
@@ -559,7 +559,7 @@ TEST_F(SnapshotRestoreTest, RestoreReturnsSceneToPrePlayState)
   NodeA->SetPosition({99.0f, 99.0f, 99.0f});
 
   // Verify the modification took effect
-  const AxTransform& ModifiedT = NodeA->GetTransform();
+  const Transform& ModifiedT = NodeA->GetTransform();
   EXPECT_NEAR(ModifiedT.Translation.X, 99.0f, 0.01f);
 
   // Delete the modified scene (simulates UnloadScene)
@@ -572,7 +572,7 @@ TEST_F(SnapshotRestoreTest, RestoreReturnsSceneToPrePlayState)
   // Verify the restored scene has the original positions
   Node* RestoredNodeA = Restored->FindNode("NodeA");
   ASSERT_NE(RestoredNodeA, nullptr);
-  const AxTransform& RestoredT = RestoredNodeA->GetTransform();
+  const Transform& RestoredT = RestoredNodeA->GetTransform();
   EXPECT_NEAR(RestoredT.Translation.X, 10.0f, 0.01f);
   EXPECT_NEAR(RestoredT.Translation.Y, 20.0f, 0.01f);
   EXPECT_NEAR(RestoredT.Translation.Z, 30.0f, 0.01f);
@@ -610,7 +610,7 @@ TEST_F(SnapshotRestoreTest, ScriptModificationsDuringPlayDiscardedOnRestore)
   Original->Update(0.016f);
 
   // Verify the script modified the position
-  const AxTransform& PlayT = Target->GetTransform();
+  const Transform& PlayT = Target->GetTransform();
   EXPECT_NEAR(PlayT.Translation.X, 99.0f, 0.01f);
   EXPECT_NEAR(PlayT.Translation.Y, 99.0f, 0.01f);
   EXPECT_NEAR(PlayT.Translation.Z, 99.0f, 0.01f);
@@ -625,7 +625,7 @@ TEST_F(SnapshotRestoreTest, ScriptModificationsDuringPlayDiscardedOnRestore)
   // Verify the restored scene has the ORIGINAL position, not the script-modified one
   Node* RestoredTarget = Restored->FindNode("Target");
   ASSERT_NE(RestoredTarget, nullptr);
-  const AxTransform& RestoredT = RestoredTarget->GetTransform();
+  const Transform& RestoredT = RestoredTarget->GetTransform();
   EXPECT_NEAR(RestoredT.Translation.X, 1.0f, 0.01f);
   EXPECT_NEAR(RestoredT.Translation.Y, 2.0f, 0.01f);
   EXPECT_NEAR(RestoredT.Translation.Z, 3.0f, 0.01f);
@@ -674,7 +674,7 @@ TEST_F(SnapshotRestoreTest, SnapshotPreservesHierarchy)
 
   // Verify typed node data preserved
   EXPECT_EQ(RestoredChild->GetType(), NodeType::MeshInstance);
-  EXPECT_STREQ(static_cast<MeshInstance*>(RestoredChild)->MeshPath, "models/test.glb");
+  EXPECT_EQ(static_cast<MeshInstance*>(RestoredChild)->GetMeshPath(), "models/test.glb");
 
   delete Restored;
 }
@@ -898,7 +898,7 @@ TEST_F(SceneSerializationTest, RoundTripLightNode)
   EXPECT_NEAR(RestoredLN->Light.Range, 150.0f, 0.01f);
 
   // Verify transform
-  const AxTransform& T = RestoredLight->GetTransform();
+  const Transform& T = RestoredLight->GetTransform();
   EXPECT_NEAR(T.Translation.X, 50.0f, 0.01f);
   EXPECT_NEAR(T.Translation.Y, 80.0f, 0.01f);
   EXPECT_NEAR(T.Translation.Z, 30.0f, 0.01f);
@@ -935,7 +935,7 @@ TEST_F(SceneSerializationTest, RoundTripCameraNode)
   EXPECT_NEAR(RestoredCN->GetNear(), 0.5f, 0.01f);
   EXPECT_NEAR(RestoredCN->GetFar(), 500.0f, 0.01f);
 
-  const AxTransform& T = RestoredCam->GetTransform();
+  const Transform& T = RestoredCam->GetTransform();
   EXPECT_NEAR(T.Translation.X, 1.0f, 0.01f);
   EXPECT_NEAR(T.Translation.Y, 2.0f, 0.01f);
   EXPECT_NEAR(T.Translation.Z, 3.0f, 0.01f);
@@ -969,10 +969,10 @@ TEST_F(SceneSerializationTest, RoundTripMeshInstance)
   EXPECT_EQ(RestoredMesh->GetType(), NodeType::MeshInstance);
 
   MeshInstance* RestoredMI = static_cast<MeshInstance*>(RestoredMesh);
-  EXPECT_STREQ(RestoredMI->MeshPath, "models/sponza.glb");
-  EXPECT_STREQ(RestoredMI->MaterialName, "DefaultMat");
+  EXPECT_EQ(RestoredMI->GetMeshPath(), "models/sponza.glb");
+  EXPECT_EQ(RestoredMI->GetMaterialName(), "DefaultMat");
 
-  const AxTransform& T = RestoredMesh->GetTransform();
+  const Transform& T = RestoredMesh->GetTransform();
   EXPECT_NEAR(T.Scale.X, 2.0f, 0.01f);
   EXPECT_NEAR(T.Scale.Y, 2.0f, 0.01f);
   EXPECT_NEAR(T.Scale.Z, 2.0f, 0.01f);
@@ -1022,13 +1022,13 @@ TEST_F(SceneSerializationTest, RoundTripHierarchy)
   EXPECT_NEAR(RestoredLN->GetIntensity(), 0.7f, 0.01f);
 
   // Verify positions
-  const AxTransform& PT = RestoredParent->GetTransform();
+  const Transform& PT = RestoredParent->GetTransform();
   EXPECT_NEAR(PT.Translation.X, 10.0f, 0.01f);
 
-  const AxTransform& CAT = RestoredChildA->GetTransform();
+  const Transform& CAT = RestoredChildA->GetTransform();
   EXPECT_NEAR(CAT.Translation.Y, 5.0f, 0.01f);
 
-  const AxTransform& CBT = RestoredChildB->GetTransform();
+  const Transform& CBT = RestoredChildB->GetTransform();
   EXPECT_NEAR(CBT.Translation.Z, 3.0f, 0.01f);
 
   delete Original;

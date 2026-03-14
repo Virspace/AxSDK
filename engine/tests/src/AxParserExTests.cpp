@@ -127,7 +127,7 @@ TEST_F(ParserExTest, ParseMeshInstanceTypedNode)
   EXPECT_EQ(ObjNode->GetType(), NodeType::MeshInstance);
 
   MeshInstance* MI = static_cast<MeshInstance*>(ObjNode);
-  EXPECT_STREQ(MI->MeshPath, "res://meshes/cube.glb");
+  EXPECT_EQ(MI->GetMeshPath(), "res://meshes/cube.glb");
 
   delete Tree;
 }
@@ -167,7 +167,7 @@ TEST_F(ParserExTest, NestedTypedNodesWithTransformsBuildHierarchy)
   EXPECT_FLOAT_EQ(Child->GetTransform().Translation.X, 4.0f);
 
   MeshInstance* MI = static_cast<MeshInstance*>(Child);
-  EXPECT_STREQ(MI->MeshPath, "res://child_mesh.glb");
+  EXPECT_EQ(MI->GetMeshPath(), "res://child_mesh.glb");
 
   delete Tree;
 }
@@ -201,8 +201,8 @@ TEST_F(ParserExTest, MultipleNodesWithMixedTypedNodeTypes)
   EXPECT_EQ(Mesh1->GetType(), NodeType::MeshInstance);
 
   MeshInstance* MI = static_cast<MeshInstance*>(Mesh1);
-  EXPECT_STREQ(MI->MeshPath, "res://a.glb");
-  EXPECT_STREQ(MI->MaterialName, "MatA");
+  EXPECT_EQ(MI->GetMeshPath(), "res://a.glb");
+  EXPECT_EQ(MI->GetMaterialName(), "MatA");
 
   Node* Body = Mesh1->GetNextSibling();
   ASSERT_NE(Body, nullptr);
@@ -233,7 +233,7 @@ TEST_F(ParserExTest, ParseCallbacksFire)
   EXPECT_EQ(Result->GetType(), NodeType::MeshInstance);
 
   MeshInstance* MI = static_cast<MeshInstance*>(Result);
-  EXPECT_STREQ(MI->MeshPath, "test.glb");
+  EXPECT_EQ(MI->GetMeshPath(), "test.glb");
 
   delete Tree;
 }
@@ -259,7 +259,7 @@ TEST_F(ParserExTest, PrefabLoadCreatesStandaloneSubtree)
   EXPECT_EQ(PrefabRoot->GetType(), NodeType::MeshInstance);
 
   MeshInstance* MI = static_cast<MeshInstance*>(PrefabRoot);
-  EXPECT_STREQ(MI->MeshPath, "res://prefab_mesh.glb");
+  EXPECT_EQ(MI->GetMeshPath(), "res://prefab_mesh.glb");
 
   Node* PrefabChild = PrefabRoot->GetFirstChild();
   ASSERT_NE(PrefabChild, nullptr);
@@ -443,7 +443,7 @@ TEST_F(ParserExTest, TG5_ParserExCallsSceneTreeDirectlyForTypedNodes)
 
   // Verify MeshInstance data
   MeshInstance* MI = static_cast<MeshInstance*>(Root);
-  EXPECT_STREQ(MI->MeshPath, "res://direct.glb");
+  EXPECT_EQ(MI->GetMeshPath(), "res://direct.glb");
 
   // Verify MeshInstance appears in typed tracking
   uint32_t MeshCount = 0;

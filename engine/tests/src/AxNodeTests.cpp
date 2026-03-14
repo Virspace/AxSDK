@@ -56,14 +56,14 @@ TEST_F(NodeTest, CreationWithNameAndTransform)
   EXPECT_EQ(node.GetType(), NodeType::Node3D);
 
   // Verify transform is initialized to identity
-  const AxTransform& Transform = node.GetTransform();
-  EXPECT_FLOAT_EQ(Transform.Translation.X, 0.0f);
-  EXPECT_FLOAT_EQ(Transform.Translation.Y, 0.0f);
-  EXPECT_FLOAT_EQ(Transform.Translation.Z, 0.0f);
-  EXPECT_FLOAT_EQ(Transform.Scale.X, 1.0f);
-  EXPECT_FLOAT_EQ(Transform.Scale.Y, 1.0f);
-  EXPECT_FLOAT_EQ(Transform.Scale.Z, 1.0f);
-  EXPECT_TRUE(Transform.IsIdentity);
+  const auto& T = node.GetTransform();
+  EXPECT_FLOAT_EQ(T.Translation.X, 0.0f);
+  EXPECT_FLOAT_EQ(T.Translation.Y, 0.0f);
+  EXPECT_FLOAT_EQ(T.Translation.Z, 0.0f);
+  EXPECT_FLOAT_EQ(T.Scale.X, 1.0f);
+  EXPECT_FLOAT_EQ(T.Scale.Y, 1.0f);
+  EXPECT_FLOAT_EQ(T.Scale.Z, 1.0f);
+  EXPECT_FLOAT_EQ(T.Rotation.W, 1.0f);
 
   // Verify hierarchy is empty
   EXPECT_EQ(node.GetParent(), nullptr);

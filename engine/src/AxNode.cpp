@@ -35,8 +35,9 @@ Node::Node(std::string_view Name, NodeType Type, AxHashTableAPI* TableAPI)
   , OwningTree_(nullptr)
   , InDirtyList_(false)
 {
-  // Initialize transform to identity
-  Transform_ = TransformIdentity();
+  // Transform default constructor handles identity initialization
+  Transform_.OwningNode_ = this;
+  WorldMatrix_ = Mat4::Identity();
 }
 
 Node::~Node()
@@ -265,46 +266,37 @@ ScriptBase* Node::GetScript() const
 
 Node& Node::SetPosition(float X, float Y, float Z)
 {
-  TransformSetTranslation(&Transform_, {X, Y, Z});
-  if (OwningTree_) {
-    OwningTree_->MarkTransformDirty(this);
-  }
+  Transform_.SetTranslation(X, Y, Z);
   return (*this);
 }
 
-Node& Node::SetPosition(AxVec3 Pos)
+Node& Node::SetPosition(const Vec3& Pos)
 {
-  TransformSetTranslation(&Transform_, Pos);
-  if (OwningTree_) {
-    OwningTree_->MarkTransformDirty(this);
-  }
+  Transform_.SetTranslation(Pos);
   return (*this);
 }
 
-Node& Node::SetRotation(AxQuat Rot)
+Node& Node::SetRotation(const Quat& Rot)
 {
-  TransformSetRotation(&Transform_, Rot);
-  if (OwningTree_) {
-    OwningTree_->MarkTransformDirty(this);
-  }
+  Transform_.SetRotation(Rot);
+  return (*this);
+}
+
+Node& Node::SetRotation(float PitchRad, float YawRad, float RollRad)
+{
+  Transform_.SetRotation(PitchRad, YawRad, RollRad);
   return (*this);
 }
 
 Node& Node::SetScale(float X, float Y, float Z)
 {
-  TransformSetScale(&Transform_, {X, Y, Z});
-  if (OwningTree_) {
-    OwningTree_->MarkTransformDirty(this);
-  }
+  Transform_.SetScale(X, Y, Z);
   return (*this);
 }
 
-Node& Node::SetScale(AxVec3 S)
+Node& Node::SetScale(const Vec3& S)
 {
-  TransformSetScale(&Transform_, S);
-  if (OwningTree_) {
-    OwningTree_->MarkTransformDirty(this);
-  }
+  Transform_.SetScale(S);
   return (*this);
 }
 

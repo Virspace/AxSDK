@@ -12,7 +12,10 @@ set(AXENGINE_SOURCES
     include/AxEngine/AxSceneParser.h
     include/AxEngine/AxRenderer.h
     include/AxEngine/AxPrimitives.h
+    include/AxEngine/AxMathTypes.h
+    include/AxEngine/AxTransformType.h
     include/AxEngine/AxScriptRegistry.h
+    src/AxTransformType.cpp
     src/AxScriptRegistry.cpp
     src/AxSceneParser.cpp
     src/AxEngine.cpp

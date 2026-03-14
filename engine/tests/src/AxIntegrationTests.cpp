@@ -165,12 +165,12 @@ TEST_F(IntegrationTest, FullPipelineParseAndVerifyTransform)
   Tree->Update(0.016f);
 
   // Verify Player world position is (10, 0, 0)
-  const AxMat4x4& PlayerWorld = PlayerNode->GetWorldTransform();
+  const Mat4& PlayerWorld = PlayerNode->GetWorldTransform();
   EXPECT_TRUE(FloatNear(PlayerWorld.E[3][0], 10.0f));
   EXPECT_TRUE(FloatNear(PlayerWorld.E[3][1], 0.0f));
 
   // Verify Weapon world position is (10, 1, 0) = parent (10,0,0) + local (0,1,0)
-  const AxMat4x4& WeaponWorld = WeaponNode->GetWorldTransform();
+  const Mat4& WeaponWorld = WeaponNode->GetWorldTransform();
   EXPECT_TRUE(FloatNear(WeaponWorld.E[3][0], 10.0f));
   EXPECT_TRUE(FloatNear(WeaponWorld.E[3][1], 1.0f));
 
@@ -182,10 +182,10 @@ TEST_F(IntegrationTest, FullPipelineParseAndVerifyTransform)
 
   // Verify mesh data on typed nodes
   MeshInstance* PlayerMI = static_cast<MeshInstance*>(MeshNodes[0]);
-  EXPECT_STREQ(PlayerMI->MeshPath, "res://meshes/player.glb");
+  EXPECT_EQ(PlayerMI->GetMeshPath(), "res://meshes/player.glb");
 
   MeshInstance* WeaponMI = static_cast<MeshInstance*>(MeshNodes[1]);
-  EXPECT_STREQ(WeaponMI->MeshPath, "res://meshes/sword.glb");
+  EXPECT_EQ(WeaponMI->GetMeshPath(), "res://meshes/sword.glb");
 
   delete Tree;
 }
@@ -220,8 +220,7 @@ TEST_F(IntegrationTest, ProgrammaticSceneCreation)
   MI->SetMeshPath("models/cube.gltf");
 
   // Set transform on mesh node
-  MeshNodePtr->GetTransform().Translation = {5.0f, 0.0f, 0.0f};
-  MeshNodePtr->GetTransform().ForwardMatrixDirty = true;
+  MeshNodePtr->GetTransform().SetTranslation(Vec3(5.0f, 0.0f, 0.0f));
 
   // Run SceneTree::Update to compute world matrices
   Tree->Update(0.016f);
@@ -324,10 +323,8 @@ TEST_F(IntegrationTest, PrefabInstantiationIntegratesWithTransformPropagation)
   ASSERT_NE(Copy2, nullptr);
 
   // Set different positions on the copies
-  Copy1->GetTransform().Translation = {5.0f, 0.0f, 0.0f};
-  Copy1->GetTransform().ForwardMatrixDirty = true;
-  Copy2->GetTransform().Translation = {-5.0f, 0.0f, 0.0f};
-  Copy2->GetTransform().ForwardMatrixDirty = true;
+  Copy1->GetTransform().SetTranslation(Vec3(5.0f, 0.0f, 0.0f));
+  Copy2->GetTransform().SetTranslation(Vec3(-5.0f, 0.0f, 0.0f));
 
   // Run SceneTree::Update to compute world matrices
   Tree->Update(0.016f);
@@ -470,25 +467,23 @@ TEST_F(IntegrationTest, TypedNodeTransformPropagation)
   // Create a hierarchy: Root -> Light (at 0,10,0) -> MeshInstance (at 5,0,0)
   Node* LightNodePtr = Tree->CreateNode("WorldLight", NodeType::Light, nullptr);
   ASSERT_NE(LightNodePtr, nullptr);
-  LightNodePtr->GetTransform().Translation = {0.0f, 10.0f, 0.0f};
-  LightNodePtr->GetTransform().ForwardMatrixDirty = true;
+  LightNodePtr->GetTransform().SetTranslation(Vec3(0.0f, 10.0f, 0.0f));
 
   Node* MeshNodePtr = Tree->CreateNode("ChildMesh", NodeType::MeshInstance, LightNodePtr);
   ASSERT_NE(MeshNodePtr, nullptr);
-  MeshNodePtr->GetTransform().Translation = {5.0f, 0.0f, 0.0f};
-  MeshNodePtr->GetTransform().ForwardMatrixDirty = true;
+  MeshNodePtr->GetTransform().SetTranslation(Vec3(5.0f, 0.0f, 0.0f));
 
   // Run update to propagate transforms
   Tree->Update(0.016f);
 
   // MeshInstance world position should be (5, 10, 0) = parent (0,10,0) + local (5,0,0)
-  const AxMat4x4& MeshWorld = MeshNodePtr->GetWorldTransform();
+  const Mat4& MeshWorld = MeshNodePtr->GetWorldTransform();
   EXPECT_TRUE(FloatNear(MeshWorld.E[3][0], 5.0f));
   EXPECT_TRUE(FloatNear(MeshWorld.E[3][1], 10.0f));
   EXPECT_TRUE(FloatNear(MeshWorld.E[3][2], 0.0f));
 
   // Light world position should be (0, 10, 0)
-  const AxMat4x4& LightWorld = LightNodePtr->GetWorldTransform();
+  const Mat4& LightWorld = LightNodePtr->GetWorldTransform();
   EXPECT_TRUE(FloatNear(LightWorld.E[3][0], 0.0f));
   EXPECT_TRUE(FloatNear(LightWorld.E[3][1], 10.0f));
 
