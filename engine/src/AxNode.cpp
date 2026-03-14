@@ -162,6 +162,77 @@ uint32_t Node::GetChildCount() const
 }
 
 //=============================================================================
+// Scene Queries
+//=============================================================================
+
+Node* Node::GetNode(std::string_view Path)
+{
+  if (Path.empty()) {
+    return (this);
+  }
+
+  // Strip trailing slash
+  if (Path.back() == '/') {
+    Path = Path.substr(0, Path.size() - 1);
+  }
+
+  if (Path.empty()) {
+    return (this);
+  }
+
+  Node* Current = this;
+
+  while (!Path.empty() && Current) {
+    // Find next segment
+    size_t SlashPos = Path.find('/');
+    std::string_view Segment = (SlashPos != std::string_view::npos)
+      ? Path.substr(0, SlashPos)
+      : Path;
+
+    if (Segment == "..") {
+      Current = Current->Parent_;
+    } else {
+      Current = Current->FindChild(Segment);
+    }
+
+    // Advance past this segment
+    if (SlashPos != std::string_view::npos) {
+      Path = Path.substr(SlashPos + 1);
+    } else {
+      break;
+    }
+  }
+
+  return (Current);
+}
+
+//=============================================================================
+// Groups
+//=============================================================================
+
+void Node::AddToGroup(std::string_view GroupName)
+{
+  if (OwningTree_ && !GroupName.empty()) {
+    OwningTree_->AddNodeToGroup(this, GroupName);
+  }
+}
+
+void Node::RemoveFromGroup(std::string_view GroupName)
+{
+  if (OwningTree_ && !GroupName.empty()) {
+    OwningTree_->RemoveNodeFromGroup(this, GroupName);
+  }
+}
+
+bool Node::IsInGroup(std::string_view GroupName) const
+{
+  if (OwningTree_ && !GroupName.empty()) {
+    return (OwningTree_->IsNodeInGroup(this, GroupName));
+  }
+  return (false);
+}
+
+//=============================================================================
 // Lifecycle
 //=============================================================================
 

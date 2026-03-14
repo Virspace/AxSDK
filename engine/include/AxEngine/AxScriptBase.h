@@ -128,6 +128,27 @@ protected:
     if (Owner_ && Child) { Owner_->AddChild(Child); }
   }
 
+  /** Find a node by relative path from this script's owner. */
+  Node* GetNode(std::string_view Path)
+  {
+    if (Owner_) { return (Owner_->GetNode(Path)); }
+    return (nullptr);
+  }
+
+  /** Type-safe variant of GetNode. */
+  template<typename T>
+  T* GetNode(std::string_view Path)
+  {
+    if (Owner_) { return (Owner_->GetNode<T>(Path)); }
+    return (nullptr);
+  }
+
+  /** Add this script's owner to a named group. */
+  void AddToGroup(std::string_view GroupName)
+  {
+    if (Owner_) { Owner_->AddToGroup(GroupName); }
+  }
+
 private:
   Node* Owner_              = nullptr;
   bool  IsInitialized_      = false;

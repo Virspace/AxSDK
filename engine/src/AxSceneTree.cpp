@@ -724,6 +724,9 @@ void SceneTree::DestroyNode(Node* Target)
   // Unregister from all optimization lists (dirty roots, script nodes, pending inits)
   UnregisterSubtreeFromAllLists(Target);
 
+  // Remove from all groups
+  RemoveSubtreeFromAllGroups(Target);
+
   // Fire AX_EVENT_NODE_DESTROYED before detaching from parent
   FireEvent(AX_EVENT_NODE_DESTROYED, Target, nullptr, 0);
 
@@ -783,5 +786,118 @@ Node** SceneTree::GetNodesByType(NodeType Type, uint32_t* OutCount)
     default:
       *OutCount = 0;
       return (nullptr);
+  }
+}
+
+//=============================================================================
+// Groups
+//=============================================================================
+
+const std::vector<Node*> SceneTree::EmptyNodeVector_;
+
+const std::vector<Node*>& SceneTree::GetNodesInGroup(std::string_view GroupName) const
+{
+  auto It = Groups_.find(std::string(GroupName));
+  if (It != Groups_.end()) {
+    return (It->second);
+  }
+  return (EmptyNodeVector_);
+}
+
+uint32_t SceneTree::GetGroupSize(std::string_view GroupName) const
+{
+  auto It = Groups_.find(std::string(GroupName));
+  if (It != Groups_.end()) {
+    return (static_cast<uint32_t>(It->second.size()));
+  }
+  return (0);
+}
+
+void SceneTree::AddNodeToGroup(Node* Target, std::string_view GroupName)
+{
+  if (!Target || GroupName.empty()) {
+    return;
+  }
+
+  auto& Vec = Groups_[std::string(GroupName)];
+
+  // Check for duplicate
+  for (Node* N : Vec) {
+    if (N == Target) {
+      return;
+    }
+  }
+
+  Vec.push_back(Target);
+}
+
+void SceneTree::RemoveNodeFromGroup(Node* Target, std::string_view GroupName)
+{
+  if (!Target || GroupName.empty()) {
+    return;
+  }
+
+  auto It = Groups_.find(std::string(GroupName));
+  if (It == Groups_.end()) {
+    return;
+  }
+
+  auto& Vec = It->second;
+  for (auto VIt = Vec.begin(); VIt != Vec.end(); ++VIt) {
+    if (*VIt == Target) {
+      Vec.erase(VIt);
+      return;
+    }
+  }
+}
+
+bool SceneTree::IsNodeInGroup(const Node* Target, std::string_view GroupName) const
+{
+  if (!Target || GroupName.empty()) {
+    return (false);
+  }
+
+  auto It = Groups_.find(std::string(GroupName));
+  if (It == Groups_.end()) {
+    return (false);
+  }
+
+  for (const Node* N : It->second) {
+    if (N == Target) {
+      return (true);
+    }
+  }
+  return (false);
+}
+
+void SceneTree::RemoveNodeFromAllGroups(Node* Target)
+{
+  if (!Target) {
+    return;
+  }
+
+  for (auto& [Name, Vec] : Groups_) {
+    for (auto It = Vec.begin(); It != Vec.end(); ++It) {
+      if (*It == Target) {
+        Vec.erase(It);
+        break;
+      }
+    }
+  }
+}
+
+void SceneTree::RemoveSubtreeFromAllGroups(Node* Target)
+{
+  if (!Target) {
+    return;
+  }
+
+  RemoveNodeFromAllGroups(Target);
+
+  Node* Child = Target->GetFirstChild();
+  while (Child) {
+    Node* Next = Child->GetNextSibling();
+    RemoveSubtreeFromAllGroups(Child);
+    Child = Next;
   }
 }

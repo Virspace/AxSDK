@@ -36,6 +36,8 @@
 
 #include <string>
 #include <string_view>
+#include <vector>
+#include <unordered_map>
 
 // Forward declarations
 class ScriptBase;
@@ -181,6 +183,25 @@ public:
   void UpdateMouseDelta(AxVec2 Delta);
 
   //=========================================================================
+  // Groups
+  //=========================================================================
+
+  /** Get all nodes in a named group. Returns empty vector if group doesn't exist. */
+  const std::vector<Node*>& GetNodesInGroup(std::string_view GroupName) const;
+
+  /** Get the number of nodes in a named group. */
+  uint32_t GetGroupSize(std::string_view GroupName) const;
+
+  /** Add a node to a named group. No-op if already present. Called by Node::AddToGroup. */
+  void AddNodeToGroup(Node* Target, std::string_view GroupName);
+
+  /** Remove a node from a named group. Called by Node::RemoveFromGroup. */
+  void RemoveNodeFromGroup(Node* Target, std::string_view GroupName);
+
+  /** Check if a node is in a named group. Called by Node::IsInGroup. */
+  bool IsNodeInGroup(const Node* Target, std::string_view GroupName) const;
+
+  //=========================================================================
   // Script Execution Control
   //=========================================================================
 
@@ -289,6 +310,12 @@ private:
   /** Set OwningTree_ on a node and all its descendants recursively. */
   void SetOwningTreeRecursive(Node* Target, SceneTree* Tree);
 
+  /** Remove a node from all groups. Called during DestroyNode cleanup. */
+  void RemoveNodeFromAllGroups(Node* Target);
+
+  /** Recursively remove a node and its subtree from all groups. */
+  void RemoveSubtreeFromAllGroups(Node* Target);
+
   //=========================================================================
   // Private Members
   //=========================================================================
@@ -335,4 +362,11 @@ private:
   // transforms and skips script init/dispatch. Set by AxEngine based
   // on the current AxEngineMode (Edit disables, Play enables).
   bool ScriptsEnabled_{true};
+
+  // String-based groups -- runtime grouping for gameplay queries.
+  // Key: group name, Value: vector of nodes in the group.
+  std::unordered_map<std::string, std::vector<Node*>> Groups_;
+
+  // Empty vector returned by GetNodesInGroup for nonexistent groups.
+  static const std::vector<Node*> EmptyNodeVector_;
 };

@@ -91,6 +91,77 @@ public:
   uint32_t GetChildCount() const;
 
   //=========================================================================
+  // Children Iteration
+  //=========================================================================
+
+  /** Lightweight range adapter for iterating direct children via range-for. */
+  class ChildRange
+  {
+  public:
+    struct Iterator
+    {
+      Node* Current;
+      Node* operator*() const { return (Current); }
+      Iterator& operator++() { Current = Current->GetNextSibling(); return (*this); }
+      bool operator!=(const Iterator& Other) const { return (Current != Other.Current); }
+    };
+
+    explicit ChildRange(Node* First) : First_(First) {}
+    Iterator begin() const { return {First_}; }
+    Iterator end() const { return {nullptr}; }
+
+  private:
+    Node* First_;
+  };
+
+  /** Get an iterable range of direct children. Zero allocation. */
+  ChildRange GetChildren() const { return (ChildRange(FirstChild_)); }
+
+  //=========================================================================
+  // Scene Queries
+  //=========================================================================
+
+  /** Find a node by relative path. Supports "/" for child traversal, ".." for parent.
+   *  Returns nullptr if any segment fails to resolve. Empty string returns this. */
+  Node* GetNode(std::string_view Path);
+
+  /** Type-safe variant. Returns nullptr if the node exists but is the wrong type. */
+  template<typename T>
+  T* GetNode(std::string_view Path)
+  {
+    Node* Found = GetNode(Path);
+    if (Found) {
+      return (Found->As<T>());
+    }
+    return (nullptr);
+  }
+
+  /** Find the first direct child of the given type. */
+  template<typename T>
+  T* FindChildByType()
+  {
+    for (Node* C = FirstChild_; C; C = C->NextSibling_) {
+      if (C->GetType() == T::StaticType) {
+        return (static_cast<T*>(C));
+      }
+    }
+    return (nullptr);
+  }
+
+  //=========================================================================
+  // Groups
+  //=========================================================================
+
+  /** Add this node to a named group. No-op if already in the group or no OwningTree_. */
+  void AddToGroup(std::string_view GroupName);
+
+  /** Remove this node from a named group. No-op if not in the group or no OwningTree_. */
+  void RemoveFromGroup(std::string_view GroupName);
+
+  /** Check if this node belongs to a named group. */
+  bool IsInGroup(std::string_view GroupName) const;
+
+  //=========================================================================
   // Lifecycle
   //=========================================================================
 
