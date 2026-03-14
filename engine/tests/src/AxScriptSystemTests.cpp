@@ -728,3 +728,177 @@ TEST_F(ScriptSystemTest, E2E_InactiveNodeMidHierarchySuppressesSubtree)
   EXPECT_EQ(CScript->UpdateCount,      1) << "Child of inactive parent must NOT receive additional OnUpdate";
   EXPECT_EQ(CScript->LateUpdateCount,  0) << "Child of inactive parent must NOT receive OnLateUpdate";
 }
+
+//=============================================================================
+// Script Process Control Tests
+//=============================================================================
+
+TEST_F(ScriptSystemTest, DefaultState_BothEnabled)
+{
+  CountingScript Script;
+  EXPECT_TRUE(Script.IsProcessing());
+  EXPECT_TRUE(Script.IsPhysicsProcessing());
+}
+
+TEST_F(ScriptSystemTest, SetProcessing_False_StopsOnUpdate)
+{
+  Node* N = Tree_->CreateNode("A", NodeType::Node3D);
+  auto* Script = new CountingScript();
+  N->AttachScript(Script);
+
+  Tree_->Update(0.016f);
+  EXPECT_EQ(Script->UpdateCount, 1);
+
+  Script->SetProcessing(false);
+  Tree_->Update(0.016f);
+  EXPECT_EQ(Script->UpdateCount, 1) << "OnUpdate should not fire after SetProcessing(false)";
+}
+
+TEST_F(ScriptSystemTest, SetProcessing_True_ResumesOnUpdate)
+{
+  Node* N = Tree_->CreateNode("A", NodeType::Node3D);
+  auto* Script = new CountingScript();
+  N->AttachScript(Script);
+
+  Tree_->Update(0.016f);
+  Script->SetProcessing(false);
+  Tree_->Update(0.016f);
+  EXPECT_EQ(Script->UpdateCount, 1);
+
+  Script->SetProcessing(true);
+  Tree_->Update(0.016f);
+  EXPECT_EQ(Script->UpdateCount, 2) << "OnUpdate should resume after SetProcessing(true)";
+}
+
+TEST_F(ScriptSystemTest, SetPhysicsProcessing_False_StopsOnFixedUpdate)
+{
+  Node* N = Tree_->CreateNode("A", NodeType::Node3D);
+  auto* Script = new CountingScript();
+  N->AttachScript(Script);
+
+  Tree_->Update(0.016f); // init
+  Tree_->FixedUpdate(0.016f);
+  EXPECT_EQ(Script->FixedUpdateCount, 1);
+
+  Script->SetPhysicsProcessing(false);
+  Tree_->FixedUpdate(0.016f);
+  EXPECT_EQ(Script->FixedUpdateCount, 1) << "OnFixedUpdate should not fire after SetPhysicsProcessing(false)";
+}
+
+TEST_F(ScriptSystemTest, SetPhysicsProcessing_True_ResumesOnFixedUpdate)
+{
+  Node* N = Tree_->CreateNode("A", NodeType::Node3D);
+  auto* Script = new CountingScript();
+  N->AttachScript(Script);
+
+  Tree_->Update(0.016f);
+  Tree_->FixedUpdate(0.016f);
+  Script->SetPhysicsProcessing(false);
+  Tree_->FixedUpdate(0.016f);
+  EXPECT_EQ(Script->FixedUpdateCount, 1);
+
+  Script->SetPhysicsProcessing(true);
+  Tree_->FixedUpdate(0.016f);
+  EXPECT_EQ(Script->FixedUpdateCount, 2) << "OnFixedUpdate should resume after SetPhysicsProcessing(true)";
+}
+
+TEST_F(ScriptSystemTest, Processing_IndependentOfPhysics)
+{
+  Node* N = Tree_->CreateNode("A", NodeType::Node3D);
+  auto* Script = new CountingScript();
+  N->AttachScript(Script);
+
+  Tree_->Update(0.016f);
+  Tree_->FixedUpdate(0.016f);
+
+  Script->SetProcessing(false);
+  Tree_->Update(0.016f);
+  Tree_->FixedUpdate(0.016f);
+  EXPECT_EQ(Script->UpdateCount, 1) << "OnUpdate stopped";
+  EXPECT_EQ(Script->FixedUpdateCount, 2) << "OnFixedUpdate still fires";
+
+  Script->SetProcessing(true);
+  Script->SetPhysicsProcessing(false);
+  Tree_->Update(0.016f);
+  Tree_->FixedUpdate(0.016f);
+  EXPECT_EQ(Script->UpdateCount, 2) << "OnUpdate resumed";
+  EXPECT_EQ(Script->FixedUpdateCount, 2) << "OnFixedUpdate stopped";
+}
+
+TEST_F(ScriptSystemTest, Processing_Disabled_LateUpdateStillFires)
+{
+  Node* N = Tree_->CreateNode("A", NodeType::Node3D);
+  auto* Script = new CountingScript();
+  N->AttachScript(Script);
+
+  Tree_->Update(0.016f);
+
+  Script->SetProcessing(false);
+  Script->SetPhysicsProcessing(false);
+  Tree_->LateUpdate(0.016f);
+  EXPECT_EQ(Script->LateUpdateCount, 1) << "LateUpdate should fire even with processing disabled";
+}
+
+TEST_F(ScriptSystemTest, Processing_InactiveNode_StillSkipped)
+{
+  Node* N = Tree_->CreateNode("A", NodeType::Node3D);
+  auto* Script = new CountingScript();
+  N->AttachScript(Script);
+
+  Tree_->Update(0.016f);
+  EXPECT_EQ(Script->UpdateCount, 1);
+
+  N->SetActive(false);
+  Tree_->Update(0.016f);
+  EXPECT_EQ(Script->UpdateCount, 1) << "Inactive node skipped even with processing enabled";
+}
+
+//=============================================================================
+// Script Process Control Integration Tests
+//=============================================================================
+
+struct SelfDisablingScript : public ScriptBase
+{
+  int UpdateCount = 0;
+  int DisableAfter = 1;
+
+  void OnUpdate(float) override
+  {
+    ++UpdateCount;
+    if (UpdateCount >= DisableAfter) {
+      SetProcessing(false);
+    }
+  }
+};
+
+TEST_F(ScriptSystemTest, Processing_DisableInOnUpdate_StopsNextFrame)
+{
+  Node* N = Tree_->CreateNode("A", NodeType::Node3D);
+  auto* Script = new SelfDisablingScript();
+  Script->DisableAfter = 2;
+  N->AttachScript(Script);
+
+  Tree_->Update(0.016f); // frame 1: init + update (count=1)
+  Tree_->Update(0.016f); // frame 2: update (count=2, disables)
+  Tree_->Update(0.016f); // frame 3: should NOT fire
+  EXPECT_EQ(Script->UpdateCount, 2) << "Should stop after self-disabling in frame 2";
+}
+
+TEST_F(ScriptSystemTest, Processing_EnableFromExternal_StartsNextFrame)
+{
+  Node* N = Tree_->CreateNode("A", NodeType::Node3D);
+  auto* Script = new CountingScript();
+  N->AttachScript(Script);
+
+  Tree_->Update(0.016f);
+  Script->SetProcessing(false);
+
+  Tree_->Update(0.016f);
+  Tree_->Update(0.016f);
+  EXPECT_EQ(Script->UpdateCount, 1) << "Still disabled";
+
+  // Simulate external trigger enabling processing
+  Script->SetProcessing(true);
+  Tree_->Update(0.016f);
+  EXPECT_EQ(Script->UpdateCount, 2) << "Should fire after external re-enable";
+}

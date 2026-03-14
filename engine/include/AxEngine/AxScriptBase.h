@@ -80,6 +80,22 @@ public:
   Node* GetOwner() const { return (Owner_); }
   bool IsInitialized() const { return (IsInitialized_); }
 
+  //=========================================================================
+  // Process Control
+  //=========================================================================
+
+  /** Enable or disable OnUpdate dispatch for this script. Default: true. */
+  void SetProcessing(bool Enabled) { Processing_ = Enabled; }
+
+  /** Enable or disable OnFixedUpdate dispatch for this script. Default: true. */
+  void SetPhysicsProcessing(bool Enabled) { PhysicsProcessing_ = Enabled; }
+
+  /** Query whether OnUpdate dispatch is enabled. */
+  bool IsProcessing() const { return (Processing_); }
+
+  /** Query whether OnFixedUpdate dispatch is enabled. */
+  bool IsPhysicsProcessing() const { return (PhysicsProcessing_); }
+
 protected:
   ScriptBase() = default;
 
@@ -113,8 +129,10 @@ protected:
   }
 
 private:
-  Node* Owner_         = nullptr;
-  bool  IsInitialized_ = false;
+  Node* Owner_              = nullptr;
+  bool  IsInitialized_      = false;
+  bool  Processing_         = true;
+  bool  PhysicsProcessing_  = true;
 
   friend class Node;
   friend class SceneTree;

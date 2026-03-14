@@ -351,7 +351,7 @@ void SceneTree::Update(float DeltaT)
     }
 
     ScriptBase* Script = ScriptNode->GetScript();
-    if (Script && Script->IsInitialized_) {
+    if (Script && Script->IsInitialized_ && Script->IsProcessing()) {
       Script->MainCamera = MainCamera_;
       Script->MouseDelta = MouseDelta_;
       Script->Tree_ = this;
@@ -374,7 +374,7 @@ void SceneTree::FixedUpdate(float DeltaT)
     }
 
     ScriptBase* Script = ScriptNode->GetScript();
-    if (Script && Script->IsInitialized_) {
+    if (Script && Script->IsInitialized_ && Script->IsPhysicsProcessing()) {
       Script->MainCamera = MainCamera_;
       Script->MouseDelta = MouseDelta_;
       Script->Tree_ = this;
