@@ -497,3 +497,91 @@ TEST_F(TypedNodeTest, DefaultStringPathsAreEmpty)
   SpriteNode Spr("EmptySprite", TableAPI_);
   EXPECT_TRUE(Spr.GetTexturePath().empty());
 }
+
+//=============================================================================
+// Node::As<T> Safe Casting Tests
+//=============================================================================
+
+TEST_F(TypedNodeTest, As_CorrectType_ReturnsTypedPointer)
+{
+  MeshInstance MI("Mesh", TableAPI_);
+  Node* N = &MI;
+  MeshInstance* Result = N->As<MeshInstance>();
+  ASSERT_NE(Result, nullptr);
+  EXPECT_EQ(Result, &MI);
+}
+
+TEST_F(TypedNodeTest, As_WrongType_ReturnsNullptr)
+{
+  MeshInstance MI("Mesh", TableAPI_);
+  Node* N = &MI;
+  CameraNode* Result = N->As<CameraNode>();
+  EXPECT_EQ(Result, nullptr);
+}
+
+TEST_F(TypedNodeTest, As_BaseNode_ReturnsNullptr)
+{
+  Node N("Base", NodeType::Base, TableAPI_);
+  MeshInstance* Result = N.As<MeshInstance>();
+  EXPECT_EQ(Result, nullptr);
+}
+
+TEST_F(TypedNodeTest, As_Const_CorrectType_ReturnsConstPointer)
+{
+  MeshInstance MI("Mesh", TableAPI_);
+  const Node* N = &MI;
+  const MeshInstance* Result = N->As<MeshInstance>();
+  ASSERT_NE(Result, nullptr);
+  EXPECT_EQ(Result, &MI);
+}
+
+TEST_F(TypedNodeTest, As_Const_WrongType_ReturnsNullptr)
+{
+  LightNode LN("Light", TableAPI_);
+  const Node* N = &LN;
+  const CameraNode* Result = N->As<CameraNode>();
+  EXPECT_EQ(Result, nullptr);
+}
+
+TEST_F(TypedNodeTest, As_AllTypedNodes_MatchOwnType)
+{
+  MeshInstance MI("MI", TableAPI_);
+  CameraNode Cam("Cam", TableAPI_);
+  LightNode Light("Light", TableAPI_);
+  RigidBodyNode RB("RB", TableAPI_);
+  ColliderNode Col("Col", TableAPI_);
+  AudioSourceNode AS("AS", TableAPI_);
+  AudioListenerNode AL("AL", TableAPI_);
+  AnimatorNode Anim("Anim", TableAPI_);
+  ParticleEmitterNode PE("PE", TableAPI_);
+  SpriteNode Spr("Spr", TableAPI_);
+
+  EXPECT_NE(((Node*)&MI)->As<MeshInstance>(), nullptr);
+  EXPECT_NE(((Node*)&Cam)->As<CameraNode>(), nullptr);
+  EXPECT_NE(((Node*)&Light)->As<LightNode>(), nullptr);
+  EXPECT_NE(((Node*)&RB)->As<RigidBodyNode>(), nullptr);
+  EXPECT_NE(((Node*)&Col)->As<ColliderNode>(), nullptr);
+  EXPECT_NE(((Node*)&AS)->As<AudioSourceNode>(), nullptr);
+  EXPECT_NE(((Node*)&AL)->As<AudioListenerNode>(), nullptr);
+  EXPECT_NE(((Node*)&Anim)->As<AnimatorNode>(), nullptr);
+  EXPECT_NE(((Node*)&PE)->As<ParticleEmitterNode>(), nullptr);
+  EXPECT_NE(((Node*)&Spr)->As<SpriteNode>(), nullptr);
+}
+
+TEST_F(TypedNodeTest, As_NullptrPattern_WorksWithIf)
+{
+  MeshInstance MI("Mesh", TableAPI_);
+  Node* N = &MI;
+
+  bool Entered = false;
+  if (auto* Result = N->As<MeshInstance>()) {
+    Entered = true;
+    EXPECT_EQ(Result->GetType(), NodeType::MeshInstance);
+  }
+  EXPECT_TRUE(Entered) << "Should enter if-block for correct type";
+
+  if (auto* Result = N->As<CameraNode>()) {
+    (void)Result;
+    FAIL() << "Should not enter if-block for wrong type";
+  }
+}

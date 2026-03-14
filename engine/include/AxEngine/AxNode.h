@@ -133,6 +133,27 @@ public:
 
   std::string_view GetName() const { return (Name_); }
   NodeType GetType() const { return (Type_); }
+
+  /** Safe downcast. Returns T* if this node's type matches T::StaticType, nullptr otherwise. */
+  template<typename T>
+  T* As()
+  {
+    if (Type_ == T::StaticType) {
+      return (static_cast<T*>(this));
+    }
+    return (nullptr);
+  }
+
+  /** Const variant. */
+  template<typename T>
+  const T* As() const
+  {
+    if (Type_ == T::StaticType) {
+      return (static_cast<const T*>(this));
+    }
+    return (nullptr);
+  }
+
   uint32_t GetNodeID() const { return (NodeID_); }
   void SetNodeID(uint32_t ID) { NodeID_ = ID; }
 
