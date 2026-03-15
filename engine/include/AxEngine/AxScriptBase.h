@@ -2,6 +2,7 @@
 
 #include "Foundation/AxTypes.h"
 #include "AxEngine/AxSceneTree.h"
+#include "AxEngine/AxScriptLog.h"
 
 /**
  * AxScriptBase.h - Script Base Class for Node Behavioral Scripting
@@ -149,7 +150,36 @@ protected:
     if (Owner_) { Owner_->AddToGroup(GroupName); }
   }
 
+  //=========================================================================
+  // Logging — pushes structured entries to LogBuffer with owner node name
+  //=========================================================================
+
+  void LogError(std::string_view Message)
+  {
+    LogBuffer::Get().Push(AX_LOG_LEVEL_ERROR, OwnerName(), Message);
+  }
+
+  void LogWarn(std::string_view Message)
+  {
+    LogBuffer::Get().Push(AX_LOG_LEVEL_WARNING, OwnerName(), Message);
+  }
+
+  void LogInfo(std::string_view Message)
+  {
+    LogBuffer::Get().Push(AX_LOG_LEVEL_INFO, OwnerName(), Message);
+  }
+
+  void LogDebug(std::string_view Message)
+  {
+    LogBuffer::Get().Push(AX_LOG_LEVEL_DEBUG, OwnerName(), Message);
+  }
+
 private:
+  std::string_view OwnerName() const
+  {
+    return (Owner_ ? Owner_->GetName() : "detached");
+  }
+
   Node* Owner_              = nullptr;
   bool  IsInitialized_      = false;
   bool  Processing_         = true;

@@ -12,6 +12,7 @@
 
 #include "AxEngine/AxNode.h"
 #include "AxEngine/AxScriptBase.h"
+#include "AxEngine/AxScriptLog.h"
 #include "AxEngine/AxSceneTree.h"
 #include "Foundation/AxAllocator.h"
 #include "Foundation/AxHashTable.h"
@@ -171,6 +172,9 @@ Node* Node::GetNode(std::string_view Path)
     return (this);
   }
 
+  // Save original for error reporting
+  std::string_view OriginalPath = Path;
+
   // Strip trailing slash
   if (Path.back() == '/') {
     Path = Path.substr(0, Path.size() - 1);
@@ -201,6 +205,15 @@ Node* Node::GetNode(std::string_view Path)
     } else {
       break;
     }
+  }
+
+  if (!Current) {
+    std::string Msg = "GetNode: path not found '";
+    Msg += OriginalPath;
+    Msg += "' from node '";
+    Msg += Name_;
+    Msg += "'";
+    Log::Warn(Msg);
   }
 
   return (Current);

@@ -16,6 +16,7 @@
 
 #include "AxEngine/AxSceneTree.h"
 #include "AxEngine/AxScriptBase.h"
+#include "AxEngine/AxScriptLog.h"
 #include "AxEngine/AxEventBus.h"
 #include "Foundation/AxMath.h"
 
@@ -625,6 +626,7 @@ void SceneTree::UnregisterSubtreeFromAllLists(Node* Target)
 Node* SceneTree::CreateNode(std::string_view NodeName, NodeType Type, Node* Parent)
 {
   if (NodeName.empty()) {
+    Log::Warn("CreateNode called with empty name");
     return (nullptr);
   }
 

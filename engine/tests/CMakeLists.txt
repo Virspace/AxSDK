@@ -49,6 +49,7 @@ target_sources(AxEngineTests
         src/AxEditorReadinessTests.cpp
         src/AxMathTypesTests.cpp
         src/AxSceneQueryTests.cpp
+        src/AxScriptLogTests.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxTransformType.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxNode.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxTypedNodes.cpp
@@ -57,6 +58,7 @@ target_sources(AxEngineTests
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxSceneParser.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxPrimitives.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxInput.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxScriptLog.cpp
 )
 
 #
@@ -80,6 +82,7 @@ target_include_directories(AxEngineTests
         ${CMAKE_CURRENT_SOURCE_DIR}/../../plugins/AxResource/include
         ${CMAKE_CURRENT_SOURCE_DIR}/../../plugins/AxResource/src
         ${CMAKE_CURRENT_SOURCE_DIR}/../../plugins/AxWindow/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../plugins/AxLog/include
 )
 
 # Link dependencies
