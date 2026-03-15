@@ -24,16 +24,21 @@ public:
             0.0f
         );
 
+        // Map named input axes
+        AxInput::Get().MapAxis("move_right", AX_KEY_D, AX_KEY_A);
+        AxInput::Get().MapAxis("move_forward", AX_KEY_W, AX_KEY_S);
+        AxInput::Get().MapAxis("move_up", AX_KEY_E, AX_KEY_Q);
+
         // Spawn five primitive shapes
         SpawnPrimitives();
     }
 
     void OnUpdate(float DeltaT) override
     {
-        // Movement input via AxInput singleton
-        float H = AxInput::Get().GetAxis(AX_KEY_D, AX_KEY_A);
-        float V = AxInput::Get().GetAxis(AX_KEY_W, AX_KEY_S);
-        float UD = AxInput::Get().GetAxis(AX_KEY_E, AX_KEY_Q);
+        // Movement input via named axes
+        float H = AxInput::Get().GetAxis("move_right");
+        float V = AxInput::Get().GetAxis("move_forward");
+        float UD = AxInput::Get().GetAxis("move_up");
 
         Vec3 Movement(
             H * CameraSpeed * DeltaT,

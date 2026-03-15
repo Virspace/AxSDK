@@ -1,8 +1,8 @@
 /**
- * AxScriptLog.cpp - Structured log buffer implementation
+ * AxScriptLog.cpp - Structured log buffer for scripts and the editor
  *
- * LogBuffer stores entries in a fixed-size ring buffer. Log:: namespace
- * functions push entries with empty NodeName for engine-internal warnings.
+ * Ring buffer of LogEntry structs consumed by the editor output panel.
+ * Separate from AxLog (engine-internal logging).
  */
 
 #include "AxEngine/AxScriptLog.h"
@@ -23,16 +23,12 @@ void LogBuffer::Push(int Level, std::string_view NodeName, std::string_view Mess
   Entry.Level = Level;
   Entry.NodeName = std::string(NodeName);
   Entry.Message = std::string(Message);
-
   Head_ = (Head_ + 1) % kMaxEntries;
-  if (Count_ < kMaxEntries) {
-    Count_++;
-  }
+  if (Count_ < kMaxEntries) { Count_++; }
 }
 
 const LogEntry& LogBuffer::GetEntry(uint32_t Index) const
 {
-  // Index 0 = oldest entry
   uint32_t Start = (Count_ < kMaxEntries) ? 0 : Head_;
   uint32_t Actual = (Start + Index) % kMaxEntries;
   return (Entries_[Actual]);

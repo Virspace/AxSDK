@@ -100,3 +100,72 @@ float AxInput::GetAxis(int PositiveKey, int NegativeKey) const
     if (Neg && !Pos) return (-1.0f);
     return (0.0f);
 }
+
+//=============================================================================
+// Action Mapping
+//=============================================================================
+
+void AxInput::MapAction(std::string_view Name, int Key)
+{
+    auto& Binding = Actions_[std::string(Name)];
+    for (int K : Binding.Keys) {
+        if (K == Key) return;
+    }
+    Binding.Keys.push_back(Key);
+}
+
+void AxInput::UnmapAction(std::string_view Name)
+{
+    Actions_.erase(std::string(Name));
+}
+
+bool AxInput::IsActionDown(std::string_view Name) const
+{
+    auto It = Actions_.find(std::string(Name));
+    if (It == Actions_.end()) return (false);
+    for (int Key : It->second.Keys) {
+        if (IsKeyDown(Key)) return (true);
+    }
+    return (false);
+}
+
+bool AxInput::IsActionPressed(std::string_view Name) const
+{
+    auto It = Actions_.find(std::string(Name));
+    if (It == Actions_.end()) return (false);
+    for (int Key : It->second.Keys) {
+        if (IsKeyPressed(Key)) return (true);
+    }
+    return (false);
+}
+
+bool AxInput::IsActionReleased(std::string_view Name) const
+{
+    auto It = Actions_.find(std::string(Name));
+    if (It == Actions_.end()) return (false);
+    for (int Key : It->second.Keys) {
+        if (IsKeyReleased(Key)) return (true);
+    }
+    return (false);
+}
+
+//=============================================================================
+// Axis Mapping
+//=============================================================================
+
+void AxInput::MapAxis(std::string_view Name, int PositiveKey, int NegativeKey)
+{
+    Axes_[std::string(Name)] = {PositiveKey, NegativeKey};
+}
+
+void AxInput::UnmapAxis(std::string_view Name)
+{
+    Axes_.erase(std::string(Name));
+}
+
+float AxInput::GetAxis(std::string_view Name) const
+{
+    auto It = Axes_.find(std::string(Name));
+    if (It == Axes_.end()) return (0.0f);
+    return (GetAxis(It->second.PositiveKey, It->second.NegativeKey));
+}

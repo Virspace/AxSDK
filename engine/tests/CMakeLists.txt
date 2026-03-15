@@ -50,6 +50,7 @@ target_sources(AxEngineTests
         src/AxMathTypesTests.cpp
         src/AxSceneQueryTests.cpp
         src/AxScriptLogTests.cpp
+        src/AxInputActionTests.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxTransformType.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxNode.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxTypedNodes.cpp
