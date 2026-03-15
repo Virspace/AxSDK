@@ -310,6 +310,9 @@ private:
   /** Set OwningTree_ on a node and all its descendants recursively. */
   void SetOwningTreeRecursive(Node* Target, SceneTree* Tree);
 
+  /** Recursively delete a subtree bottom-up (children first, then the node). */
+  void DestroySubtreeBottomUp(Node* Target);
+
   /** Remove a node from all groups. Called during DestroyNode cleanup. */
   void RemoveNodeFromAllGroups(Node* Target);
 

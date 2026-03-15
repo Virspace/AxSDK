@@ -48,6 +48,9 @@ Node::~Node()
     Shutdown();
   }
 
+  // Clean up signal connections (both incoming and outgoing)
+  CleanupSignals();
+
   // Destroy the attached script (DetachScript fires OnDisable/OnDetach first)
   if (Script_) {
     delete DetachScript();
@@ -404,4 +407,146 @@ void Node::SetActive(bool Active)
       Script_->OnEnable();
     }
   }
+}
+
+//=============================================================================
+// Signals
+//=============================================================================
+
+void Node::EmitSignal(std::string_view Name)
+{
+  SignalArgs Args;
+  EmitSignalArgs(Name, Args);
+}
+
+void Node::EmitSignal(std::string_view Name, float Arg0)
+{
+  SignalArgs Args;
+  Args.Args[0].ArgType = SignalArg::Type::Float;
+  Args.Args[0].AsFloat = Arg0;
+  Args.Count = 1;
+  EmitSignalArgs(Name, Args);
+}
+
+void Node::EmitSignal(std::string_view Name, float Arg0, float Arg1)
+{
+  SignalArgs Args;
+  Args.Args[0].ArgType = SignalArg::Type::Float;
+  Args.Args[0].AsFloat = Arg0;
+  Args.Args[1].ArgType = SignalArg::Type::Float;
+  Args.Args[1].AsFloat = Arg1;
+  Args.Count = 2;
+  EmitSignalArgs(Name, Args);
+}
+
+void Node::EmitSignalArgs(std::string_view Name, const SignalArgs& Args)
+{
+  for (auto& Slot : Signals_) {
+    if (Slot.Name == Name) {
+      // Snapshot IDs — callbacks may disconnect during emission
+      std::vector<uint32_t> IDs;
+      IDs.reserve(Slot.Connections.size());
+      for (auto& C : Slot.Connections) { IDs.push_back(C.ID); }
+
+      for (uint32_t ID : IDs) {
+        // Find connection by ID (may have been erased by a prior callback)
+        for (auto& C : Slot.Connections) {
+          if (C.ID == ID) {
+            C.Callback(Args);
+            break;
+          }
+        }
+      }
+      return;
+    }
+  }
+}
+
+uint32_t Node::Connect(std::string_view SignalName, SignalCallback Callback, Node* Receiver)
+{
+  // Find or create signal slot
+  SignalSlot* Slot = nullptr;
+  for (auto& S : Signals_) {
+    if (S.Name == SignalName) { Slot = &S; break; }
+  }
+  if (!Slot) {
+    Signals_.push_back({std::string(SignalName), {}});
+    Slot = &Signals_.back();
+  }
+
+  uint32_t ID = NextConnectionID_++;
+  Slot->Connections.push_back({ID, std::move(Callback), Receiver});
+
+  // Track outgoing connection on receiver for cleanup
+  if (Receiver) {
+    Receiver->OutgoingConnections_.push_back({this, std::string(SignalName), ID});
+  }
+
+  return (ID);
+}
+
+void Node::Disconnect(std::string_view SignalName, uint32_t ConnectionID)
+{
+  for (auto& Slot : Signals_) {
+    if (Slot.Name == SignalName) {
+      for (auto It = Slot.Connections.begin(); It != Slot.Connections.end(); ++It) {
+        if (It->ID == ConnectionID) {
+          // Remove corresponding outgoing connection from receiver
+          if (It->Receiver) {
+            auto& Out = It->Receiver->OutgoingConnections_;
+            for (auto OIt = Out.begin(); OIt != Out.end(); ++OIt) {
+              if (OIt->Emitter == this && OIt->ConnectionID == ConnectionID) {
+                Out.erase(OIt);
+                break;
+              }
+            }
+          }
+          Slot.Connections.erase(It);
+          return;
+        }
+      }
+      return;
+    }
+  }
+}
+
+void Node::CleanupSignals()
+{
+  // 1. Clean up incoming connections: for each subscriber with a Receiver,
+  //    remove the corresponding OutgoingConnection from the receiver
+  for (auto& Slot : Signals_) {
+    for (auto& Conn : Slot.Connections) {
+      if (Conn.Receiver) {
+        auto& Out = Conn.Receiver->OutgoingConnections_;
+        for (auto It = Out.begin(); It != Out.end(); ++It) {
+          if (It->Emitter == this && It->ConnectionID == Conn.ID) {
+            Out.erase(It);
+            break;
+          }
+        }
+      }
+    }
+  }
+  Signals_.clear();
+
+  // 2. Clean up outgoing connections: disconnect this node's subscriptions
+  //    from the emitters
+  for (auto& OC : OutgoingConnections_) {
+    if (OC.Emitter) {
+      // Remove the connection directly without calling Disconnect
+      // (which would try to modify our OutgoingConnections_ while we iterate)
+      for (auto& Slot : OC.Emitter->Signals_) {
+        if (Slot.Name == OC.SignalName) {
+          for (auto It = Slot.Connections.begin(); It != Slot.Connections.end(); ++It) {
+            if (It->ID == OC.ConnectionID) {
+              Slot.Connections.erase(It);
+              break;
+            }
+          }
+          break;
+        }
+      }
+    }
+  }
+  OutgoingConnections_.clear();
 }

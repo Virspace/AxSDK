@@ -874,6 +874,27 @@ static inline void TransformRotateFromMouseDelta(AxTransform *Transform, AxVec2 
     TransformMarkDirty(Transform);
 }
 
+/**
+ * Sine-based pulse curve: maps T in [0,1] to a smooth 0 -> 1 -> 0 bell shape.
+ * Useful for driving burst effects (spin-up then slow-down).
+ */
+static inline float SinPulse(float T)
+{
+    if (T <= 0.0f || T >= 1.0f) return (0.0f);
+    return (sinf(T * AX_PI));
+}
+
+/**
+ * Sine-based ease-in-out: maps T in [0,1] to a smooth 0 -> 1 S-curve.
+ * Starts slow, accelerates, then decelerates to a stop.
+ */
+static inline float EaseInOutSin(float T)
+{
+    if (T <= 0.0f) return (0.0f);
+    if (T >= 1.0f) return (1.0f);
+    return (0.5f * (1.0f - cosf(T * AX_PI)));
+}
+
 static inline float Lerp(float A, float B, float T)
 {
     return (A + T * (B - A));

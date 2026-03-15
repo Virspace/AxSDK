@@ -151,6 +151,31 @@ protected:
   }
 
   //=========================================================================
+  // Signals — convenience wrappers that delegate to Owner_ node
+  //=========================================================================
+
+  void EmitSignal(std::string_view Name)
+  {
+    if (Owner_) { Owner_->EmitSignal(Name); }
+  }
+
+  void EmitSignal(std::string_view Name, float Arg0)
+  {
+    if (Owner_) { Owner_->EmitSignal(Name, Arg0); }
+  }
+
+  void EmitSignal(std::string_view Name, float Arg0, float Arg1)
+  {
+    if (Owner_) { Owner_->EmitSignal(Name, Arg0, Arg1); }
+  }
+
+  uint32_t Connect(Node* Emitter, std::string_view SignalName, SignalCallback Callback)
+  {
+    if (Emitter) { return (Emitter->Connect(SignalName, std::move(Callback), Owner_)); }
+    return (0);
+  }
+
+  //=========================================================================
   // Logging — pushes structured entries to LogBuffer with owner node name
   //=========================================================================
 

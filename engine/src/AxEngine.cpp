@@ -450,26 +450,22 @@ void AxEngine::Shutdown()
     // Shutdown input
     AxInput::Get().Shutdown();
 
-    // Detach and destroy the game script while Game DLL is still loaded
-    // (in DLL mode, the script's vtable lives in Game.dll, so it must be deleted before unload)
-    if (SceneTree_ && SceneTree_->GetRootNode()) {
-        ScriptBase* Script = SceneTree_->GetRootNode()->DetachScript();
-        delete Script;
-    }
+    // Release scene BEFORE unloading Game DLL. The scene tree contains nodes
+    // with scripts and signal connections whose code lives in libGame.dll.
+    // All nodes (and their std::function captures) must be destroyed while
+    // the DLL is still loaded.
+    UnloadScene();
 
     // Clear the script registry
     ScriptRegistry::Get().Clear();
 
 #if !defined(AX_SHIPPING)
-    // Unload Game DLL (script is already destroyed)
+    // Unload Game DLL (scene is already destroyed)
     if (PlatformAPI_ && PlatformAPI_->DLLAPI && PlatformAPI_->DLLAPI->IsValid(GameDLL_)) {
         PlatformAPI_->DLLAPI->Unload(GameDLL_);
         GameDLL_ = {};
     }
 #endif
-
-    // Release scene (unload models, destroy tree)
-    UnloadScene();
 
     // Discard any scene snapshot
     SceneSnapshot_.clear();

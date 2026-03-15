@@ -114,11 +114,12 @@ SceneTree::~SceneTree()
     Bus_ = nullptr;
   }
 
-  // Clear the root's OwningTree_ before deletion to prevent
-  // the destructor from trying to unregister from lists
+  // Recursively destroy all children of Root before deleting Root itself.
+  // This ensures scripts, signal connections, and std::function captures
+  // are properly cleaned up while all nodes are still alive.
   if (Root_) {
     SetOwningTreeRecursive(static_cast<Node*>(Root_), nullptr);
-    delete Root_;
+    DestroySubtreeBottomUp(static_cast<Node*>(Root_));
     Root_ = nullptr;
   }
 }
@@ -479,6 +480,25 @@ void SceneTree::SetOwningTreeRecursive(Node* Target, SceneTree* Tree)
     SetOwningTreeRecursive(Child, Tree);
     Child = Child->GetNextSibling();
   }
+}
+
+void SceneTree::DestroySubtreeBottomUp(Node* Target)
+{
+  if (!Target) {
+    return;
+  }
+
+  // Destroy children first (bottom-up)
+  while (Target->GetFirstChild()) {
+    DestroySubtreeBottomUp(Target->GetFirstChild());
+  }
+
+  // Detach from parent before deleting
+  if (Target->GetParent()) {
+    Target->GetParent()->RemoveChild(Target);
+  }
+
+  delete Target;
 }
 
 //=============================================================================

@@ -15,6 +15,7 @@ set(AXENGINE_SOURCES
     include/AxEngine/AxMathTypes.h
     include/AxEngine/AxTransformType.h
     include/AxEngine/AxScriptRegistry.h
+    include/AxEngine/AxSignal.h
     include/AxEngine/AxScriptLog.h
     src/AxTransformType.cpp
     src/AxScriptRegistry.cpp

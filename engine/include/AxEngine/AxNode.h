@@ -15,6 +15,7 @@
 #include "Foundation/AxTypes.h"
 #include "AxEngine/AxMathTypes.h"
 #include "AxEngine/AxTransformType.h"
+#include "AxEngine/AxSignal.h"
 #include <string>
 #include <string_view>
 
@@ -199,6 +200,28 @@ public:
   ScriptBase* GetScript() const;
 
   //=========================================================================
+  // Signals
+  //=========================================================================
+
+  /** Emit a signal with no arguments. */
+  void EmitSignal(std::string_view Name);
+
+  /** Emit a signal with a single float argument. */
+  void EmitSignal(std::string_view Name, float Arg0);
+
+  /** Emit a signal with two float arguments. */
+  void EmitSignal(std::string_view Name, float Arg0, float Arg1);
+
+  /** Emit a signal with a pre-built SignalArgs container. */
+  void EmitSignalArgs(std::string_view Name, const SignalArgs& Args);
+
+  /** Connect a callback to a signal on this node. Returns a unique connection ID. */
+  uint32_t Connect(std::string_view SignalName, SignalCallback Callback, Node* Receiver = nullptr);
+
+  /** Disconnect a specific callback by signal name and connection ID. */
+  void Disconnect(std::string_view SignalName, uint32_t ConnectionID);
+
+  //=========================================================================
   // Accessors
   //=========================================================================
 
@@ -285,6 +308,14 @@ protected:
   bool IsActive_;
 
 private:
+  // Signal storage
+  std::vector<SignalSlot> Signals_;
+  uint32_t NextConnectionID_{1};
+  std::vector<OutgoingConnection> OutgoingConnections_;
+
+  /** Clean up all signal connections (called from destructor). */
+  void CleanupSignals();
+
   // Back-pointer to the owning SceneTree (set by SceneTree::CreateNode,
   // cleared by SceneTree::DestroyNode). Enables Node to notify SceneTree
   // of transform changes and script attach/detach without callers passing
