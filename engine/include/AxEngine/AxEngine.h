@@ -5,8 +5,6 @@
 #include "AxEngine/AxSceneParser.h"
 #include <string>
 
-#define AX_ENGINE_API_NAME "AxEngineAPI"
-
 struct AxAPIRegistry;
 struct AxWindowAPI;
 struct AxResourceAPI;
@@ -66,69 +64,6 @@ struct AxEngineConfig {
   int32_t ViewportHeight{720};
 };
 
-// Engine API exposed to host applications
-struct AxEngineAPI {
-  // Initialize engine with configuration
-  bool (*Initialize)(const AxEngineConfig* config);
-
-  // Run main loop (blocks until exit) -- standalone mode only
-  int (*Run)();
-
-  // Advance one frame -- editor-hosted mode (editor owns the frame loop)
-  bool (*Tick)();
-
-  // Shutdown and cleanup
-  void (*Shutdown)();
-
-  // Query engine state
-  bool (*IsRunning)();
-
-  // Resize the renderer viewport and update camera aspect ratio.
-  // Called by the editor when its viewport panel resizes.
-  void (*Resize)(int32_t Width, int32_t Height);
-
-  // Set the engine operating mode at runtime.
-  // Edit mode: transforms propagate, scripts/physics skipped.
-  // Play mode: full simulation (identical to standalone).
-  void (*SetMode)(AxEngineMode Mode);
-
-  // === Runtime Scene Management ===
-
-  // Load a .ats scene file, replacing the current scene tree.
-  // Returns true on success, false on failure.
-  bool (*LoadScene)(const char* Path);
-
-  // Unload the current scene, leaving the engine running with an empty scene.
-  void (*UnloadScene)();
-
-  // Create a fresh empty scene tree with a root node.
-  void (*NewScene)();
-
-  // Save the current scene tree to a .ats file.
-  // Returns true on success, false on failure.
-  bool (*SaveScene)(const char* Path);
-
-  // === Play Mode Control ===
-
-  // Enter play mode: snapshot the current scene, reset accumulators,
-  // switch to Play mode. The snapshot allows restoring the scene when
-  // play mode ends.
-  void (*EnterPlayMode)();
-
-  // Exit play mode: switch back to Edit mode, restore the scene from
-  // the snapshot taken on EnterPlayMode, discard the snapshot.
-  void (*ExitPlayMode)();
-
-  // === Editor Camera ===
-
-  // Set the editor camera parameters. The editor camera provides
-  // view/projection matrices during Edit mode, independent of any
-  // scene CameraNode.
-  void (*SetEditorCamera)(float PosX, float PosY, float PosZ,
-                          float TargetX, float TargetY, float TargetZ,
-                          float FOV);
-};
-
 /**
  * AxEngine - Core engine
  *
@@ -143,7 +78,7 @@ public:
     AxEngine();
     ~AxEngine();
 
-    bool Initialize(const AxEngineConfig* config);
+    bool Initialize(const AxEngineConfig* config, AxAPIRegistry* Registry);
     int Run();
     void Shutdown();
     bool IsRunning() const { return (isRunning_); }

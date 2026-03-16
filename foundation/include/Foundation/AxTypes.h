@@ -36,15 +36,6 @@ extern "C" {
   #define AXON_DLL_IMPORT
 #endif
 
-/* Engine API export -- in shipping mode, everything is statically linked */
-#if defined(AX_SHIPPING)
-  #define AXENGINE_API
-#elif defined(AXENGINE_EXPORTS)
-  #define AXENGINE_API AXON_DLL_EXPORT
-#else
-  #define AXENGINE_API AXON_DLL_IMPORT
-#endif
-
 #define AX_PI 3.14159265359f
 
 /* Assertion macro -- active in Debug/Development, stripped in Shipping */

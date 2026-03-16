@@ -16,9 +16,9 @@ class ScriptBase;
  * The engine queries the registry by name to instantiate scripts.
  *
  * Get() is defined in AxScriptRegistry.cpp (not inline) to ensure a single
- * instance across DLL boundaries. Game.dll resolves it from AxEngine.dll.
+ * instance across DLL boundaries. Game.dll resolves it from the host executable.
  */
-class AXENGINE_API ScriptRegistry
+class ScriptRegistry
 {
 public:
     using FactoryFn = ScriptBase* (*)();

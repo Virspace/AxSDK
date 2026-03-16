@@ -28,7 +28,7 @@ FetchContent_MakeAvailable(googletest)
 # Add the executable
 add_executable(AxEngineTests)
 
-# Add sources to target
+# Add test sources only -- engine code comes from linking Virspace::AxEngine
 target_sources(AxEngineTests
     PRIVATE
         src/main.cpp
@@ -52,15 +52,6 @@ target_sources(AxEngineTests
         src/AxScriptLogTests.cpp
         src/AxInputActionTests.cpp
         src/AxSignalTests.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxTransformType.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxNode.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxTypedNodes.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxSceneTree.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxEventBus.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxSceneParser.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxPrimitives.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxInput.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AxScriptLog.cpp
 )
 
 #
@@ -72,25 +63,21 @@ target_compile_features(AxEngineTests PRIVATE cxx_std_23)
 target_compile_definitions(AxEngineTests
     PRIVATE
         AXON_LINKS_FOUNDATION
-        AXENGINE_EXPORTS
 )
 
-# Specify include directories
+# Include directories for plugin headers (needed by engine headers)
 target_include_directories(AxEngineTests
     PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/../include
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src
         ${CMAKE_CURRENT_SOURCE_DIR}/../../plugins/AxOpenGL/include
         ${CMAKE_CURRENT_SOURCE_DIR}/../../plugins/AxResource/include
         ${CMAKE_CURRENT_SOURCE_DIR}/../../plugins/AxResource/src
         ${CMAKE_CURRENT_SOURCE_DIR}/../../plugins/AxWindow/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/../../plugins/AxLog/include
 )
 
-# Link dependencies
+# Link AxEngine static library (brings Foundation, AxLog, stb, cgltf transitively)
 target_link_libraries(AxEngineTests
     PRIVATE
-        Virspace::Foundation
+        Virspace::AxEngine
         gtest
         gtest_main
 )

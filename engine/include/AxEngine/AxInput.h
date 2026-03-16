@@ -29,7 +29,7 @@ struct AxisBinding
  * Singleton class that tracks keyboard, mouse, and other input state.
  * Polls input from the window each frame when Update() is called.
  */
-class AXENGINE_API AxInput
+class AxInput
 {
 public:
     static AxInput& Get();

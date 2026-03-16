@@ -32,17 +32,11 @@
 #include <string>
 #include <string_view>
 
-// Forward declaration of global API registry (defined at end of file)
-static AxAPIRegistry* gAPIRegistry = nullptr;
-
 static const int32_t DefaultWindowWidth = 1280;
 static const int32_t DefaultWindowHeight = 720;
 
 // Resource allocator for the engine (created during initialization)
 static struct AxAllocator* gResourceAllocator = nullptr;
-
-// Global engine pointer (for static API function implementations)
-static AxEngine* gEngine = nullptr;
 
 //=============================================================================
 // Plugin Loading
@@ -261,13 +255,11 @@ bool AxEngine::InitGameScript()
     return (true);
 }
 
-bool AxEngine::Initialize(const AxEngineConfig* config)
+bool AxEngine::Initialize(const AxEngineConfig* config, AxAPIRegistry* Registry)
 {
-    if (!config) {
+    if (!config || !Registry) {
         return (false);
     }
-
-    gEngine = this;
 
     // Store editor-hosted mode state from config
     ExternalWindowHandle_ = config->ExternalWindowHandle;
@@ -282,11 +274,7 @@ bool AxEngine::Initialize(const AxEngineConfig* config)
         Mode_ = AxEngineMode::Play;
     }
 
-    APIRegistry_ = gAPIRegistry;
-    if (!APIRegistry_) {
-        AX_LOG(ERROR, "Failed to get API registry");
-        return (false);
-    }
+    APIRegistry_ = Registry;
 
     PluginAPI_ = static_cast<AxPluginAPI*>(APIRegistry_->Get(AXON_PLUGIN_API_NAME));
     if (!PluginAPI_) {
@@ -496,8 +484,6 @@ void AxEngine::Shutdown()
         WindowAPI_->DestroyWindow(Window_);
         Window_ = nullptr;
     }
-
-    gEngine = nullptr;
 }
 
 AxEngine::~AxEngine()
@@ -819,159 +805,3 @@ void AxEngine::SetEditorCamera(float PosX, float PosY, float PosZ,
     }
 }
 
-//=============================================================================
-// Static API Functions
-//=============================================================================
-
-static bool Initialize(const AxEngineConfig* cfg)
-{
-    if (!gEngine) {
-        gEngine = new AxEngine();
-    }
-    return (gEngine->Initialize(cfg));
-}
-
-static int Run()
-{
-    if (!gEngine) {
-        return (1);
-    }
-    return (gEngine->Run());
-}
-
-static bool Tick()
-{
-    if (!gEngine) {
-        return (false);
-    }
-    return (gEngine->Tick());
-}
-
-static void Shutdown()
-{
-    if (gEngine) {
-        gEngine->Shutdown();
-        delete gEngine;
-        gEngine = nullptr;
-    }
-}
-
-static bool IsRunning()
-{
-    return (gEngine && gEngine->IsRunning());
-}
-
-static void Resize(int32_t Width, int32_t Height)
-{
-    if (gEngine) {
-        gEngine->Resize(Width, Height);
-    }
-}
-
-static void SetMode(AxEngineMode Mode)
-{
-    if (gEngine) {
-        gEngine->SetMode(Mode);
-    }
-}
-
-static bool LoadSceneAPI(const char* Path)
-{
-    if (!gEngine) {
-        return (false);
-    }
-    return (gEngine->LoadSceneFromPath(Path));
-}
-
-static void UnloadSceneAPI()
-{
-    if (gEngine) {
-        gEngine->UnloadCurrentScene();
-    }
-}
-
-static void NewSceneAPI()
-{
-    if (gEngine) {
-        gEngine->NewScene();
-    }
-}
-
-static bool SaveSceneAPI(const char* Path)
-{
-    if (!gEngine) {
-        return (false);
-    }
-    return (gEngine->SaveCurrentScene(Path));
-}
-
-static void EnterPlayModeAPI()
-{
-    if (gEngine) {
-        gEngine->EnterPlayMode();
-    }
-}
-
-static void ExitPlayModeAPI()
-{
-    if (gEngine) {
-        gEngine->ExitPlayMode();
-    }
-}
-
-static void SetEditorCameraAPI(float PosX, float PosY, float PosZ,
-                               float TargetX, float TargetY, float TargetZ,
-                               float FOV)
-{
-    if (gEngine) {
-        gEngine->SetEditorCamera(PosX, PosY, PosZ, TargetX, TargetY, TargetZ, FOV);
-    }
-}
-
-static AxEngineAPI gEngineAPI = {
-    .Initialize = Initialize,
-    .Run = Run,
-    .Tick = Tick,
-    .Shutdown = Shutdown,
-    .IsRunning = IsRunning,
-    .Resize = Resize,
-    .SetMode = SetMode,
-    .LoadScene = LoadSceneAPI,
-    .UnloadScene = UnloadSceneAPI,
-    .NewScene = NewSceneAPI,
-    .SaveScene = SaveSceneAPI,
-    .EnterPlayMode = EnterPlayModeAPI,
-    .ExitPlayMode = ExitPlayModeAPI,
-    .SetEditorCamera = SetEditorCameraAPI
-};
-
-#if !defined(AX_SHIPPING)
-extern "C" AXENGINE_API void LoadPlugin(AxAPIRegistry* Registry, bool Load)
-{
-    if (Load) {
-        gAPIRegistry = Registry;
-        Registry->Set(AX_ENGINE_API_NAME, &gEngineAPI, sizeof(AxEngineAPI));
-        AX_LOG(INFO, "Plugin loaded and API registered");
-    } else {
-        if (gEngine) {
-            delete gEngine;
-            gEngine = nullptr;
-        }
-        gAPIRegistry = nullptr;
-    }
-}
-#else
-extern "C" void InitAxEngine(AxAPIRegistry* Registry, bool Load)
-{
-    if (Load) {
-        gAPIRegistry = Registry;
-        Registry->Set(AX_ENGINE_API_NAME, &gEngineAPI, sizeof(AxEngineAPI));
-    } else {
-        if (gEngine) {
-            delete gEngine;
-            gEngine = nullptr;
-        }
-        gAPIRegistry = nullptr;
-    }
-}
-#endif

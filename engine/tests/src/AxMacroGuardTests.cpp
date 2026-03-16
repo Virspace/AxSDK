@@ -19,14 +19,14 @@ TEST(MacroGuards, AxLogApiShippingBehavior)
 }
 
 // ---------------------------------------------------------------------------
-// Test 2: AXENGINE_API expands to nothing when AX_SHIPPING is defined
+// Test 2: AXENGINE_API macro removed (DEC-016) -- engine is a static library
 // ---------------------------------------------------------------------------
-TEST(MacroGuards, AxEngineApiShippingBehavior)
+TEST(MacroGuards, AxEngineApiRemoved)
 {
-#if defined(AX_SHIPPING)
-    SUCCEED() << "AXENGINE_API is empty in Shipping (statically linked)";
+#if defined(AXENGINE_API)
+    FAIL() << "AXENGINE_API should not be defined -- engine is a static library (DEC-016)";
 #else
-    SUCCEED() << "AXENGINE_API is active in non-Shipping build";
+    SUCCEED() << "AXENGINE_API correctly removed";
 #endif
 }
 

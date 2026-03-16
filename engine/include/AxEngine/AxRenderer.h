@@ -19,7 +19,7 @@ class CameraNode;
  * Manages viewport, camera, shaders, and scene rendering.
  * Created and owned by AxEngine.
  */
-class AXENGINE_API AxRenderer
+class AxRenderer
 {
 public:
     AxRenderer() = default;

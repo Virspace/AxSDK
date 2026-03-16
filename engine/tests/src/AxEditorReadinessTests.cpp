@@ -1,43 +1,15 @@
 /**
  * AxEditorReadinessTests.cpp - Tests for Editor Readiness features
  *
- * Tests for Task Groups 1, 2, 3, 4, 5, and 6 of the Engine Editor Readiness spec:
+ * Task Group 1: AxEngineConfig, AxEngineMode, AxInput null-window no-op
+ * Task Group 2: Edit/Play mode toggle via SceneTree
+ * Task Group 3: Play mode scene snapshot & restore
+ * Task Group 4: Runtime scene management (SceneParser)
+ * Task Group 5: Scene serialization round-trip
+ * Task Group 6: EditorCameraState defaults
  *
- * Task Group 1: Externally-Driven Engine Lifecycle & Window Decoupling
- *   - AxEngineConfig has ExternalWindowHandle, ViewportWidth, ViewportHeight
- *   - AxEngineAPI has Tick, Resize, and SetMode function pointers
- *   - AxEngineMode enum exists with Edit and Play values
- *   - AxInput no-ops on Update() when uninitialized (nullptr Window)
- *
- * Task Group 2: Editor/Play Mode Toggle
- *   - Edit mode runs transforms but skips scripts in SceneTree
- *   - Play mode runs everything (transforms + scripts)
- *   - Mode can be toggled at runtime
- *   - FixedUpdate and LateUpdate skip script dispatch in Edit mode
- *
- * Task Group 3: Play Mode Scene Snapshot & Restore
- *   - AxEngineAPI has EnterPlayMode and ExitPlayMode function pointers
- *   - Snapshot captures scene state via SaveSceneToString
- *   - Restore returns scene to pre-play state via LoadSceneFromString
- *   - Script modifications during play are discarded on restore
- *
- * Task Group 4: Runtime Scene Management API
- *   - AxEngineAPI has LoadScene, UnloadScene, NewScene, SaveScene pointers
- *   - Task 4.4/4.5 verify editor-hosted vs standalone scene loading behavior
- *
- * Task Group 5: Scene Serialization (Save)
- *   - SaveSceneToString serializes a SceneTree to .ats format
- *   - Round-trip: parse -> serialize -> re-parse produces equivalent tree
- *
- * Task Group 6: Editor Camera
- *   - EditorCameraState struct has default values
- *   - AxEngineAPI has SetEditorCamera function pointer
- *   - AxRenderer UseEditorCamera flag concept tested via struct defaults
- *
- * These tests exercise the SceneTree and public API surface directly.
- * Engine-level integration (AxEngine class with real plugins) cannot be
- * tested in the unit test binary since it requires DLL loading and GPU
- * resources.
+ * These tests exercise SceneTree and parser directly. Engine-level
+ * integration requires DLL loading and GPU resources.
  */
 
 #include "gtest/gtest.h"
@@ -129,7 +101,7 @@ protected:
 };
 
 //=============================================================================
-// Task Group 1: AxEngineConfig and AxEngineAPI surface tests
+// Task Group 1: AxEngineConfig and AxEngineMode surface tests
 //
 // These tests verify the public struct/enum definitions compile correctly
 // and have the expected default values.
@@ -165,43 +137,6 @@ TEST(EngineModeEnumTest, EditAndPlayValuesExist)
   EXPECT_EQ(static_cast<int32_t>(AxEngineMode::Edit), 0);
   EXPECT_EQ(static_cast<int32_t>(AxEngineMode::Play), 1);
   EXPECT_NE(AxEngineMode::Edit, AxEngineMode::Play);
-}
-
-TEST(EngineAPIStructTest, HasTickFunctionPointer)
-{
-  AxEngineAPI API{};
-  EXPECT_EQ(API.Tick, nullptr);
-}
-
-TEST(EngineAPIStructTest, HasResizeFunctionPointer)
-{
-  AxEngineAPI API{};
-  EXPECT_EQ(API.Resize, nullptr);
-}
-
-TEST(EngineAPIStructTest, HasSetModeFunctionPointer)
-{
-  AxEngineAPI API{};
-  EXPECT_EQ(API.SetMode, nullptr);
-}
-
-TEST(EngineAPIStructTest, AllFunctionPointersPresent)
-{
-  AxEngineAPI API{};
-  EXPECT_EQ(API.Initialize, nullptr);
-  EXPECT_EQ(API.Run, nullptr);
-  EXPECT_EQ(API.Tick, nullptr);
-  EXPECT_EQ(API.Shutdown, nullptr);
-  EXPECT_EQ(API.IsRunning, nullptr);
-  EXPECT_EQ(API.Resize, nullptr);
-  EXPECT_EQ(API.SetMode, nullptr);
-  EXPECT_EQ(API.LoadScene, nullptr);
-  EXPECT_EQ(API.UnloadScene, nullptr);
-  EXPECT_EQ(API.NewScene, nullptr);
-  EXPECT_EQ(API.SaveScene, nullptr);
-  EXPECT_EQ(API.EnterPlayMode, nullptr);
-  EXPECT_EQ(API.ExitPlayMode, nullptr);
-  EXPECT_EQ(API.SetEditorCamera, nullptr);
 }
 
 //=============================================================================
@@ -475,18 +410,6 @@ TEST_F(EditorReadinessTest, FullEditPlayCycleWithAllUpdatePhases)
 // API surface tests verify the new function pointers exist.
 //=============================================================================
 
-TEST(EngineAPIPlayMode, HasEnterPlayModeFunctionPointer)
-{
-  AxEngineAPI API{};
-  EXPECT_EQ(API.EnterPlayMode, nullptr);
-}
-
-TEST(EngineAPIPlayMode, HasExitPlayModeFunctionPointer)
-{
-  AxEngineAPI API{};
-  EXPECT_EQ(API.ExitPlayMode, nullptr);
-}
-
 // Snapshot & Restore test fixture using SceneParser for serialization
 class SnapshotRestoreTest : public testing::Test
 {
@@ -677,37 +600,6 @@ TEST_F(SnapshotRestoreTest, SnapshotPreservesHierarchy)
   EXPECT_EQ(static_cast<MeshInstance*>(RestoredChild)->GetMeshPath(), "models/test.glb");
 
   delete Restored;
-}
-
-//=============================================================================
-// Task Group 4: Runtime Scene Management API surface tests
-//
-// These tests verify the AxEngineAPI struct has the new function pointers.
-// Engine-level integration cannot be tested without DLL loading and GPU.
-//=============================================================================
-
-TEST(EngineAPISceneManagement, HasLoadSceneFunctionPointer)
-{
-  AxEngineAPI API{};
-  EXPECT_EQ(API.LoadScene, nullptr);
-}
-
-TEST(EngineAPISceneManagement, HasUnloadSceneFunctionPointer)
-{
-  AxEngineAPI API{};
-  EXPECT_EQ(API.UnloadScene, nullptr);
-}
-
-TEST(EngineAPISceneManagement, HasNewSceneFunctionPointer)
-{
-  AxEngineAPI API{};
-  EXPECT_EQ(API.NewScene, nullptr);
-}
-
-TEST(EngineAPISceneManagement, HasSaveSceneFunctionPointer)
-{
-  AxEngineAPI API{};
-  EXPECT_EQ(API.SaveScene, nullptr);
 }
 
 //=============================================================================
@@ -1115,18 +1007,3 @@ TEST(EditorCameraStateTest, CanBeModified)
   EXPECT_NEAR(State.Far, 500.0f, 0.001f);
 }
 
-TEST(EngineAPIEditorCamera, HasSetEditorCameraFunctionPointer)
-{
-  AxEngineAPI API{};
-  EXPECT_EQ(API.SetEditorCamera, nullptr);
-}
-
-TEST(EngineAPIEditorCamera, AllPlayModeAndCameraPointersPresent)
-{
-  // Comprehensive check that all new function pointers from Task Groups 3 and 6
-  // are present alongside existing ones
-  AxEngineAPI API{};
-  EXPECT_EQ(API.EnterPlayMode, nullptr);
-  EXPECT_EQ(API.ExitPlayMode, nullptr);
-  EXPECT_EQ(API.SetEditorCamera, nullptr);
-}

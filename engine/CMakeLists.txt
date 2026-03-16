@@ -90,10 +90,13 @@ if(AX_BUILD_CONFIG STREQUAL "Shipping")
 
 else()
     #
-    # Debug / Development: AxEngine SHARED + AxStandalone executable (current behavior)
+    # Debug / Development: AxEngine STATIC library (DEC-016)
+    #
+    # All consumers (game host, editor, tests) link this directly.
+    # No DLL exports, no AxStandalone bootstrap, no AxEngineAPI indirection.
     #
 
-    add_library(AxEngine SHARED)
+    add_library(AxEngine STATIC)
     add_library(Virspace::AxEngine ALIAS AxEngine)
 
     target_sources(AxEngine
@@ -101,19 +104,7 @@ else()
             ${AXENGINE_SOURCES}
     )
 
-    add_executable(AxStandalone)
-
-    target_sources(AxStandalone
-        PRIVATE
-            src/AxStandalone.cpp
-    )
-
-    # AxEngine settings
     target_compile_features(AxEngine PRIVATE cxx_std_23)
-    target_compile_definitions(AxEngine
-        PRIVATE
-            AXENGINE_EXPORTS
-    )
 
     target_include_directories(AxEngine
         PUBLIC
@@ -124,86 +115,18 @@ else()
             ${CMAKE_CURRENT_SOURCE_DIR}/../plugins/AxResource/src
     )
 
+    # PUBLIC so consumers inherit Foundation, AxLog, stb, cgltf
     target_link_libraries(AxEngine
-        PRIVATE
+        PUBLIC
             Virspace::Foundation
             Virspace::AxLog
             axsdk_stb
             cgltf
     )
 
-    # Export all symbols for dynamic plugin loading (GCC/Clang only; MSVC uses __declspec)
-    if(NOT MSVC)
-        target_link_options(AxEngine PRIVATE -Wl,--export-all-symbols)
-    endif()
-
-    # AxStandalone settings
-    target_compile_features(AxStandalone PRIVATE cxx_std_23)
-    target_compile_definitions(AxStandalone
-        PRIVATE
-            AXON_LINKS_FOUNDATION
-    )
-
-    target_link_libraries(AxStandalone
-        PRIVATE
-            Virspace::Foundation
-            Virspace::AxLog
-            shell32
-    )
-
-    target_include_directories(AxStandalone
-        PRIVATE
-            ${CMAKE_CURRENT_SOURCE_DIR}/include
-    )
-
-    #
-    # Install and Export (Development/Debug only)
-    #
-
-    set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/AxEngine)
-
-    include(GNUInstallDirs)
-    install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-
-    install(TARGETS AxEngine
-        EXPORT AxEngineTargets
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/$<CONFIG>
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/$<CONFIG>
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}/$<CONFIG>
-        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-    )
-
-    install(EXPORT AxEngineTargets
-        FILE AxEngineTargets.cmake
-        NAMESPACE Virspace::
-        DESTINATION ${INSTALL_CONFIGDIR}
-    )
-
-    include(CMakePackageConfigHelpers)
-    configure_package_config_file(
-        ${CMAKE_CURRENT_LIST_DIR}/cmake/AxEngineConfig.cmake.in
-        ${CMAKE_CURRENT_BINARY_DIR}/cmake/AxEngineConfig.cmake
-        INSTALL_DESTINATION ${INSTALL_CONFIGDIR}
-        NO_SET_AND_CHECK_MACRO
-        NO_CHECK_REQUIRED_COMPONENTS_MACRO
-    )
-
-    write_basic_package_version_file(
-        ${CMAKE_CURRENT_BINARY_DIR}/cmake/AxEngineConfigVersion.cmake
-        VERSION ${PROJECT_VERSION}
-        COMPATIBILITY SameMajorVersion
-    )
-
-    install(FILES
-        ${CMAKE_CURRENT_BINARY_DIR}/cmake/AxEngineConfig.cmake
-        ${CMAKE_CURRENT_BINARY_DIR}/cmake/AxEngineConfigVersion.cmake
-        DESTINATION ${INSTALL_CONFIGDIR}
-    )
-
-    export(EXPORT AxEngineTargets
-        FILE ${CMAKE_CURRENT_BINARY_DIR}/AxEngineTargets.cmake
-        NAMESPACE Virspace::
-    )
+    # Install/export is not needed for the static library in Development/Debug.
+    # Consumers use the Virspace::AxEngine ALIAS target via add_subdirectory.
+    # Shipping builds compile engine sources directly into the monolithic exe.
 
 endif()
 
@@ -211,6 +134,8 @@ endif()
 # Engine Tests
 #
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt)
-    add_subdirectory(tests)
+if(NOT AX_BUILD_CONFIG STREQUAL "Shipping")
+    if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt)
+        add_subdirectory(tests)
+    endif()
 endif()

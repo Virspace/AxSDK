@@ -1,14 +1,15 @@
+/**
+ * Game Host - standalone executable that links AxEngine as a static library.
+ *
+ * Replaces the old AxStandalone.exe which loaded AxEngine.dll via PluginAPI.
+ * Now constructs AxEngine directly as a C++ object (DEC-016).
+ *
+ * Game.dll (scripts) is still loaded at runtime by the engine for hot-reload.
+ */
+
 #include "Foundation/AxAPIRegistry.h"
 #include "AxEngine/AxEngine.h"
 #include "AxLog/AxLog.h"
-
-// Forward declarations for shipping init functions (plugins linked statically)
-extern "C" void InitAxWindow(struct AxAPIRegistry* APIRegistry, bool Load);
-extern "C" void InitAxOpenGL(struct AxAPIRegistry* APIRegistry, bool Load);
-extern "C" void InitAxResource(struct AxAPIRegistry* APIRegistry, bool Load);
-#if defined(AX_OS_WINDOWS)
-extern "C" void InitAxAudio(struct AxAPIRegistry* APIRegistry, bool Load);
-#endif
 
 int main(int argc, char** argv)
 {
@@ -16,18 +17,10 @@ int main(int argc, char** argv)
     AxonInitGlobalAPIRegistry();
     AxonRegisterAllFoundationAPIs(AxonGlobalAPIRegistry);
 
-    // AxLog -- open the log file directly (no plugin loading in shipping)
+    // Open log file early -- sets the uptime epoch for all subsequent log calls
     AxLogOpenFile("engine.log");
 
-    AX_LOG(INFO, "Starting AxonEngine (Shipping)...");
-
-    // Initialize plugins in dependency order (statically linked)
-    InitAxWindow(AxonGlobalAPIRegistry, true);
-    InitAxOpenGL(AxonGlobalAPIRegistry, true);
-    InitAxResource(AxonGlobalAPIRegistry, true);
-#if defined(AX_OS_WINDOWS)
-    InitAxAudio(AxonGlobalAPIRegistry, true);
-#endif
+    AX_LOG(INFO, "Starting game host...");
 
     // Configure engine
     AxEngineConfig Config {
@@ -37,7 +30,7 @@ int main(int argc, char** argv)
         .argv = argv
     };
 
-    // Construct and initialize engine directly (DEC-016: static library, no API indirection)
+    // Construct engine directly (static library, no DLL loading)
     AxEngine Engine;
     if (!Engine.Initialize(&Config, AxonGlobalAPIRegistry)) {
         AX_LOG(FATAL, "Engine initialization failed");
