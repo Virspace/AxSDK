@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Foundation/AxTypes.h"
+#include "AxEngine/AxDebugDraw.h"
 
 struct AxAPIRegistry;
 struct AxOpenGLAPI;
@@ -100,6 +101,20 @@ public:
     /** Query whether the editor camera is currently active. */
     bool IsUsingEditorCamera() const { return (UseEditorCamera_); }
 
+    /** Get the underlying render API (for subsystem initialization). */
+    AxOpenGLAPI* GetRenderAPI() { return (RenderAPI_); }
+
+    /** Get the debug draw system. */
+    DebugDraw* GetDebugDraw() { return (&DebugDraw_); }
+
+    /**
+     * Flush debug draw overlay after the scene has been rendered.
+     * Disables depth test so debug lines render on top of geometry,
+     * flushes the debug vertex buffer, restores depth test, and clears
+     * the draw buffer for the next frame.
+     */
+    void FlushDebugDraw();
+
 private:
     void RenderNode(Node* NodePtr, const AxMat4x4* ParentTransform);
     void RenderModel(const AxModelData* Model, const AxMat4x4* BaseTransform);
@@ -116,4 +131,7 @@ private:
     AxMat4x4 EditorViewMatrix_;
     AxMat4x4 EditorProjectionMatrix_;
     AxVec3 EditorCameraPosition_;
+
+    // Debug draw (immediate-mode debug line rendering)
+    DebugDraw DebugDraw_;
 };

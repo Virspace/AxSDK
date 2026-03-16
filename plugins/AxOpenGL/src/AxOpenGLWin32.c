@@ -1430,6 +1430,16 @@ static void AxSetDepthWrite(bool Enable)
     glDepthMask(Enable ? GL_TRUE : GL_FALSE);
 }
 
+static void AxSetDepthTest(bool Enable)
+{
+    AXON_ASSERT(ContextInitialized && "Context not initialized in SetDepthTest()!");
+    if (Enable) {
+        glEnable(GL_DEPTH_TEST);
+    } else {
+        glDisable(GL_DEPTH_TEST);
+    }
+}
+
 static void AxSetCullMode(bool Enable)
 {
     AXON_ASSERT(ContextInitialized && "Context not initialized in SetCullMode()!");
@@ -1605,6 +1615,101 @@ static void AxSetTextureFilterMode(AxTexture *Texture, AxTextureFilter MagFilter
     }
 }
 
+//=============================================================================
+// Dynamic Vertex Buffers
+//=============================================================================
+
+static AxDynamicBuffer AxCreateDynamicBuffer(const AxVertexAttrib* Attribs, uint32_t AttribCount,
+                                              uint32_t VertexStride, uint32_t MaxVertexCount)
+{
+    AXON_ASSERT(ContextInitialized && "Context not initialized in CreateDynamicBuffer()!");
+
+    GLuint VAO, VBO;
+    glGenVertexArrays(1, &VAO);
+    glGenBuffers(1, &VBO);
+
+    glBindVertexArray(VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)MaxVertexCount * VertexStride, NULL, GL_DYNAMIC_DRAW);
+
+    for (uint32_t i = 0; i < AttribCount; ++i) {
+        glEnableVertexAttribArray(Attribs[i].Location);
+        glVertexAttribPointer(
+            Attribs[i].Location,
+            Attribs[i].Components,
+            GL_FLOAT,
+            GL_FALSE,
+            VertexStride,
+            (void*)(uintptr_t)Attribs[i].Offset
+        );
+    }
+
+    glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    AX_LOG(INFO, "Dynamic buffer created (VAO=%u, VBO=%u, Stride=%u, MaxVerts=%u)",
+           VAO, VBO, VertexStride, MaxVertexCount);
+
+    return (AxDynamicBuffer){ .VAO = (uint32_t)VAO, .VBO = (uint32_t)VBO };
+}
+
+static void AxUpdateBuffer(AxDynamicBuffer Buffer, const void* Data, uint32_t DataSizeBytes)
+{
+    AXON_ASSERT(ContextInitialized && "Context not initialized in UpdateBuffer()!");
+
+    glBindBuffer(GL_ARRAY_BUFFER, Buffer.VBO);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, DataSizeBytes, Data);
+}
+
+static GLenum PrimitiveModeToGL(AxPrimitiveMode Mode)
+{
+    switch (Mode) {
+        case AX_PRIMITIVE_LINES:          return GL_LINES;
+        case AX_PRIMITIVE_TRIANGLES:      return GL_TRIANGLES;
+        case AX_PRIMITIVE_LINE_STRIP:     return GL_LINE_STRIP;
+        case AX_PRIMITIVE_TRIANGLE_STRIP: return GL_TRIANGLE_STRIP;
+        case AX_PRIMITIVE_POINTS:         return GL_POINTS;
+        default:                          return GL_LINES;
+    }
+}
+
+static void AxDrawBuffer(AxDynamicBuffer Buffer, uint32_t ShaderProgram,
+                          AxPrimitiveMode Mode, uint32_t VertexCount)
+{
+    if (VertexCount == 0) {
+        return;
+    }
+
+    AXON_ASSERT(ContextInitialized && "Context not initialized in DrawBuffer()!");
+
+    glUseProgram(ShaderProgram);
+    glBindVertexArray(Buffer.VAO);
+    glDrawArrays(PrimitiveModeToGL(Mode), 0, VertexCount);
+    glBindVertexArray(0);
+}
+
+static void AxDestroyBuffer(AxDynamicBuffer Buffer)
+{
+    if (Buffer.VBO) {
+        glDeleteBuffers(1, &Buffer.VBO);
+    }
+    if (Buffer.VAO) {
+        glDeleteVertexArrays(1, &Buffer.VAO);
+    }
+
+    AX_LOG(INFO, "Dynamic buffer destroyed (VAO=%u, VBO=%u)", Buffer.VAO, Buffer.VBO);
+}
+
+static void AxSetUniformMat4(uint32_t Program, const char* Name, const struct AxMat4x4* Value)
+{
+    AXON_ASSERT(ContextInitialized && "Context not initialized in SetUniformMat4()!");
+
+    GLint Loc = glGetUniformLocation(Program, Name);
+    if (Loc != -1) {
+        glProgramUniformMatrix4fv(Program, Loc, 1, GL_FALSE, (const GLfloat*)Value);
+    }
+}
+
 // Use a compound literal to construct an unnamed object of API type in-place
 struct AxOpenGLAPI *AxOpenGLAPI = &(struct AxOpenGLAPI) {
     .CreateContext = AxCreateContext,
@@ -1648,7 +1753,13 @@ struct AxOpenGLAPI *AxOpenGLAPI = &(struct AxOpenGLAPI) {
     .SetBlendFunction = AxSetBlendFunction,
     .TextureHasAlpha = AxTextureHasAlpha,
     .SetDepthWrite = AxSetDepthWrite,
-    .SetCullMode = AxSetCullMode
+    .SetDepthTest = AxSetDepthTest,
+    .SetCullMode = AxSetCullMode,
+    .CreateDynamicBuffer = AxCreateDynamicBuffer,
+    .UpdateBuffer = AxUpdateBuffer,
+    .DrawBuffer = AxDrawBuffer,
+    .DestroyBuffer = AxDestroyBuffer,
+    .SetUniformMat4 = AxSetUniformMat4,
 };
 
 #if !defined(AX_SHIPPING)

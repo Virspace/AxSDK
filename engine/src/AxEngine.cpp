@@ -211,6 +211,8 @@ bool AxEngine::InitScene()
         return (false);
     }
 
+
+
     uint32_t CamCount = 0;
     Node** CamNodes = SceneTree_->GetNodesByType(NodeType::Camera, &CamCount);
     if (CamNodes && CamCount > 0) {
@@ -383,6 +385,7 @@ bool AxEngine::Tick()
     if (Renderer_) {
         Renderer_->BeginFrame();
         Renderer_->RenderScene(SceneTree_);
+        Renderer_->FlushDebugDraw();
         Renderer_->EndFrame();
     }
 
@@ -599,8 +602,9 @@ bool AxEngine::LoadSceneFromPath(const char* Path)
         SceneTree_->SetMainCamera(SceneCam);
     }
 
-    // Propagate current mode to the new scene tree
+    // Propagate current mode and debug draw to the new scene tree
     SceneTree_->SetScriptsEnabled(Mode_ == AxEngineMode::Play);
+
 
     AX_LOG(INFO, "Scene loaded from '%s'", Path);
     return (true);
@@ -638,8 +642,9 @@ void AxEngine::NewScene()
     SceneTree_ = new SceneTree(HashTableAPI, nullptr);
     SceneTree_->Name = "NewScene";
 
-    // Propagate current mode to the new scene tree
+    // Propagate current mode and debug draw to the new scene tree
     SceneTree_->SetScriptsEnabled(Mode_ == AxEngineMode::Play);
+
 
     AX_LOG(INFO, "New empty scene created");
 }
@@ -723,8 +728,9 @@ void AxEngine::RestoreSnapshot()
         SceneTree_->SetMainCamera(SceneCam);
     }
 
-    // Propagate current mode to the restored scene tree
+    // Propagate current mode and debug draw to the restored scene tree
     SceneTree_->SetScriptsEnabled(Mode_ == AxEngineMode::Play);
+
 
     AX_LOG(INFO, "Scene restored from snapshot");
 }

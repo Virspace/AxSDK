@@ -61,6 +61,8 @@ public:
         AnimatePlane(DeltaT);
         AnimateCylinder(DeltaT);
         AnimateCapsule(DeltaT);
+
+        DrawDebugOverlays();
     }
 
 private:
@@ -157,6 +159,56 @@ private:
                 CapsuleTimer_ = 0.0f;
                 CapsuleWobbleDir_ = -CapsuleWobbleDir_; // alternate direction
             });
+        }
+    }
+
+    //=========================================================================
+    // Debug Draw Overlays — visualize bounding volumes and axes
+    //=========================================================================
+
+    void DrawDebugOverlays()
+    {
+        Vec4 Red(1.0f, 0.0f, 0.0f, 1.0f);
+        Vec4 Green(0.0f, 1.0f, 0.0f, 1.0f);
+        Vec4 Blue(0.0f, 0.0f, 1.0f, 1.0f);
+        Vec4 Yellow(1.0f, 1.0f, 0.0f, 1.0f);
+        Vec4 Cyan(0.0f, 1.0f, 1.0f, 1.0f);
+
+        // Wireframe box around the bouncing box primitive
+        if (BoxNode_) {
+            Vec3 Pos(BoxNode_->GetTransform().Translation);
+            Debug.DrawBox(Pos, Vec3(0.6f, 0.6f, 0.6f), Yellow);
+        }
+
+        // Wireframe sphere around the sphere primitive
+        if (SphereNode_) {
+            Vec3 Pos(SphereNode_->GetTransform().Translation);
+            Debug.DrawSphere(Pos, 0.7f, Cyan);
+        }
+
+        // Surface normal line on the spinning plane
+        if (PlaneNode_) {
+            Vec3 Pos(PlaneNode_->GetTransform().Translation);
+            Quat Rot(PlaneNode_->GetTransform().Rotation);
+            Vec3 Normal = Rot.Rotate(Vec3(0.0f, 1.0f, 0.0f));
+            Debug.DrawLine(Pos, Pos + Normal * 1.5f, Green);
+        }
+
+        // Yellow wireframe spheres at point light positions
+        uint32_t LightCount = 0;
+        Node** Lights = GetSceneTree()->GetNodesByType(NodeType::Light, &LightCount);
+        for (uint32_t I = 0; I < LightCount; ++I) {
+            LightNode* Light = static_cast<LightNode*>(Lights[I]);
+            Vec3 Pos(Light->GetTransform().Translation);
+            Debug.DrawSphere(Pos, 2.0f, Yellow);
+        }
+
+        // Origin axes gizmo centered on the bouncing box
+        if (BoxNode_) {
+            Vec3 Center(BoxNode_->GetTransform().Translation);
+            Debug.DrawLine(Center, Vec3(Center.X + 2.0f, Center.Y, Center.Z), Red);
+            Debug.DrawLine(Center, Vec3(Center.X, Center.Y + 2.0f, Center.Z), Green);
+            Debug.DrawLine(Center, Vec3(Center.X, Center.Y, Center.Z + 2.0f), Blue);
         }
     }
 

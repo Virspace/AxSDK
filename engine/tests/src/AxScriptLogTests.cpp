@@ -133,8 +133,8 @@ struct LogTestScript : public ScriptBase
 {
   void OnInit() override
   {
-    LogWarn("init warning");
-    LogError("init error");
+    Debug.LogWarn("init warning");
+    Debug.LogError("init error");
   }
 };
 

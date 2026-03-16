@@ -17,6 +17,7 @@ set(AXENGINE_SOURCES
     include/AxEngine/AxScriptRegistry.h
     include/AxEngine/AxSignal.h
     include/AxEngine/AxScriptLog.h
+    include/AxEngine/AxDebugDraw.h
     src/AxTransformType.cpp
     src/AxScriptRegistry.cpp
     src/AxSceneParser.cpp
@@ -29,6 +30,7 @@ set(AXENGINE_SOURCES
     src/AxRenderer.cpp
     src/AxEventBus.cpp
     src/AxPrimitives.cpp
+    src/AxDebugDraw.cpp
 )
 
 # Include directories shared by all engine targets

@@ -2,6 +2,7 @@
 
 #include "Foundation/AxTypes.h"
 #include "AxEngine/AxSceneTree.h"
+#include "AxEngine/AxDebugDraw.h"
 #include "AxEngine/AxScriptLog.h"
 
 /**
@@ -176,34 +177,55 @@ protected:
   }
 
   //=========================================================================
-  // Logging — pushes structured entries to LogBuffer with owner node name
+  // Debug — draw and log utilities grouped under Debug member
+  //
+  // Usage: Debug.DrawLine(...), Debug.LogError("msg"), etc.
+  // Log methods automatically include the owner node name.
+  // Draw methods are no-ops in shipping builds.
   //=========================================================================
 
-  void LogError(std::string_view Message)
+  struct DebugHelper
   {
-    LogBuffer::Get().Push(AX_LOG_LEVEL_ERROR, OwnerName(), Message);
-  }
+    ScriptBase& Self;
 
-  void LogWarn(std::string_view Message)
-  {
-    LogBuffer::Get().Push(AX_LOG_LEVEL_WARNING, OwnerName(), Message);
-  }
+    // Draw
+    void DrawLine(const Vec3& From, const Vec3& To, const Vec4& Color)
+    {
+      DebugDraw::DrawLine(From, To, Color);
+    }
 
-  void LogInfo(std::string_view Message)
-  {
-    LogBuffer::Get().Push(AX_LOG_LEVEL_INFO, OwnerName(), Message);
-  }
+    void DrawRay(const Vec3& Origin, const Vec3& Direction, float Length, const Vec4& Color)
+    {
+      DebugDraw::DrawRay(Origin, Direction, Length, Color);
+    }
 
-  void LogDebug(std::string_view Message)
-  {
-    LogBuffer::Get().Push(AX_LOG_LEVEL_DEBUG, OwnerName(), Message);
-  }
+    void DrawBox(const Vec3& Center, const Vec3& HalfExtents, const Vec4& Color)
+    {
+      DebugDraw::DrawBox(Center, HalfExtents, Color);
+    }
+
+    void DrawSphere(const Vec3& Center, float Radius, const Vec4& Color, int Segments = 16)
+    {
+      DebugDraw::DrawSphere(Center, Radius, Color, Segments);
+    }
+
+    // Log
+    void LogError(std::string_view Message)   { Log_(AX_LOG_LEVEL_ERROR, Message); }
+    void LogWarn(std::string_view Message)    { Log_(AX_LOG_LEVEL_WARNING, Message); }
+    void LogInfo(std::string_view Message)    { Log_(AX_LOG_LEVEL_INFO, Message); }
+    void LogDebug(std::string_view Message)   { Log_(AX_LOG_LEVEL_DEBUG, Message); }
+
+  private:
+    void Log_(int Level, std::string_view Message)
+    {
+      std::string_view Name = Self.Owner_ ? Self.Owner_->GetName() : "detached";
+      LogBuffer::Get().Push(Level, Name, Message);
+    }
+  };
+
+  DebugHelper Debug{*this};
 
 private:
-  std::string_view OwnerName() const
-  {
-    return (Owner_ ? Owner_->GetName() : "detached");
-  }
 
   Node* Owner_              = nullptr;
   bool  IsInitialized_      = false;

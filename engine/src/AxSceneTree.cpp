@@ -273,8 +273,9 @@ void SceneTree::ProcessPendingInits()
       continue;
     }
 
-    // Set SceneTree reference and main camera on the script
+    // Set SceneTree reference, main camera, and debug draw on the script
     Script->MainCamera = MainCamera_;
+
     Script->Tree_ = this;
     Script->IsInitialized_ = true;
     Script->OnInit();
@@ -356,6 +357,7 @@ void SceneTree::Update(float DeltaT)
     if (Script && Script->IsInitialized_ && Script->IsProcessing()) {
       Script->MainCamera = MainCamera_;
       Script->MouseDelta = MouseDelta_;
+  
       Script->Tree_ = this;
       Script->OnUpdate(DeltaT);
     }
@@ -379,6 +381,7 @@ void SceneTree::FixedUpdate(float DeltaT)
     if (Script && Script->IsInitialized_ && Script->IsPhysicsProcessing()) {
       Script->MainCamera = MainCamera_;
       Script->MouseDelta = MouseDelta_;
+  
       Script->Tree_ = this;
       Script->OnFixedUpdate(DeltaT);
     }
@@ -402,6 +405,7 @@ void SceneTree::LateUpdate(float DeltaT)
     if (Script && Script->IsInitialized_) {
       Script->MainCamera = MainCamera_;
       Script->MouseDelta = MouseDelta_;
+  
       Script->Tree_ = this;
       Script->OnLateUpdate(DeltaT);
     }

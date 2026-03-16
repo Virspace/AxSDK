@@ -157,7 +157,28 @@ struct AxOpenGLAPI
     void (*SetBlendFunction)(AxBlendFunction SourceFactor, AxBlendFunction DestFactor);
     bool (*TextureHasAlpha)(AxTexture *Texture);
     void (*SetDepthWrite)(bool Enable);
+    void (*SetDepthTest)(bool Enable);
 
     // Face culling control
     void (*SetCullMode)(bool Enable);  // Enable/disable backface culling
+
+    // Dynamic vertex buffers
+    // Create a dynamic vertex buffer with a custom attribute layout.
+    // VertexStride is the total size of one vertex in bytes.
+    // MaxVertexCount is the maximum number of vertices the buffer can hold.
+    AxDynamicBuffer (*CreateDynamicBuffer)(const AxVertexAttrib* Attribs, uint32_t AttribCount,
+                                          uint32_t VertexStride, uint32_t MaxVertexCount);
+
+    // Upload vertex data to a dynamic buffer (partial update from offset 0).
+    void (*UpdateBuffer)(AxDynamicBuffer Buffer, const void* Data, uint32_t DataSizeBytes);
+
+    // Draw vertices from a dynamic buffer using a shader program.
+    void (*DrawBuffer)(AxDynamicBuffer Buffer, uint32_t ShaderProgram,
+                       AxPrimitiveMode Mode, uint32_t VertexCount);
+
+    // Destroy a dynamic buffer and release GPU resources.
+    void (*DestroyBuffer)(AxDynamicBuffer Buffer);
+
+    // Generic uniform setters (by shader program handle + uniform name)
+    void (*SetUniformMat4)(uint32_t Program, const char* Name, const struct AxMat4x4* Value);
 };

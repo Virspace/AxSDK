@@ -1,9 +1,9 @@
 # AxEngine Editor Integration Guide
 
-> Version: 1.0.0
-> Last Updated: 2026-03-11
+> Version: 2.0.0
+> Last Updated: 2026-03-16
 
-This document describes how to integrate AxEngine into an external editor application (AxEditor). The engine exposes its functionality through the `AxEngineAPI` function-pointer table, which the editor retrieves from the Foundation API registry after initialization. The editor owns the window, the frame loop, and the overall application lifecycle. The engine renders into an editor-provided HWND and advances one frame per `Tick()` call.
+This document describes how to integrate AxEngine into an external editor application (AxEditor). The engine is a **static C++ library** (DEC-016) that the editor links directly at compile time. The editor owns the window, the frame loop, and the overall application lifecycle. The engine renders into an editor-provided HWND and advances one frame per `Tick()` call.
 
 ## Table of Contents
 
@@ -15,10 +15,11 @@ This document describes how to integrate AxEngine into an external editor applic
 6. [Edit and Play Modes](#edit-and-play-modes)
 7. [Scene Management](#scene-management)
 8. [Programmatic Scene Manipulation](#programmatic-scene-manipulation)
-9. [Resource Lifecycle](#resource-lifecycle)
-10. [Shutdown](#shutdown)
-11. [Constraints and Ordering Requirements](#constraints-and-ordering-requirements)
-12. [Complete Example: Editor Main Loop](#complete-example-editor-main-loop)
+9. [Debug Draw](#debug-draw)
+10. [Resource Lifecycle](#resource-lifecycle)
+11. [Shutdown](#shutdown)
+12. [Constraints and Ordering Requirements](#constraints-and-ordering-requirements)
+13. [Complete Example: Editor Main Loop](#complete-example-editor-main-loop)
 
 ---
 
@@ -27,16 +28,16 @@ This document describes how to integrate AxEngine into an external editor applic
 ```
 +------------------+          +---------------------+
 |    AxEditor      |          |     AxEngine        |
-|  (owns window)   |  calls   |  (shared library)   |
-|  (owns frame     | -------> |  AxEngineAPI:       |
+|  (owns window)   |  links   |  (static library)   |
+|  (owns frame     | -------> |  Direct C++ API:    |
 |   loop)          |          |    Initialize()     |
 |  (owns UI)       |          |    Tick()           |
 |                  |          |    Shutdown()       |
 |  Creates HWND    |          |    Resize()         |
-|  Passes to       |          |    SetEditorCamera()|
-|  engine config   |          |    EnterPlayMode()  |
-+------------------+          |    ExitPlayMode()   |
-                              |    LoadScene()      |
+|  Constructs      |          |    SetEditorCamera()|
+|  AxEngine        |          |    EnterPlayMode()  |
+|  directly        |          |    ExitPlayMode()   |
++------------------+          |    LoadScene()      |
                               |    SaveScene()      |
                               |    NewScene()       |
                               |    UnloadScene()    |
@@ -47,26 +48,42 @@ This document describes how to integrate AxEngine into an external editor applic
 
 Key architectural points:
 
+- **AxEngine is a static library** (DEC-016). The editor links it at compile time via `Virspace::AxEngine`. No DLL loading, no function-pointer indirection, no `AxEngineAPI` struct. All calls are direct C++ method calls on the `AxEngine` class.
 - **AxWindow plugin is NOT loaded** in editor-hosted mode. The editor owns the window.
 - **AxInput receives nullptr** and no-ops on `Update()`. The editor handles input separately and translates it into engine API calls (camera movement, play/pause, etc.).
 - **Scene loading is NOT automatic.** The editor calls `LoadScene()`, `NewScene()`, or `SaveScene()` explicitly.
 - **Game script DLL is NOT auto-loaded.** The editor manages script compilation and hot-reload.
 - **ESC-to-quit is disabled** in editor-hosted mode.
 - The engine defaults to **Edit mode** when editor-hosted (standalone defaults to Play mode).
+- **Game.dll links the editor executable's import library** (not the static lib) to resolve engine symbols. The editor exe needs `ENABLE_EXPORTS TRUE` and `-Wl,--export-all-symbols` so Game.dll can find `ScriptRegistry::Get()` and other engine symbols.
 
 ---
 
 ## Bootstrapping the Engine
 
-Before using the engine, the editor must initialize Foundation (the API registry, platform APIs, allocators) and then load the engine plugin. In Debug/Development builds, the engine is a shared library (`libAxEngine.dll`). In Shipping builds, it is statically linked.
+The editor links AxEngine as a static library. There is no DLL to load and no `AxEngineAPI` struct to retrieve. The editor constructs an `AxEngine` instance directly and calls methods on it.
 
 ### Required Headers
 
 ```cpp
 #include "Foundation/AxAPIRegistry.h"
-#include "Foundation/AxPlugin.h"
 #include "AxEngine/AxEngine.h"
 #include "AxLog/AxLog.h"
+```
+
+### CMake Setup
+
+The editor's CMakeLists.txt links the engine static library:
+
+```cmake
+add_executable(AxEditor)
+
+target_compile_definitions(AxEditor PRIVATE AXON_LINKS_FOUNDATION)
+target_link_libraries(AxEditor PRIVATE Virspace::AxEngine)
+
+# Export all symbols so Game.dll can resolve engine symbols from the editor exe
+target_link_options(AxEditor PRIVATE -Wl,--export-all-symbols)
+set_target_properties(AxEditor PROPERTIES ENABLE_EXPORTS TRUE)
 ```
 
 ### Initialization Sequence
@@ -81,57 +98,30 @@ AxonRegisterAllFoundationAPIs(AxonGlobalAPIRegistry);
 // Step 2: Open the log file (optional but recommended)
 AxLogOpenFile("editor.log");
 
-// Step 3: Get the PluginAPI to load engine DLL
-AxPluginAPI* PluginAPI = static_cast<AxPluginAPI*>(
-    AxonGlobalAPIRegistry->Get(AXON_PLUGIN_API_NAME)
-);
+// Step 3: Create the editor's viewport panel (your windowing/UI framework)
+HWND ViewportPanel = CreateViewportPanel();
+int32_t VpWidth = 1280, VpHeight = 720;
 
-// Step 4: Load AxEngine.dll
-uint64_t EngineHandle = PluginAPI->Load("libAxEngine.dll", false);
-if (!PluginAPI->IsValid(EngineHandle)) {
-    // Handle error: engine DLL not found
-    AxLogCloseFile();
-    AxonTermGlobalAPIRegistry();
-    return 1;
-}
-
-// Step 5: Get the engine API from the registry
-AxEngineAPI* Engine = static_cast<AxEngineAPI*>(
-    AxonGlobalAPIRegistry->Get(AX_ENGINE_API_NAME)
-);
-
-if (!Engine) {
-    // Handle error: engine API not registered
-    PluginAPI->Unload(EngineHandle);
-    AxLogCloseFile();
-    AxonTermGlobalAPIRegistry();
-    return 1;
-}
-```
-
-### Configuring Editor-Hosted Mode
-
-The key difference from standalone mode is the `ExternalWindowHandle` field. When this is non-zero, the engine skips AxWindow plugin loading and window creation entirely.
-
-```cpp
-// The editor creates its own viewport panel (e.g., an HWND from a docking panel)
-HWND ViewportHWND = CreateEditorViewportPanel();  // Your editor code
-
+// Step 4: Configure the engine for editor-hosted mode
 AxEngineConfig Config{};
 Config.PluginPath = "./plugins/";
 Config.argc = argc;
 Config.argv = argv;
+Config.ExternalWindowHandle = reinterpret_cast<uint64_t>(ViewportPanel);
+Config.ViewportWidth = VpWidth;
+Config.ViewportHeight = VpHeight;
 
-// Editor-hosted mode: pass the editor's viewport HWND
-Config.ExternalWindowHandle = reinterpret_cast<uint64_t>(ViewportHWND);
-Config.ViewportWidth = 1280;   // Initial viewport width in pixels
-Config.ViewportHeight = 720;   // Initial viewport height in pixels
-
-if (!Engine->Initialize(&Config)) {
-    Engine->Shutdown();
-    // Handle error
+// Step 5: Construct and initialize the engine directly
+AxEngine Engine;
+if (!Engine.Initialize(&Config, AxonGlobalAPIRegistry)) {
+    Engine.Shutdown();
+    AxLogCloseFile();
+    AxonTermGlobalAPIRegistry();
     return 1;
 }
+
+// Step 6: Load initial scene (editor-hosted mode does NOT auto-load)
+Engine.LoadScene("scenes/default.ats");
 ```
 
 ### What Happens During Initialize()
@@ -164,12 +154,9 @@ while (EditorIsRunning()) {
     ProcessEditorEvents();
 
     // Advance the engine by one frame
-    // Tick() handles: input update, scene tree update, transform propagation,
-    // script dispatch (Play mode only), rendering, and resource cleanup
-    Engine->Tick();
+    Engine.Tick();
 
     // Swap the editor window's back buffer
-    // (Engine renders into the viewport panel, editor composites its UI)
     SwapEditorBuffers();
 }
 ```
@@ -177,35 +164,36 @@ while (EditorIsRunning()) {
 ### What Tick() Does Each Frame
 
 1. Calculates delta time from the last call
-2. Polls window events (skipped in editor-hosted mode -- no AxWindow)
+2. Polls window events (skipped in editor-hosted mode — no AxWindow)
 3. Updates AxInput (no-op in editor-hosted mode)
 4. Propagates mouse delta to SceneTree (for script access)
 5. **Play mode only:** Runs fixed-timestep updates (physics placeholder, `ScriptBase::OnFixedUpdate`)
 6. Runs variable-rate update (transform propagation always runs; `ScriptBase::OnUpdate` runs in Play mode only)
 7. **Play mode only:** Runs late update (`ScriptBase::OnLateUpdate`)
 8. Renders the scene (using editor camera in Edit mode, game camera in Play mode)
-9. Processes pending resource releases (deferred destruction)
+9. Flushes debug draw primitives (see [Debug Draw](#debug-draw))
+10. Processes pending resource releases (deferred destruction)
 
 ### Frame Timing
 
-The engine tracks wall-clock time internally. The first `Tick()` after `Initialize()` produces a valid delta time (typically near zero). There is no need to seed or reset the timer -- `Initialize()` records the starting timestamp.
+The engine tracks wall-clock time internally. The first `Tick()` after `Initialize()` produces a valid delta time (typically near zero). There is no need to seed or reset the timer — `Initialize()` records the starting timestamp.
 
 ---
 
 ## Viewport Resize
 
-When the editor's viewport panel changes size (user resizes the docking panel, window maximizes, etc.), call `Resize()` before the next `Tick()`.
+When the editor's viewport panel changes size, call `Resize()` before the next `Tick()`.
 
 ```cpp
 void OnViewportResized(int32_t NewWidth, int32_t NewHeight)
 {
-    Engine->Resize(NewWidth, NewHeight);
+    Engine.Resize(NewWidth, NewHeight);
 }
 ```
 
 `Resize()` updates the renderer's viewport dimensions and recalculates the camera aspect ratio. If the editor camera is active (Edit mode), its projection matrix is also updated.
 
-**Ordering:** Call `Resize()` before `Tick()` when dimensions change. This ensures the frame renders at the correct resolution. Calling `Resize()` multiple times between `Tick()` calls is safe -- only the last dimensions are used.
+**Ordering:** Call `Resize()` before `Tick()` when dimensions change. This ensures the frame renders at the correct resolution.
 
 ---
 
@@ -216,8 +204,7 @@ The editor camera is independent of any scene `CameraNode`. It provides view and
 ### Setting the Editor Camera
 
 ```cpp
-// Position the editor camera looking at the scene origin
-Engine->SetEditorCamera(
+Engine.SetEditorCamera(
     0.0f, 5.0f, 10.0f,    // Camera position (x, y, z)
     0.0f, 0.0f, 0.0f,     // Look-at target (x, y, z)
     60.0f                   // Field of view in degrees
@@ -225,8 +212,6 @@ Engine->SetEditorCamera(
 ```
 
 ### Default Editor Camera
-
-If `SetEditorCamera()` is never called, the engine uses these defaults:
 
 | Parameter | Default Value |
 |-----------|--------------|
@@ -236,8 +221,6 @@ If `SetEditorCamera()` is never called, the engine uses these defaults:
 | Near Clip | 0.1          |
 | Far Clip  | 1000.0       |
 
-Near and far clip planes are not exposed through the API -- they use fixed defaults.
-
 ### Editor Camera and Mode Switching
 
 - **Edit mode:** The editor camera is active. Scene `CameraNode` instances are ignored for rendering.
@@ -245,11 +228,8 @@ Near and far clip planes are not exposed through the API -- they use fixed defau
 
 ### Orbit Camera Example
 
-The editor implements orbit/pan/zoom by translating mouse input into `SetEditorCamera()` calls each frame:
-
 ```cpp
-// Example: simple orbit camera (editor-side logic)
-void UpdateEditorOrbitCamera(AxEngineAPI* Engine,
+void UpdateEditorOrbitCamera(AxEngine& Engine,
                               float Yaw, float Pitch, float Distance,
                               float TargetX, float TargetY, float TargetZ)
 {
@@ -258,7 +238,7 @@ void UpdateEditorOrbitCamera(AxEngineAPI* Engine,
     float PosY = TargetY + Distance * sinf(Pitch);
     float PosZ = TargetZ + Distance * CosP * cosf(Yaw);
 
-    Engine->SetEditorCamera(PosX, PosY, PosZ,
+    Engine.SetEditorCamera(PosX, PosY, PosZ,
                             TargetX, TargetY, TargetZ,
                             60.0f);
 }
@@ -268,7 +248,7 @@ void UpdateEditorOrbitCamera(AxEngineAPI* Engine,
 
 ## Edit and Play Modes
 
-The engine operates in one of two modes, controlled by the `AxEngineMode` enum:
+The engine operates in one of two modes:
 
 ```cpp
 enum class AxEngineMode : int32_t {
@@ -279,7 +259,7 @@ enum class AxEngineMode : int32_t {
 
 ### Edit Mode (Default for Editor)
 
-- Transform propagation runs every `Tick()` -- the viewport always reflects current node positions
+- Transform propagation runs every `Tick()` — the viewport always reflects current node positions
 - Script `OnUpdate`, `OnFixedUpdate`, and `OnLateUpdate` are **not** called
 - Script `OnInit` is **not** processed
 - The editor camera provides view/projection matrices
@@ -294,28 +274,24 @@ enum class AxEngineMode : int32_t {
 
 ### Switching Modes Directly
 
-Use `SetMode()` to switch modes without snapshot/restore behavior:
-
 ```cpp
-Engine->SetMode(AxEngineMode::Play);  // Enable scripts
-Engine->SetMode(AxEngineMode::Edit);  // Disable scripts
+Engine.SetMode(AxEngineMode::Play);  // Enable scripts
+Engine.SetMode(AxEngineMode::Edit);  // Disable scripts
 ```
 
-**Warning:** `SetMode()` does NOT snapshot or restore the scene. If scripts modify the scene during Play and you call `SetMode(Edit)`, those modifications persist. For proper play-mode behavior with scene preservation, use `EnterPlayMode()` and `ExitPlayMode()` instead.
+**Warning:** `SetMode()` does NOT snapshot or restore the scene. For proper play-mode behavior with scene preservation, use `EnterPlayMode()` and `ExitPlayMode()` instead.
 
 ### Play Mode with Snapshot/Restore
 
-The recommended way to enter and exit play mode:
-
 ```cpp
 // User presses "Play" button in editor toolbar
-Engine->EnterPlayMode();
+Engine.EnterPlayMode();
 // Scene is now snapshotted. Scripts run. Game camera is active.
 
 // ... user tests their game ...
 
 // User presses "Stop" button in editor toolbar
-Engine->ExitPlayMode();
+Engine.ExitPlayMode();
 // Scene is restored to its pre-play state. Editor camera is active.
 // All runtime modifications by scripts are discarded.
 ```
@@ -340,7 +316,7 @@ Engine->ExitPlayMode();
 
 ### Important Notes
 
-- Scripts start fresh on each `EnterPlayMode()`. Script runtime state (member variables, etc.) is **not** preserved across play/stop cycles. `OnInit` runs again on the next `EnterPlayMode()`.
+- Scripts start fresh on each `EnterPlayMode()`. Script runtime state is **not** preserved across play/stop cycles. `OnInit` runs again on the next `EnterPlayMode()`.
 - If `EnterPlayMode()` is called while already in Play mode, it logs a warning and returns without action.
 - If `ExitPlayMode()` is called while already in Edit mode, it logs a warning and returns without action.
 
@@ -348,139 +324,167 @@ Engine->ExitPlayMode();
 
 ## Scene Management
 
-The engine provides four scene management functions through `AxEngineAPI`. In editor-hosted mode, no scene is loaded automatically during `Initialize()` -- the editor must call one of these to populate the viewport.
+The engine provides scene management methods on the `AxEngine` class. In editor-hosted mode, no scene is loaded automatically during `Initialize()` — the editor must call one of these to populate the viewport.
 
 ### Loading a Scene from Disk
 
 ```cpp
-bool Success = Engine->LoadScene("scenes/my_level.ats");
-if (!Success) {
-    // Handle error: file not found, parse error, etc.
-}
+bool Success = Engine.LoadScene("scenes/my_level.ats");
 ```
 
-`LoadScene()`:
-- Unloads the current scene (releases model handles, destroys tree)
-- Parses the `.ats` file and creates a new scene tree
-- Loads model resources for all `MeshInstance` nodes
-- Sets up the main camera from the first `CameraNode` in the scene
-- Propagates the current mode (Edit/Play) to the new scene tree
+`LoadScene()` unloads the current scene, parses the `.ats` file, creates a new scene tree, loads model resources, and sets up the main camera.
 
 ### Creating a New Empty Scene
 
 ```cpp
-Engine->NewScene();
+Engine.NewScene();
 // Scene now contains only a root node named "NewScene"
 ```
-
-`NewScene()`:
-- Unloads the current scene
-- Creates a fresh `SceneTree` with a single root `Node`
-- The scene name defaults to `"NewScene"`
 
 ### Saving the Current Scene
 
 ```cpp
-bool Success = Engine->SaveScene("scenes/my_level.ats");
-if (!Success) {
-    // Handle error: write failure, no scene loaded, etc.
-}
+bool Success = Engine.SaveScene("scenes/my_level.ats");
 ```
-
-`SaveScene()`:
-- Serializes the current scene tree to the `.ats` text format
-- Writes the output to the specified file path
-- Returns `false` if no scene is loaded or the write fails
 
 ### Unloading the Current Scene
 
 ```cpp
-Engine->UnloadScene();
-// Engine continues running with an empty viewport (no scene)
+Engine.UnloadScene();
+// Engine continues running with an empty viewport
 ```
-
-`UnloadScene()`:
-- Releases all model handles for `MeshInstance` nodes
-- Destroys the scene tree
-- Clears the renderer's main camera reference
-- The engine continues to run -- `Tick()` renders an empty frame
 
 ---
 
 ## Programmatic Scene Manipulation
 
-While the engine's scene tree internals are C++ classes (not exposed through `AxEngineAPI`), the editor can manipulate scenes through two mechanisms:
+Since the editor links the engine as a static C++ library (DEC-016), it has **full direct access** to all engine types. This is the primary way the editor interacts with the scene — no function-pointer indirection, no marshaling, no C wrapper functions.
 
-### 1. File-Based Manipulation
-
-Create or modify `.ats` files and load them:
-
-```cpp
-// Create a scene file programmatically
-// .ats format is text-based and human-readable
-const char* SceneContent = R"(
-scene "MyScene" {
-    node "Root" Node {
-        node "MainCamera" Camera {
-            fov: 60.0
-            near: 0.1
-            far: 1000.0
-            position: 0.0 5.0 10.0
-        }
-        node "Ground" MeshInstance {
-            mesh: "models/ground.gltf"
-            position: 0.0 0.0 0.0
-            scale: 10.0 1.0 10.0
-        }
-        node "Sun" Light {
-            type: directional
-            color: 1.0 0.95 0.9
-            intensity: 1.0
-            direction: -0.5 -1.0 -0.3
-        }
-    }
-}
-)";
-
-// Write to disk and load
-WriteFile("scenes/generated.ats", SceneContent);
-Engine->LoadScene("scenes/generated.ats");
-```
-
-### 2. Direct C++ Access (Editor Linking Against Engine)
-
-If the editor links against the engine library, it can access the scene tree directly through the `AxEngine` class (not the API function-pointer table). This requires including engine headers and linking against the engine:
+### Direct C++ Access
 
 ```cpp
 #include "AxEngine/AxSceneTree.h"
 #include "AxEngine/AxNode.h"
 #include "AxEngine/AxTypedNodes.h"
 
-// Access the engine instance directly (requires linking against engine)
-// Note: This approach is for tight integration only. The AxEngineAPI
-// function-pointer table is the stable, recommended interface.
+// Access the scene tree from the engine instance
+SceneTree* Tree = Engine.GetSceneTree();
+
+// Create typed nodes
+MeshInstance* Mesh = Tree->CreateNode<MeshInstance>("Ground");
+CameraNode* Cam = Tree->CreateNode<CameraNode>("MainCamera");
+LightNode* Sun = Tree->CreateNode<LightNode>("Sun");
+
+// Set properties directly on typed nodes
+Cam->FOV = 60.0f;
+Cam->Near = 0.1f;
+Cam->Far = 1000.0f;
+
+Sun->Type = LightType::Directional;
+Sun->Color = {1.0f, 0.95f, 0.9f};
+Sun->Intensity = 1.0f;
+
+// Set transforms
+Mesh->SetLocalPosition({0.0f, 0.0f, 0.0f});
+Mesh->SetLocalScale({10.0f, 1.0f, 10.0f});
+
+// Build hierarchy
+Tree->GetRoot()->AddChild(Mesh);
+Tree->GetRoot()->AddChild(Cam);
+Tree->GetRoot()->AddChild(Sun);
+
+// Query nodes
+Node* Found = Tree->FindNode("MainCamera");
+std::vector<MeshInstance*> Meshes = Tree->GetNodesByType<MeshInstance>();
 ```
 
-The `AxEngineAPI` function-pointer table is the stable public interface. Direct C++ access is available but subject to change between engine versions.
+### File-Based Manipulation
+
+Create or modify `.ats` files and load them:
+
+```cpp
+Engine.LoadScene("scenes/generated.ats");
+```
+
+The `.ats` format is text-based and human-readable — scene files can be generated programmatically if needed.
+
+---
+
+## Debug Draw
+
+The engine provides an immediate-mode debug draw API for visualizing lines, boxes, spheres, and rays in 3D world space. This is used by the editor for gizmos, selection outlines, and grid rendering, and by game scripts for debug visualization.
+
+### API
+
+```cpp
+// Access from the engine instance
+DebugDraw* Debug = Engine.GetDebugDraw();
+
+// Draw primitives (all positions in world space)
+Debug->Line(From, To, Color);                       // Line segment
+Debug->Ray(Origin, Direction, Length, Color);        // Ray from origin
+Debug->Box(Center, HalfExtents, Color);             // Wireframe box
+Debug->Sphere(Center, Radius, Color, Segments);     // Wireframe sphere (default 16 segments)
+```
+
+Colors are `AxVec4` (RGBA). Alpha < 1.0 produces semi-transparent lines.
+
+### Behavior
+
+- **Immediate-mode:** All primitives are cleared after each frame. Submit every frame to keep them visible.
+- **Batched:** All primitives are collected into a single vertex buffer and drawn with one `GL_LINES` call per frame — minimal GPU overhead.
+- **Depth-tested:** Debug lines are hidden behind closer scene geometry by default (depth-test ON, depth-write OFF).
+- **Rendered after scene:** Debug geometry renders on top of the scene, before SwapBuffers.
+
+### Editor Usage
+
+The editor uses debug draw for visualization overlays:
+
+```cpp
+// Grid
+for (int i = -10; i <= 10; i++) {
+    AxVec4 GridColor = {0.5f, 0.5f, 0.5f, 0.3f};
+    Debug->Line({(float)i, 0.0f, -10.0f}, {(float)i, 0.0f, 10.0f}, GridColor);
+    Debug->Line({-10.0f, 0.0f, (float)i}, {10.0f, 0.0f, (float)i}, GridColor);
+}
+
+// Selection wireframe around a node
+AxVec3 Pos = SelectedNode->GetWorldPosition();
+AxVec3 Half = {0.5f, 0.5f, 0.5f};
+Debug->Box(Pos, Half, {1.0f, 0.8f, 0.0f, 1.0f});  // Yellow selection box
+```
+
+### Script Usage
+
+Scripts access debug draw through `ScriptBase::GetDebugDraw()`:
+
+```cpp
+void MyScript::OnUpdate(float DeltaT)
+{
+    // Visualize patrol path
+    DebugDraw* Debug = GetDebugDraw();
+    if (Debug) {
+        Debug->Line(GetNode()->GetWorldPosition(), TargetPos, {0.0f, 1.0f, 0.0f, 1.0f});
+        Debug->Sphere(TargetPos, 0.5f, {1.0f, 0.0f, 0.0f, 1.0f});
+    }
+}
+```
+
+### Shipping Builds
+
+Debug draw is compiled out in shipping builds (`AX_SHIPPING`). All methods become no-ops and the flush is skipped entirely — zero runtime cost.
 
 ---
 
 ## Resource Lifecycle
 
-The engine uses handle-based resource management with deferred destruction (see DEC-007). Resources (textures, models, shaders) are reference-counted. When a resource's reference count reaches zero, it is queued for deferred destruction rather than being destroyed immediately.
-
-### How It Works in Editor Mode
-
-- `Tick()` calls `ProcessPendingReleases()` at the end of each frame automatically
-- When `LoadScene()` is called, model resources for all `MeshInstance` nodes are loaded automatically
-- When `UnloadScene()` or a scene replacement occurs, model handles are released (queued for deferred destruction)
-- The deferred destruction happens on the next `Tick()` after the release
+The engine uses handle-based resource management with deferred destruction (DEC-007). Resources (textures, models, shaders) are reference-counted. When a resource's reference count reaches zero, it is queued for deferred destruction.
 
 ### Editor Considerations
 
 - **No manual `ProcessPendingReleases()` calls needed.** `Tick()` handles this automatically.
 - **Scene transitions are safe.** Loading a new scene releases the old scene's resources and loads the new ones in a single operation.
-- **Play mode restore reloads resources.** When `ExitPlayMode()` restores the scene from a snapshot, it reloads model resources because the handles were released during the unload step.
+- **Play mode restore reloads resources.** When `ExitPlayMode()` restores the scene from a snapshot, it reloads model resources.
 
 ---
 
@@ -489,33 +493,25 @@ The engine uses handle-based resource management with deferred destruction (see 
 When the editor exits, shut down in reverse initialization order:
 
 ```cpp
-// Shutdown the engine (cleans up scene, renderer, resources, plugins)
-Engine->Shutdown();
-
-// Unload the engine DLL (Debug/Development mode only)
-PluginAPI->Unload(EngineHandle);
-
-// Close the log file
+Engine.Shutdown();
 AxLogCloseFile();
-
-// Terminate Foundation's global API registry
 AxonTermGlobalAPIRegistry();
 ```
 
 ### What Shutdown() Does
 
-1. Stops the engine (`isRunning_ = false`)
+1. Stops the engine
 2. Shuts down AxInput
 3. Detaches and destroys game scripts (if any were loaded)
 4. Clears the ScriptRegistry
-5. Unloads the Game DLL (Debug/Development mode, if loaded)
+5. Unloads the Game DLL (if loaded)
 6. Unloads the scene (releases model handles, destroys scene tree)
 7. Discards any scene snapshot buffer
 8. Shuts down the renderer
-9. Shuts down ResourceAPI (cleans up all loaded resources)
+9. Shuts down ResourceAPI
 10. Terminates the scene parser
 11. Destroys the resource allocator
-12. Skips window destruction (editor owns the window in editor-hosted mode)
+12. Skips window destruction (editor owns the window)
 
 ---
 
@@ -523,59 +519,57 @@ AxonTermGlobalAPIRegistry();
 
 ### Initialization Order
 
-The following initialization order must be respected:
-
 ```
 1. AxonInitGlobalAPIRegistry()        -- creates the API registry
 2. AxonRegisterAllFoundationAPIs()    -- registers Platform, Plugin, Allocator, etc.
 3. AxLogOpenFile()                    -- optional, enables file logging
-4. PluginAPI->Load("libAxEngine.dll") -- loads engine (registers AxEngineAPI)
-5. Engine->Initialize(&Config)        -- initializes engine subsystems
-6. Engine->LoadScene() or NewScene()  -- populates the scene (editor-hosted only)
+4. AxEngine Engine;                   -- construct engine instance
+5. Engine.Initialize(&Config, AxonGlobalAPIRegistry)  -- initialize subsystems
+6. Engine.LoadScene() or NewScene()   -- populate the scene (editor-hosted only)
 ```
-
-Violating this order (e.g., calling `Initialize()` before Foundation APIs are registered) will cause null pointer dereferences or assertion failures.
 
 ### Per-Frame Ordering
 
-Within the editor's frame loop:
-
 ```
 1. Process editor UI events
-2. Update editor camera if changed:  Engine->SetEditorCamera(...)
-3. Handle viewport resize if changed: Engine->Resize(Width, Height)
-4. Advance the engine:                Engine->Tick()
+2. Update editor camera if changed:  Engine.SetEditorCamera(...)
+3. Handle viewport resize if changed: Engine.Resize(Width, Height)
+4. Advance the engine:                Engine.Tick()
 5. Composite editor UI / swap buffers
 ```
 
-**Resize before Tick.** If the viewport dimensions changed since the last frame, call `Resize()` before `Tick()`. This ensures the renderer uses the correct viewport size and aspect ratio for the frame. Failing to resize first may cause a single frame to render at the wrong aspect ratio.
+**Resize before Tick.** Call `Resize()` before `Tick()` when viewport dimensions change.
 
-**SetEditorCamera before Tick.** If the editor camera moved (orbit, pan, zoom from mouse input), call `SetEditorCamera()` before `Tick()` so the frame renders from the updated viewpoint.
-
-### Resource Cleanup
-
-`ProcessPendingReleases()` is called automatically inside `Tick()`. The editor does not need to call it manually. However, be aware that resource destruction is deferred -- a resource released in frame N is actually destroyed during `Tick()` of frame N+1 (or later).
+**SetEditorCamera before Tick.** Call before `Tick()` so the frame renders from the updated viewpoint.
 
 ### Scene Management Constraints
 
-- **One scene at a time.** Loading a new scene unloads the previous one. There is no multi-scene support.
+- **One scene at a time.** Loading a new scene unloads the previous one.
 - **SaveScene() requires a loaded scene.** Returns `false` if no scene is loaded.
-- **EnterPlayMode() requires a loaded scene.** The snapshot will be empty if called with no scene, and `ExitPlayMode()` will log an error.
-- **Do not call LoadScene/NewScene during Play mode** without first calling `ExitPlayMode()`. The snapshot references the pre-play scene -- loading a different scene during play means `ExitPlayMode()` will restore the wrong scene.
+- **EnterPlayMode() requires a loaded scene.**
+- **Do not call LoadScene/NewScene during Play mode** without first calling `ExitPlayMode()`.
 
 ### Thread Safety
 
-The engine is **single-threaded**. All `AxEngineAPI` calls must come from the same thread. Do not call engine functions from background threads, UI threads, or worker pools. If the editor uses a multi-threaded architecture, marshal all engine calls to the thread that owns the frame loop.
+The engine is **single-threaded**. All calls must come from the same thread.
+
+### Game.dll Integration
+
+When the editor loads Game.dll for script hot-reload, the DLL resolves engine symbols from the editor executable's export table — the same pattern used by `OpenGLGameHost`. The editor's CMakeLists must include:
+
+```cmake
+target_link_options(AxEditor PRIVATE -Wl,--export-all-symbols)
+set_target_properties(AxEditor PROPERTIES ENABLE_EXPORTS TRUE)
+```
+
+Game.dll links against the editor executable's import library (not `Virspace::AxEngine` directly) to ensure a single `ScriptRegistry::Get()` instance is shared between the editor and scripts.
 
 ---
 
 ## Complete Example: Editor Main Loop
 
-This example demonstrates a minimal editor that initializes the engine, loads a scene, provides orbit camera navigation, and supports play/stop toggling.
-
 ```cpp
 #include "Foundation/AxAPIRegistry.h"
-#include "Foundation/AxPlugin.h"
 #include "AxEngine/AxEngine.h"
 #include "AxLog/AxLog.h"
 
@@ -586,17 +580,7 @@ int main(int argc, char** argv)
     AxonRegisterAllFoundationAPIs(AxonGlobalAPIRegistry);
     AxLogOpenFile("editor.log");
 
-    // === Load Engine ===
-    AxPluginAPI* PluginAPI = static_cast<AxPluginAPI*>(
-        AxonGlobalAPIRegistry->Get(AXON_PLUGIN_API_NAME)
-    );
-    uint64_t EngineHandle = PluginAPI->Load("libAxEngine.dll", false);
-    AxEngineAPI* Engine = static_cast<AxEngineAPI*>(
-        AxonGlobalAPIRegistry->Get(AX_ENGINE_API_NAME)
-    );
-
     // === Create Editor Window and Viewport Panel ===
-    // (Your windowing/UI framework code here)
     HWND MainWindow = CreateEditorWindow();
     HWND ViewportPanel = CreateViewportPanel(MainWindow);
     int32_t VpWidth = 1280, VpHeight = 720;
@@ -610,13 +594,19 @@ int main(int argc, char** argv)
     Config.ViewportWidth = VpWidth;
     Config.ViewportHeight = VpHeight;
 
-    Engine->Initialize(&Config);
+    AxEngine Engine;
+    if (!Engine.Initialize(&Config, AxonGlobalAPIRegistry)) {
+        Engine.Shutdown();
+        AxLogCloseFile();
+        AxonTermGlobalAPIRegistry();
+        return 1;
+    }
 
     // === Load Initial Scene ===
-    Engine->LoadScene("scenes/default.ats");
+    Engine.LoadScene("scenes/default.ats");
 
     // === Set Initial Editor Camera ===
-    Engine->SetEditorCamera(0.0f, 5.0f, 10.0f,
+    Engine.SetEditorCamera(0.0f, 5.0f, 10.0f,
                             0.0f, 0.0f, 0.0f,
                             60.0f);
 
@@ -626,7 +616,6 @@ int main(int argc, char** argv)
 
     // === Main Loop ===
     while (!ShouldClose(MainWindow)) {
-        // Process editor UI events
         ProcessEditorEvents(MainWindow);
 
         // Handle viewport resize
@@ -635,17 +624,17 @@ int main(int argc, char** argv)
             if (NewW != VpWidth || NewH != VpHeight) {
                 VpWidth = NewW;
                 VpHeight = NewH;
-                Engine->Resize(VpWidth, VpHeight);
+                Engine.Resize(VpWidth, VpHeight);
             }
         }
 
-        // Handle play/stop toggle (e.g., toolbar button)
+        // Handle play/stop toggle
         if (PlayButtonPressed()) {
             if (!IsPlaying) {
-                Engine->EnterPlayMode();
+                Engine.EnterPlayMode();
                 IsPlaying = true;
             } else {
-                Engine->ExitPlayMode();
+                Engine.ExitPlayMode();
                 IsPlaying = false;
             }
         }
@@ -654,7 +643,7 @@ int main(int argc, char** argv)
         if (!IsPlaying) {
             UpdateOrbitFromMouse(&CamYaw, &CamPitch, &CamDist);
             float CosP = cosf(CamPitch);
-            Engine->SetEditorCamera(
+            Engine.SetEditorCamera(
                 CamDist * CosP * sinf(CamYaw),
                 CamDist * sinf(CamPitch),
                 CamDist * CosP * cosf(CamYaw),
@@ -663,8 +652,18 @@ int main(int argc, char** argv)
             );
         }
 
-        // Advance the engine (renders into ViewportPanel)
-        Engine->Tick();
+        // Draw editor overlays (grid, selection, etc.)
+        DebugDraw* Debug = Engine.GetDebugDraw();
+        if (Debug && !IsPlaying) {
+            for (int i = -10; i <= 10; i++) {
+                AxVec4 GridColor = {0.5f, 0.5f, 0.5f, 0.3f};
+                Debug->Line({(float)i, 0.f, -10.f}, {(float)i, 0.f, 10.f}, GridColor);
+                Debug->Line({-10.f, 0.f, (float)i}, {10.f, 0.f, (float)i}, GridColor);
+            }
+        }
+
+        // Advance the engine (renders scene + debug draw into ViewportPanel)
+        Engine.Tick();
 
         // Render editor UI (panels, menus, etc.) and swap buffers
         RenderEditorUI(MainWindow);
@@ -672,8 +671,7 @@ int main(int argc, char** argv)
     }
 
     // === Shutdown ===
-    Engine->Shutdown();
-    PluginAPI->Unload(EngineHandle);
+    Engine.Shutdown();
     AxLogCloseFile();
     AxonTermGlobalAPIRegistry();
 
@@ -704,24 +702,26 @@ int main(int argc, char** argv)
 | `Edit` | 0   | Transforms propagate, scripts/physics skipped |
 | `Play` | 1   | Full simulation (identical to standalone) |
 
-### AxEngineAPI Function Pointers
+### AxEngine Public Methods
 
-| Function           | Signature | Description |
+| Method             | Signature | Description |
 |--------------------|-----------|-------------|
-| `Initialize`       | `bool (*)(const AxEngineConfig*)` | Initialize engine with configuration |
-| `Run`              | `int (*)()` | Run standalone frame loop (blocks until exit; not used by editor) |
-| `Tick`             | `bool (*)()` | Advance one frame (editor drives this) |
-| `Shutdown`         | `void (*)()` | Clean up engine |
-| `IsRunning`        | `bool (*)()` | Query if engine is running |
-| `Resize`           | `void (*)(int32_t, int32_t)` | Update viewport dimensions |
-| `SetMode`          | `void (*)(AxEngineMode)` | Switch Edit/Play mode (no snapshot) |
-| `LoadScene`        | `bool (*)(const char*)` | Load .ats scene file |
-| `UnloadScene`      | `void (*)()` | Clear current scene |
-| `NewScene`         | `void (*)()` | Create empty scene with root node |
-| `SaveScene`        | `bool (*)(const char*)` | Save scene to .ats file |
-| `EnterPlayMode`    | `void (*)()` | Snapshot scene, switch to Play mode |
-| `ExitPlayMode`     | `void (*)()` | Restore scene, switch to Edit mode |
-| `SetEditorCamera`  | `void (*)(float, float, float, float, float, float, float)` | Set editor camera (pos, target, fov) |
+| `Initialize`       | `bool Initialize(const AxEngineConfig*, AxAPIRegistry*)` | Initialize engine with configuration |
+| `Run`              | `int Run()` | Run standalone frame loop (blocks; not used by editor) |
+| `Tick`             | `bool Tick()` | Advance one frame (editor drives this) |
+| `Shutdown`         | `void Shutdown()` | Clean up engine |
+| `IsRunning`        | `bool IsRunning() const` | Query if engine is running |
+| `Resize`           | `void Resize(int32_t, int32_t)` | Update viewport dimensions |
+| `SetMode`          | `void SetMode(AxEngineMode)` | Switch Edit/Play mode (no snapshot) |
+| `LoadScene`        | `bool LoadScene(const char*)` | Load .ats scene file |
+| `UnloadScene`      | `void UnloadScene()` | Clear current scene |
+| `NewScene`         | `void NewScene()` | Create empty scene with root node |
+| `SaveScene`        | `bool SaveScene(const char*)` | Save scene to .ats file |
+| `EnterPlayMode`    | `void EnterPlayMode()` | Snapshot scene, switch to Play mode |
+| `ExitPlayMode`     | `void ExitPlayMode()` | Restore scene, switch to Edit mode |
+| `SetEditorCamera`  | `void SetEditorCamera(float, float, float, float, float, float, float)` | Set editor camera (pos, target, fov) |
+| `GetSceneTree`     | `SceneTree* GetSceneTree()` | Direct access to the scene tree |
+| `GetDebugDraw`     | `DebugDraw* GetDebugDraw()` | Debug draw API (nullptr in shipping) |
 
 ### EditorCameraState
 

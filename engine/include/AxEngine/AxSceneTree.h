@@ -182,6 +182,7 @@ public:
   /** Store the mouse delta for propagation to scripts this frame. */
   void UpdateMouseDelta(AxVec2 Delta);
 
+
   //=========================================================================
   // Groups
   //=========================================================================

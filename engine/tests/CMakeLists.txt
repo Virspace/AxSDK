@@ -52,6 +52,7 @@ target_sources(AxEngineTests
         src/AxScriptLogTests.cpp
         src/AxInputActionTests.cpp
         src/AxSignalTests.cpp
+        src/AxDebugDrawTests.cpp
 )
 
 #

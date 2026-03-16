@@ -12,6 +12,7 @@
  */
 
 #include "AxEngine/AxRenderer.h"
+#include "AxEngine/AxDebugDraw.h"
 #include "AxEngine/AxSceneTree.h"
 #include "AxEngine/AxNode.h"
 #include "AxEngine/AxTypedNodes.h"
@@ -76,12 +77,18 @@ bool AxRenderer::Initialize(AxAPIRegistry* Registry, uint64_t WindowHandle, int3
         return (false);
     }
 
+    // Initialize debug draw with the render API
+    DebugDraw_.Initialize(RenderAPI_);
+
     AX_LOG(INFO, "Initialized (%dx%d)", Width, Height);
     return (true);
 }
 
 void AxRenderer::Shutdown()
 {
+    // Shutdown debug draw (before destroying GL context)
+    DebugDraw_.Shutdown();
+
     // Clear shader pointer (ResourceAPI handles cleanup)
     ShaderData_ = nullptr;
 
@@ -218,6 +225,35 @@ void AxRenderer::RenderScene(SceneTree* Scene)
 
     // Render the node hierarchy starting from the root
     RenderNode(static_cast<Node*>(Scene->GetRootNode()), nullptr);
+}
+
+void AxRenderer::FlushDebugDraw()
+{
+    if (DebugDraw_.GetLineVertexCount() == 0) {
+        return;
+    }
+
+    // Determine current camera matrices
+    AxMat4x4 ViewMatrix;
+    AxMat4x4 ProjectionMatrix;
+
+    if (UseEditorCamera_) {
+        ViewMatrix = EditorViewMatrix_;
+        ProjectionMatrix = EditorProjectionMatrix_;
+    } else if (MainCameraNode_) {
+        ViewMatrix = MainCameraNode_->GetViewMatrix();
+        ProjectionMatrix = MainCameraNode_->GetProjectionMatrix();
+    } else {
+        // No camera available — cannot render debug draw
+        DebugDraw_.Clear();
+        return;
+    }
+
+    // Render debug lines on top of scene geometry
+    RenderAPI_->SetDepthTest(false);
+    DebugDraw_.Flush(ViewMatrix, ProjectionMatrix);
+    RenderAPI_->SetDepthTest(true);
+    DebugDraw_.Clear();
 }
 
 void AxRenderer::RenderNode(Node* NodePtr, const AxMat4x4* ParentTransform)

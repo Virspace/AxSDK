@@ -274,6 +274,40 @@ typedef struct AxModel
     uint32_t TransformData;
 } AxModel;
 
+//=============================================================================
+// Generic Dynamic Buffer Types
+//=============================================================================
+
+/**
+ * Vertex attribute descriptor for dynamic buffer creation.
+ * Describes one attribute in a custom vertex layout.
+ */
+typedef struct AxVertexAttrib {
+    uint8_t Location;     // Shader attribute location (0-15)
+    uint8_t Components;   // Float count per attribute (1-4: float, vec2, vec3, vec4)
+    uint16_t Offset;      // Byte offset within the vertex
+} AxVertexAttrib;
+
+/**
+ * Handle to a dynamic vertex buffer (VAO + VBO pair).
+ * Created by CreateDynamicBuffer, passed to UpdateBuffer/DrawBuffer/DestroyBuffer.
+ */
+typedef struct AxDynamicBuffer {
+    uint32_t VAO;
+    uint32_t VBO;
+} AxDynamicBuffer;
+
+/**
+ * Primitive drawing modes for DrawBuffer.
+ */
+typedef enum AxPrimitiveMode {
+    AX_PRIMITIVE_LINES,
+    AX_PRIMITIVE_TRIANGLES,
+    AX_PRIMITIVE_LINE_STRIP,
+    AX_PRIMITIVE_TRIANGLE_STRIP,
+    AX_PRIMITIVE_POINTS,
+} AxPrimitiveMode;
+
 #ifdef __cplusplus
 }
 #endif
