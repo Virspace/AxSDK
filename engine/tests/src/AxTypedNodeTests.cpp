@@ -447,7 +447,7 @@ TEST_F(TypedNodeTest, StringPathsAcceptLongPaths)
   LongPath = "models/" + LongPath + ".glb";
   MI.MeshPath = LongPath;
   EXPECT_TRUE(MI.MeshPath == LongPath);
-  EXPECT_EQ(MI.MeshPath.Get().size(), LongPath.size());
+  EXPECT_EQ(MI.MeshPath.size(), LongPath.size());
 
   // Same for material name (old limit was 64)
   std::string LongMat(128, 'm');
@@ -485,17 +485,17 @@ TEST_F(TypedNodeTest, StringPropertyGetReturnsConstRef)
 TEST_F(TypedNodeTest, DefaultStringPathsAreEmpty)
 {
   MeshInstance MI("EmptyTest", TableAPI_);
-  EXPECT_TRUE(MI.MeshPath.Get().empty());
-  EXPECT_TRUE(MI.MaterialName.Get().empty());
+  EXPECT_TRUE(MI.MeshPath.empty());
+  EXPECT_TRUE(MI.MaterialName.empty());
 
   AudioSourceNode AS("EmptyAudio", TableAPI_);
-  EXPECT_TRUE(AS.ClipPath.Get().empty());
+  EXPECT_TRUE(AS.ClipPath.empty());
 
   AnimatorNode Anim("EmptyAnim", TableAPI_);
-  EXPECT_TRUE(Anim.AnimationName.Get().empty());
+  EXPECT_TRUE(Anim.AnimationName.empty());
 
   SpriteNode Spr("EmptySprite", TableAPI_);
-  EXPECT_TRUE(Spr.TexturePath.Get().empty());
+  EXPECT_TRUE(Spr.TexturePath.empty());
 }
 
 //=============================================================================

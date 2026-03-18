@@ -18,6 +18,8 @@
 
 #include "AxEngine/AxNode.h"
 #include "AxEngine/AxMathTypes.h"
+#include <concepts>
+#include <string>
 
 //=============================================================================
 // Primary template — scalars, strings, enums
@@ -35,6 +37,11 @@ public:
   // Read -- implicit conversion, zero overhead (inlines to value read)
   operator const T&() const { return (Value_); }
   const T& Get() const { return (Value_); }
+
+  // String convenience — avoids .Get().c_str() / .Get().empty() chains
+  const char* c_str() const requires std::same_as<T, std::string> { return (Value_.c_str()); }
+  bool empty() const requires std::same_as<T, std::string> { return (Value_.empty()); }
+  size_t size() const requires std::same_as<T, std::string> { return (Value_.size()); }
 
   // Write -- marks owner dirty
   Property& operator=(const T& V)

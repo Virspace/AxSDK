@@ -529,7 +529,7 @@ void AxEngine::LoadSceneModels(SceneTree* Scene)
 
     for (uint32_t i = 0; i < Count; ++i) {
         MeshInstance* MI = static_cast<MeshInstance*>(MeshNodes[i]);
-        if (!MI || MI->MeshPath.Get().empty()) {
+        if (!MI || MI->MeshPath.empty()) {
             continue;
         }
 
@@ -537,13 +537,13 @@ void AxEngine::LoadSceneModels(SceneTree* Scene)
             continue;
         }
 
-        AxModelHandle Handle = ResourceAPI_->LoadModel(MI->MeshPath.Get().c_str());
+        AxModelHandle Handle = ResourceAPI_->LoadModel(MI->MeshPath.c_str());
         if (AX_HANDLE_IS_VALID(Handle)) {
             MI->ModelHandle = Handle;
             AX_LOG(DEBUG, "Loaded model '%s' -> [%u:%u]",
-                   MI->MeshPath.Get().c_str(), Handle.Index, Handle.Generation);
+                   MI->MeshPath.c_str(), Handle.Index, Handle.Generation);
         } else {
-            AX_LOG(ERROR, "Failed to load model '%s'", MI->MeshPath.Get().c_str());
+            AX_LOG(ERROR, "Failed to load model '%s'", MI->MeshPath.c_str());
         }
     }
 }
