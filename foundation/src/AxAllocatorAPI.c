@@ -815,6 +815,19 @@ static struct AxAllocator* CreateStack(const char* Name, size_t Capacity)
 // Registry Functions
 //=============================================================================
 
+void AxonResetAllocatorRegistry(void)
+{
+    if (AllocatorTable) {
+        HashTableAPI->DestroyTable(AllocatorTable);
+        AllocatorTable = NULL;
+    }
+
+    free(AllocatorList);
+    AllocatorList = NULL;
+    AllocatorListCount = 0;
+    AllocatorListCapacity = 0;
+}
+
 static size_t GetCount(void)
 {
     return (AllocatorListCount);

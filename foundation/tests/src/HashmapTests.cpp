@@ -15,7 +15,6 @@ class HashMapTest : public testing::Test
         void TearDown()
         {
             HashTableAPI->DestroyTable(Table);
-            free(Table);
         }
 };
 

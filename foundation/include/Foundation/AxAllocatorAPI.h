@@ -91,6 +91,9 @@ struct AxAllocatorAPI
 
 #if defined(AXON_LINKS_FOUNDATION)
 extern struct AxAllocatorAPI* AllocatorAPI;
+
+/** Resets internal allocator registry state. Called by AxonTermGlobalAPIRegistry. */
+void AxonResetAllocatorRegistry(void);
 #endif
 
 #ifdef __cplusplus

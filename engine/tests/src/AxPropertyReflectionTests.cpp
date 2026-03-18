@@ -293,12 +293,11 @@ static const PropDescriptor TestDescs[] = {
 TEST(PropertyRegistryTest, Register_GetProperties_ReturnsDescriptors)
 {
   PropertyRegistry& Reg = PropertyRegistry::Get();
-  // Use a NodeType that won't conflict with real registrations
-  // NodeType::Node3D is unlikely to have real properties registered
-  Reg.Register(NodeType::Node3D, TestDescs, 2);
+  // Use NodeType::Base which has no real property registrations
+  Reg.Register(NodeType::Base, TestDescs, 2);
 
   uint32_t Count = 0;
-  const PropDescriptor* Props = Reg.GetProperties(NodeType::Node3D, &Count);
+  const PropDescriptor* Props = Reg.GetProperties(NodeType::Base, &Count);
   ASSERT_NE(Props, nullptr);
   EXPECT_EQ(Count, 2u);
   EXPECT_STREQ(Props[0].Name, "alpha");
@@ -317,9 +316,9 @@ TEST(PropertyRegistryTest, GetProperties_UnregisteredType_ReturnsNull)
 TEST(PropertyRegistryTest, FindProperty_ByName)
 {
   PropertyRegistry& Reg = PropertyRegistry::Get();
-  Reg.Register(NodeType::Node3D, TestDescs, 2);
+  Reg.Register(NodeType::Base, TestDescs, 2);
 
-  const PropDescriptor* Found = Reg.FindProperty(NodeType::Node3D, "beta");
+  const PropDescriptor* Found = Reg.FindProperty(NodeType::Base, "beta");
   ASSERT_NE(Found, nullptr);
   EXPECT_STREQ(Found->Name, "beta");
   EXPECT_EQ(Found->Type, PropType::Int32);
@@ -328,9 +327,9 @@ TEST(PropertyRegistryTest, FindProperty_ByName)
 TEST(PropertyRegistryTest, FindProperty_Unknown_ReturnsNull)
 {
   PropertyRegistry& Reg = PropertyRegistry::Get();
-  Reg.Register(NodeType::Node3D, TestDescs, 2);
+  Reg.Register(NodeType::Base, TestDescs, 2);
 
-  const PropDescriptor* Found = Reg.FindProperty(NodeType::Node3D, "nonexistent");
+  const PropDescriptor* Found = Reg.FindProperty(NodeType::Base, "nonexistent");
   EXPECT_EQ(Found, nullptr);
 }
 

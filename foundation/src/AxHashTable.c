@@ -130,11 +130,9 @@ static void DestroyTable(AxHashTable *Table)
         }
     }
 
-    // Free the array
+    // Free the entries array and the table itself
     free(Table->Entries);
-
-    // Reinitialize table
-    CreateTable(Table);
+    free(Table);
 }
 
 static bool HashTableExpand(AxHashTable *Table, size_t Capacity)
@@ -143,7 +141,7 @@ static bool HashTableExpand(AxHashTable *Table, size_t Capacity)
     HashEntry* Entries = calloc(Capacity, sizeof(HashEntry));
 
     // Initialize keys to NULL and values to unused
-    for (size_t i = 0; i < Table->Capacity; i++)
+    for (size_t i = 0; i < Capacity; i++)
     {
         Entries[i].Key = NULL;
         Entries[i].Value = (void *)AXON_HASH_UNUSED;
@@ -159,9 +157,9 @@ static bool HashTableExpand(AxHashTable *Table, size_t Capacity)
             continue;
         }
 
-        // Insert old entry into new array
+        // Move old entry into new array (transfer key ownership)
         HashEntry *NewEntry = FindEntry(Entries, Capacity, Entry->Key);
-        NewEntry->Key = strdup(Entry->Key);
+        NewEntry->Key = Entry->Key;
         NewEntry->Value = Entry->Value;
         Table->Size++;
     }

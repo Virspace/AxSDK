@@ -59,8 +59,15 @@ void AxonInitGlobalAPIRegistry()
 
 void AxonTermGlobalAPIRegistry()
 {
+    // Reset allocator registry before destroying the API map
+    AxonResetAllocatorRegistry();
+
     HashTableAPI->DestroyTable(APIMap);
+    APIMap = NULL;
+
     free(APIMemory);
+    APIMemory = NULL;
+    APIMemoryOffset = 0;
 }
 
 void AxonRegisterAllFoundationAPIs(struct AxAPIRegistry *APIRegistry)
