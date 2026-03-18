@@ -6,7 +6,7 @@
  * Nodes are lightweight scene tree elements with transforms, names, and ordered
  * children. They follow the Parent/FirstChild/NextSibling hierarchy pattern
  * as proper C++ classes. Typed node subclasses carry their data directly
- * (e.g. MeshInstance holds mesh path and model handle, CameraNode holds AxCamera).
+ * (e.g. MeshInstance holds mesh path and model handle, CameraNode holds FOV and clip planes).
  *
  * This is engine-level code (C++). Foundation types (AxTransform, AxHashTable,
  * AxAllocator) are C11 structs used here but not modified.
@@ -254,6 +254,11 @@ public:
   bool IsInitialized() const { return (IsInitialized_); }
   bool IsActive() const { return (IsActive_); }
 
+  // Property dirty tracking -- set by Property<T>::operator=
+  void MarkDirty() { PropertiesDirty_ = true; }
+  bool IsPropertiesDirty() const { return (PropertiesDirty_); }
+  void ClearPropertiesDirty() { PropertiesDirty_ = false; }
+
   /**
    * Set the active state of this node.
    * Fires OnDisable on the script when transitioning to inactive (if initialized).
@@ -306,6 +311,7 @@ protected:
   // Flags
   bool IsInitialized_;
   bool IsActive_;
+  bool PropertiesDirty_;
 
 private:
   // Signal storage

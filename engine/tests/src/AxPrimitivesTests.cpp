@@ -381,7 +381,7 @@ TEST_F(PrimitivesParserTest, PrimitiveBoxSyntaxParsesCorrectly)
 
     MeshInstance* MI = static_cast<MeshInstance*>(FloorNode);
     // MeshPath should be empty (primitive, not file-based)
-    EXPECT_TRUE(MI->GetMeshPath().empty());
+    EXPECT_TRUE(MI->MeshPath.Get().empty());
 
     delete Tree;
 }
@@ -400,7 +400,7 @@ TEST_F(PrimitivesParserTest, PrimitiveSphereEmptyParamsUsesDefaults)
     EXPECT_EQ(BallNode->GetType(), NodeType::MeshInstance);
 
     MeshInstance* MI = static_cast<MeshInstance*>(BallNode);
-    EXPECT_TRUE(MI->GetMeshPath().empty());
+    EXPECT_TRUE(MI->MeshPath.Get().empty());
 
     delete Tree;
 }
@@ -419,7 +419,7 @@ TEST_F(PrimitivesParserTest, PrimitivePlaneReadsFloatParams)
     EXPECT_EQ(GroundNode->GetType(), NodeType::MeshInstance);
 
     MeshInstance* MI = static_cast<MeshInstance*>(GroundNode);
-    EXPECT_TRUE(MI->GetMeshPath().empty());
+    EXPECT_TRUE(MI->MeshPath.Get().empty());
 
     delete Tree;
 }
@@ -438,7 +438,7 @@ TEST_F(PrimitivesParserTest, PrimitiveCylinderMixedParams)
     EXPECT_EQ(PillarNode->GetType(), NodeType::MeshInstance);
 
     MeshInstance* MI = static_cast<MeshInstance*>(PillarNode);
-    EXPECT_TRUE(MI->GetMeshPath().empty());
+    EXPECT_TRUE(MI->MeshPath.Get().empty());
 
     delete Tree;
 }
@@ -457,7 +457,7 @@ TEST_F(PrimitivesParserTest, PrimitiveCapsuleProducesValidNode)
     EXPECT_EQ(CapsuleNode->GetType(), NodeType::MeshInstance);
 
     MeshInstance* MI = static_cast<MeshInstance*>(CapsuleNode);
-    EXPECT_TRUE(MI->GetMeshPath().empty());
+    EXPECT_TRUE(MI->MeshPath.Get().empty());
 
     delete Tree;
 }
@@ -479,7 +479,7 @@ TEST_F(PrimitivesParserTest, ExistingMeshPathSyntaxStillWorks)
     EXPECT_EQ(ModelNode->GetType(), NodeType::MeshInstance);
 
     MeshInstance* MI = static_cast<MeshInstance*>(ModelNode);
-    EXPECT_EQ(MI->GetMeshPath(), "models/scene.glb");
+    EXPECT_TRUE(MI->MeshPath == "models/scene.glb");
 
     delete Tree;
 }
@@ -511,17 +511,17 @@ TEST_F(PrimitivesParserTest, MixedPrimitivesAndFileMeshes)
     // Verify Sponza has a mesh path
     Node* Sponza = Tree->GetRootNode()->GetFirstChild();
     ASSERT_NE(Sponza, nullptr);
-    EXPECT_EQ(static_cast<MeshInstance*>(Sponza)->GetMeshPath(), "models/atrium.glb");
+    EXPECT_TRUE(static_cast<MeshInstance*>(Sponza)->MeshPath == "models/atrium.glb");
 
     // Verify GroundPlane has empty mesh path (primitive)
     Node* Ground = Sponza->GetNextSibling();
     ASSERT_NE(Ground, nullptr);
-    EXPECT_TRUE(static_cast<MeshInstance*>(Ground)->GetMeshPath().empty());
+    EXPECT_TRUE(static_cast<MeshInstance*>(Ground)->MeshPath.Get().empty());
 
     // Verify Marker has empty mesh path (primitive)
     Node* Marker = Ground->GetNextSibling();
     ASSERT_NE(Marker, nullptr);
-    EXPECT_TRUE(static_cast<MeshInstance*>(Marker)->GetMeshPath().empty());
+    EXPECT_TRUE(static_cast<MeshInstance*>(Marker)->MeshPath.Get().empty());
 
     delete Tree;
 }

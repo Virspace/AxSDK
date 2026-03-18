@@ -446,7 +446,7 @@ TEST_F(SnapshotRestoreTest, SnapshotCapturesSceneState)
   NodeA->SetPosition({10.0f, 20.0f, 30.0f});
 
   Node* Light = Tree->CreateNode("TestLight", NodeType::Light, nullptr);
-  static_cast<LightNode*>(Light)->SetIntensity(2.5f);
+  static_cast<LightNode*>(Light)->Intensity = 2.5f;
   Light->SetPosition({5.0f, 5.0f, 5.0f});
 
   // Take a snapshot (serialize to string)
@@ -471,7 +471,7 @@ TEST_F(SnapshotRestoreTest, RestoreReturnsSceneToPrePlayState)
   NodeA->SetPosition({10.0f, 20.0f, 30.0f});
 
   Node* Cam = Original->CreateNode("TestCam", NodeType::Camera, nullptr);
-  static_cast<CameraNode*>(Cam)->SetFOV(60.0f);
+  static_cast<CameraNode*>(Cam)->FieldOfView = 60.0f;
   Cam->SetPosition({0.0f, 5.0f, 10.0f});
 
   // Take a snapshot
@@ -505,7 +505,7 @@ TEST_F(SnapshotRestoreTest, RestoreReturnsSceneToPrePlayState)
   ASSERT_NE(RestoredCam, nullptr);
   EXPECT_EQ(RestoredCam->GetType(), NodeType::Camera);
   CameraNode* RestoredCN = static_cast<CameraNode*>(RestoredCam);
-  EXPECT_NEAR(RestoredCN->GetFOV(), 60.0f, 0.01f);
+  EXPECT_NEAR(RestoredCN->FieldOfView, 60.0f, 0.01f);
 
   delete Restored;
 }
@@ -569,7 +569,7 @@ TEST_F(SnapshotRestoreTest, SnapshotPreservesHierarchy)
   Node* Child  = Original->CreateNode("Child",  NodeType::MeshInstance, Parent);
   Parent->SetPosition({10.0f, 0.0f, 0.0f});
   Child->SetPosition({0.0f, 5.0f, 0.0f});
-  static_cast<MeshInstance*>(Child)->SetMeshPath("models/test.glb");
+  static_cast<MeshInstance*>(Child)->MeshPath = "models/test.glb";
 
   // Snapshot
   std::string Snapshot = Parser_.SaveSceneToString(Original);
@@ -597,7 +597,7 @@ TEST_F(SnapshotRestoreTest, SnapshotPreservesHierarchy)
 
   // Verify typed node data preserved
   EXPECT_EQ(RestoredChild->GetType(), NodeType::MeshInstance);
-  EXPECT_EQ(static_cast<MeshInstance*>(RestoredChild)->GetMeshPath(), "models/test.glb");
+  EXPECT_TRUE(static_cast<MeshInstance*>(RestoredChild)->MeshPath == "models/test.glb");
 
   delete Restored;
 }
@@ -670,15 +670,15 @@ TEST_F(SceneSerializationTest, SaveSceneWithLightNode)
   ASSERT_NE(Light, nullptr);
 
   LightNode* LN = static_cast<LightNode*>(Light);
-  LN->SetLightType(AX_LIGHT_TYPE_POINT);
-  LN->SetColor({1.0f, 0.8f, 0.6f});
-  LN->SetIntensity(2.5f);
-  LN->Light.Range = 100.0f;
+  LN->LightType = AX_LIGHT_TYPE_SPOT;  // non-default to ensure serialized
+  LN->Color = Vec3(1.0f, 0.8f, 0.6f);
+  LN->Intensity = 2.5f;
+  LN->Range = 100.0f;
   Light->SetPosition({10.0f, 20.0f, 30.0f});
 
   std::string Output = Parser_.SaveSceneToString(Tree);
   EXPECT_NE(Output.find("node \"TestLight\" Light"), std::string::npos);
-  EXPECT_NE(Output.find("type: point"), std::string::npos);
+  EXPECT_NE(Output.find("type: spot"), std::string::npos);
   EXPECT_NE(Output.find("intensity:"), std::string::npos);
   EXPECT_NE(Output.find("range:"), std::string::npos);
 
@@ -694,9 +694,9 @@ TEST_F(SceneSerializationTest, SaveSceneWithCameraNode)
   ASSERT_NE(Cam, nullptr);
 
   CameraNode* CN = static_cast<CameraNode*>(Cam);
-  CN->SetFOV(75.0f);
-  CN->SetNear(0.5f);
-  CN->SetFar(500.0f);
+  CN->FieldOfView = 75.0f;
+  CN->NearClipPlane = 0.5f;
+  CN->FarClipPlane = 500.0f;
   Cam->SetPosition({1.0f, 2.0f, 3.0f});
 
   std::string Output = Parser_.SaveSceneToString(Tree);
@@ -717,8 +717,8 @@ TEST_F(SceneSerializationTest, SaveSceneWithMeshInstance)
   ASSERT_NE(Mesh, nullptr);
 
   MeshInstance* MI = static_cast<MeshInstance*>(Mesh);
-  MI->SetMeshPath("models/test.glb");
-  MI->SetMaterialName("TestMaterial");
+  MI->MeshPath = "models/test.glb";
+  MI->MaterialName = "TestMaterial";
   Mesh->SetPosition({5.0f, 0.0f, -3.0f});
 
   std::string Output = Parser_.SaveSceneToString(Tree);
@@ -759,10 +759,10 @@ TEST_F(SceneSerializationTest, RoundTripLightNode)
 
   Node* Light = Original->CreateNode("MainLight", NodeType::Light, nullptr);
   LightNode* LN = static_cast<LightNode*>(Light);
-  LN->SetLightType(AX_LIGHT_TYPE_POINT);
-  LN->SetColor({1.0f, 0.8f, 0.6f});
-  LN->SetIntensity(1.5f);
-  LN->Light.Range = 150.0f;
+  LN->LightType = AX_LIGHT_TYPE_POINT;
+  LN->Color = Vec3(1.0f, 0.8f, 0.6f);
+  LN->Intensity = 1.5f;
+  LN->Range = 150.0f;
   Light->SetPosition({50.0f, 80.0f, 30.0f});
 
   // Serialize to string
@@ -782,12 +782,12 @@ TEST_F(SceneSerializationTest, RoundTripLightNode)
   EXPECT_EQ(RestoredLight->GetType(), NodeType::Light);
 
   LightNode* RestoredLN = static_cast<LightNode*>(RestoredLight);
-  EXPECT_EQ(RestoredLN->GetLightType(), AX_LIGHT_TYPE_POINT);
-  EXPECT_NEAR(RestoredLN->Light.Color.X, 1.0f, 0.01f);
-  EXPECT_NEAR(RestoredLN->Light.Color.Y, 0.8f, 0.01f);
-  EXPECT_NEAR(RestoredLN->Light.Color.Z, 0.6f, 0.01f);
-  EXPECT_NEAR(RestoredLN->GetIntensity(), 1.5f, 0.01f);
-  EXPECT_NEAR(RestoredLN->Light.Range, 150.0f, 0.01f);
+  EXPECT_TRUE(RestoredLN->LightType == AX_LIGHT_TYPE_POINT);
+  EXPECT_NEAR(RestoredLN->Color.X, 1.0f, 0.01f);
+  EXPECT_NEAR(RestoredLN->Color.Y, 0.8f, 0.01f);
+  EXPECT_NEAR(RestoredLN->Color.Z, 0.6f, 0.01f);
+  EXPECT_NEAR(RestoredLN->Intensity, 1.5f, 0.01f);
+  EXPECT_NEAR(RestoredLN->Range, 150.0f, 0.01f);
 
   // Verify transform
   const Transform& T = RestoredLight->GetTransform();
@@ -806,9 +806,9 @@ TEST_F(SceneSerializationTest, RoundTripCameraNode)
 
   Node* Cam = Original->CreateNode("TestCam", NodeType::Camera, nullptr);
   CameraNode* CN = static_cast<CameraNode*>(Cam);
-  CN->SetFOV(75.0f);
-  CN->SetNear(0.5f);
-  CN->SetFar(500.0f);
+  CN->FieldOfView = 75.0f;
+  CN->NearClipPlane = 0.5f;
+  CN->FarClipPlane = 500.0f;
   Cam->SetPosition({1.0f, 2.0f, 3.0f});
   Cam->SetRotation({-0.1f, 0.0f, 0.0f, 0.995f});
 
@@ -823,9 +823,9 @@ TEST_F(SceneSerializationTest, RoundTripCameraNode)
   EXPECT_EQ(RestoredCam->GetType(), NodeType::Camera);
 
   CameraNode* RestoredCN = static_cast<CameraNode*>(RestoredCam);
-  EXPECT_NEAR(RestoredCN->GetFOV(), 75.0f, 0.01f);
-  EXPECT_NEAR(RestoredCN->GetNear(), 0.5f, 0.01f);
-  EXPECT_NEAR(RestoredCN->GetFar(), 500.0f, 0.01f);
+  EXPECT_NEAR(RestoredCN->FieldOfView, 75.0f, 0.01f);
+  EXPECT_NEAR(RestoredCN->NearClipPlane, 0.5f, 0.01f);
+  EXPECT_NEAR(RestoredCN->FarClipPlane, 500.0f, 0.01f);
 
   const Transform& T = RestoredCam->GetTransform();
   EXPECT_NEAR(T.Translation.X, 1.0f, 0.01f);
@@ -845,8 +845,8 @@ TEST_F(SceneSerializationTest, RoundTripMeshInstance)
 
   Node* Mesh = Original->CreateNode("Sponza", NodeType::MeshInstance, nullptr);
   MeshInstance* MI = static_cast<MeshInstance*>(Mesh);
-  MI->SetMeshPath("models/sponza.glb");
-  MI->SetMaterialName("DefaultMat");
+  MI->MeshPath = "models/sponza.glb";
+  MI->MaterialName = "DefaultMat";
   Mesh->SetPosition({0.0f, 0.0f, 0.0f});
   Mesh->SetScale({2.0f, 2.0f, 2.0f});
 
@@ -861,8 +861,8 @@ TEST_F(SceneSerializationTest, RoundTripMeshInstance)
   EXPECT_EQ(RestoredMesh->GetType(), NodeType::MeshInstance);
 
   MeshInstance* RestoredMI = static_cast<MeshInstance*>(RestoredMesh);
-  EXPECT_EQ(RestoredMI->GetMeshPath(), "models/sponza.glb");
-  EXPECT_EQ(RestoredMI->GetMaterialName(), "DefaultMat");
+  EXPECT_TRUE(RestoredMI->MeshPath == "models/sponza.glb");
+  EXPECT_TRUE(RestoredMI->MaterialName == "DefaultMat");
 
   const Transform& T = RestoredMesh->GetTransform();
   EXPECT_NEAR(T.Scale.X, 2.0f, 0.01f);
@@ -887,8 +887,8 @@ TEST_F(SceneSerializationTest, RoundTripHierarchy)
   ChildB->SetPosition({0.0f, 0.0f, 3.0f});
 
   LightNode* LN = static_cast<LightNode*>(ChildB);
-  LN->SetLightType(AX_LIGHT_TYPE_DIRECTIONAL);
-  LN->SetIntensity(0.7f);
+  LN->LightType = AX_LIGHT_TYPE_DIRECTIONAL;
+  LN->Intensity = 0.7f;
 
   std::string Serialized = Parser_.SaveSceneToString(Original);
   ASSERT_FALSE(Serialized.empty());
@@ -910,8 +910,8 @@ TEST_F(SceneSerializationTest, RoundTripHierarchy)
   EXPECT_EQ(RestoredChildB->GetType(), NodeType::Light);
 
   LightNode* RestoredLN = static_cast<LightNode*>(RestoredChildB);
-  EXPECT_EQ(RestoredLN->GetLightType(), AX_LIGHT_TYPE_DIRECTIONAL);
-  EXPECT_NEAR(RestoredLN->GetIntensity(), 0.7f, 0.01f);
+  EXPECT_TRUE(RestoredLN->LightType == AX_LIGHT_TYPE_DIRECTIONAL);
+  EXPECT_NEAR(RestoredLN->Intensity, 0.7f, 0.01f);
 
   // Verify positions
   const Transform& PT = RestoredParent->GetTransform();
@@ -934,15 +934,15 @@ TEST_F(SceneSerializationTest, RoundTripMultipleNodeTypes)
   Original->Name = "MultiTypeScene";
 
   Node* Light = Original->CreateNode("Light1", NodeType::Light, nullptr);
-  static_cast<LightNode*>(Light)->SetIntensity(2.0f);
+  static_cast<LightNode*>(Light)->Intensity = 2.0f;
   Light->SetPosition({0.0f, 10.0f, 0.0f});
 
   Node* Cam = Original->CreateNode("Cam1", NodeType::Camera, nullptr);
-  static_cast<CameraNode*>(Cam)->SetFOV(90.0f);
+  static_cast<CameraNode*>(Cam)->FieldOfView = 90.0f;
   Cam->SetPosition({5.0f, 1.7f, 0.0f});
 
   Node* Mesh = Original->CreateNode("Floor", NodeType::MeshInstance, nullptr);
-  static_cast<MeshInstance*>(Mesh)->SetMeshPath("models/floor.glb");
+  static_cast<MeshInstance*>(Mesh)->MeshPath = "models/floor.glb";
 
   std::string Serialized = Parser_.SaveSceneToString(Original);
   ASSERT_FALSE(Serialized.empty());

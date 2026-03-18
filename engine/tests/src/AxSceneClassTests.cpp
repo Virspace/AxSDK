@@ -292,19 +292,19 @@ TEST_F(SceneTreeClassTest, SceneTreeStoresLightsAndCamerasViaTypedNodes)
   Node* SunNode = Tree->CreateNode("Sun", NodeType::Light, nullptr);
   ASSERT_NE(SunNode, nullptr);
   LightNode* Sun = static_cast<LightNode*>(SunNode);
-  Sun->SetLightType(AX_LIGHT_TYPE_DIRECTIONAL);
-  Sun->SetIntensity(2.5f);
-  Sun->SetColor({1.0f, 0.95f, 0.8f});
+  Sun->LightType = AX_LIGHT_TYPE_DIRECTIONAL;
+  Sun->Intensity = 2.5f;
+  Sun->Color = Vec3(1.0f, 0.95f, 0.8f);
 
-  EXPECT_EQ(Sun->GetLightType(), AX_LIGHT_TYPE_DIRECTIONAL);
-  EXPECT_FLOAT_EQ(Sun->GetIntensity(), 2.5f);
+  EXPECT_TRUE(Sun->LightType == AX_LIGHT_TYPE_DIRECTIONAL);
+  EXPECT_FLOAT_EQ(Sun->Intensity, 2.5f);
 
   // Create a point light via LightNode
   Node* LampNode = Tree->CreateNode("Lamp", NodeType::Light, nullptr);
   ASSERT_NE(LampNode, nullptr);
   LightNode* Lamp = static_cast<LightNode*>(LampNode);
-  Lamp->SetLightType(AX_LIGHT_TYPE_POINT);
-  Lamp->SetIntensity(0.8f);
+  Lamp->LightType = AX_LIGHT_TYPE_POINT;
+  Lamp->Intensity = 0.8f;
 
   // Verify lights are tracked
   Node** Lights = Tree->GetNodesByType(NodeType::Light, &LightCount);
@@ -323,9 +323,9 @@ TEST_F(SceneTreeClassTest, SceneTreeStoresLightsAndCamerasViaTypedNodes)
   Node* CamNode = Tree->CreateNode("MainCamera", NodeType::Camera, nullptr);
   ASSERT_NE(CamNode, nullptr);
   CameraNode* Cam = static_cast<CameraNode*>(CamNode);
-  Cam->SetFOV(75.0f);
-  Cam->SetNear(0.1f);
-  Cam->SetFar(500.0f);
+  Cam->FieldOfView = 75.0f;
+  Cam->NearClipPlane = 0.1f;
+  Cam->FarClipPlane = 500.0f;
 
   // Set camera transform via the node's transform
   Cam->GetTransform().Translation = Vec3(0.0f, 5.0f, -10.0f);
@@ -336,7 +336,7 @@ TEST_F(SceneTreeClassTest, SceneTreeStoresLightsAndCamerasViaTypedNodes)
   EXPECT_EQ(CameraCount, 1u);
 
   CameraNode* RetrievedCam = static_cast<CameraNode*>(Cameras[0]);
-  EXPECT_FLOAT_EQ(RetrievedCam->GetFOV(), 75.0f);
+  EXPECT_FLOAT_EQ(RetrievedCam->FieldOfView, 75.0f);
   EXPECT_FLOAT_EQ(RetrievedCam->GetTransform().Translation.Y, 5.0f);
 
   delete Tree;
@@ -367,10 +367,10 @@ TEST_F(SceneTreeClassTest, GetNodesByTypeFindsMeshInstanceReferences)
 
   // Set mesh paths on the MeshInstance nodes
   MeshInstance* MIA = static_cast<MeshInstance*>(MeshNodeA);
-  MIA->SetMeshPath("models/cube.gltf");
+  MIA->MeshPath = "models/cube.gltf";
 
   MeshInstance* MIB = static_cast<MeshInstance*>(MeshNodeB);
-  MIB->SetMeshPath("models/sphere.gltf");
+  MIB->MeshPath = "models/sphere.gltf";
 
   // Iterate all MeshInstance nodes by type
   uint32_t Count = 0;
@@ -381,8 +381,8 @@ TEST_F(SceneTreeClassTest, GetNodesByTypeFindsMeshInstanceReferences)
   // Verify we can read MeshPath from the typed nodes (resource loading approach)
   MeshInstance* MI0 = static_cast<MeshInstance*>(MeshNodes[0]);
   MeshInstance* MI1 = static_cast<MeshInstance*>(MeshNodes[1]);
-  EXPECT_EQ(MI0->GetMeshPath(), "models/cube.gltf");
-  EXPECT_EQ(MI1->GetMeshPath(), "models/sphere.gltf");
+  EXPECT_TRUE(MI0->MeshPath == "models/cube.gltf");
+  EXPECT_TRUE(MI1->MeshPath == "models/sphere.gltf");
 
   // Verify the empty node is not in the MeshInstance list
   EXPECT_EQ(EmptyNode->GetType(), NodeType::Node3D);
@@ -403,16 +403,16 @@ TEST_F(SceneTreeClassTest, LightsAndCamerasAccessibleViaGetNodesByType)
   Node* SunNode = Tree->CreateNode("Sun", NodeType::Light, nullptr);
   ASSERT_NE(SunNode, nullptr);
   LightNode* Sun = static_cast<LightNode*>(SunNode);
-  Sun->SetLightType(AX_LIGHT_TYPE_DIRECTIONAL);
-  Sun->SetColor({1.0f, 0.95f, 0.8f});
-  Sun->SetIntensity(2.5f);
+  Sun->LightType = AX_LIGHT_TYPE_DIRECTIONAL;
+  Sun->Color = Vec3(1.0f, 0.95f, 0.8f);
+  Sun->Intensity = 2.5f;
 
   Node* FillNode = Tree->CreateNode("Fill", NodeType::Light, nullptr);
   ASSERT_NE(FillNode, nullptr);
   LightNode* Fill = static_cast<LightNode*>(FillNode);
-  Fill->SetLightType(AX_LIGHT_TYPE_POINT);
-  Fill->SetColor({0.3f, 0.3f, 0.5f});
-  Fill->SetIntensity(0.8f);
+  Fill->LightType = AX_LIGHT_TYPE_POINT;
+  Fill->Color = Vec3(0.3f, 0.3f, 0.5f);
+  Fill->Intensity = 0.8f;
 
   // Verify lights are accessible via GetNodesByType (renderer reads these)
   uint32_t LightCount = 0;
@@ -422,8 +422,8 @@ TEST_F(SceneTreeClassTest, LightsAndCamerasAccessibleViaGetNodesByType)
 
   LightNode* L0 = static_cast<LightNode*>(Lights[0]);
   LightNode* L1 = static_cast<LightNode*>(Lights[1]);
-  EXPECT_FLOAT_EQ(L0->GetIntensity(), 2.5f);
-  EXPECT_FLOAT_EQ(L1->GetIntensity(), 0.8f);
+  EXPECT_FLOAT_EQ(L0->Intensity, 2.5f);
+  EXPECT_FLOAT_EQ(L1->Intensity, 0.8f);
   EXPECT_EQ(L0->GetName(), "Sun");
   EXPECT_EQ(L1->GetName(), "Fill");
 
@@ -431,9 +431,9 @@ TEST_F(SceneTreeClassTest, LightsAndCamerasAccessibleViaGetNodesByType)
   Node* CamNode = Tree->CreateNode("MainCamera", NodeType::Camera, nullptr);
   ASSERT_NE(CamNode, nullptr);
   CameraNode* Cam = static_cast<CameraNode*>(CamNode);
-  Cam->SetFOV(60.0f);
-  Cam->SetNear(0.1f);
-  Cam->SetFar(200.0f);
+  Cam->FieldOfView = 60.0f;
+  Cam->NearClipPlane = 0.1f;
+  Cam->FarClipPlane = 200.0f;
   Cam->GetTransform().Translation = Vec3(0.0f, 2.0f, 5.0f);
 
   // Verify cameras are accessible
@@ -443,9 +443,9 @@ TEST_F(SceneTreeClassTest, LightsAndCamerasAccessibleViaGetNodesByType)
   EXPECT_EQ(CameraCount, 1u);
 
   CameraNode* RetrievedCam = static_cast<CameraNode*>(Cameras[0]);
-  EXPECT_FLOAT_EQ(RetrievedCam->GetFOV(), 60.0f);
-  EXPECT_FLOAT_EQ(RetrievedCam->GetNear(), 0.1f);
-  EXPECT_FLOAT_EQ(RetrievedCam->GetFar(), 200.0f);
+  EXPECT_FLOAT_EQ(RetrievedCam->FieldOfView, 60.0f);
+  EXPECT_FLOAT_EQ(RetrievedCam->NearClipPlane, 0.1f);
+  EXPECT_FLOAT_EQ(RetrievedCam->FarClipPlane, 200.0f);
   EXPECT_FLOAT_EQ(RetrievedCam->GetTransform().Translation.X, 0.0f);
   EXPECT_FLOAT_EQ(RetrievedCam->GetTransform().Translation.Y, 2.0f);
   EXPECT_FLOAT_EQ(RetrievedCam->GetTransform().Translation.Z, 5.0f);

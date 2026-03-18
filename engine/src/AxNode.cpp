@@ -33,6 +33,7 @@ Node::Node(std::string_view Name, NodeType Type, AxHashTableAPI* TableAPI)
   , Script_(nullptr)
   , IsInitialized_(false)
   , IsActive_(true)
+  , PropertiesDirty_(false)
   , OwningTree_(nullptr)
   , InDirtyList_(false)
 {

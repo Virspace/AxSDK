@@ -4,14 +4,19 @@
  * AxTypedNodes.h - Typed Node Subclasses
  *
  * Specialized node types that inherit from Node3D or Node2D and carry
- * their data directly. Type dispatch uses the NodeType enum via GetType():
+ * their data directly via Property<T> wrappers. Serializable fields use
+ * Property<T> for automatic dirty marking and type safety. Runtime-only
+ * fields (handles, computed state) remain plain members.
  *
+ * Type dispatch uses the NodeType enum via GetType():
  *   if (node->GetType() == NodeType::MeshInstance) {
  *       MeshInstance* MI = static_cast<MeshInstance*>(node);
  *   }
  */
 
 #include "AxEngine/AxNode.h"
+#include "AxEngine/AxProperty.h"
+#include "AxEngine/AxMathTypes.h"
 #include "AxOpenGL/AxOpenGLTypes.h"
 #include "Foundation/AxTypes.h"
 #include "Foundation/AxMath.h"
@@ -20,6 +25,7 @@
 
 #include <cstring>
 #include <cstdint>
+#include <string>
 
 // Required for MeshInstance::SetPrimitiveMesh
 #include "AxEngine/AxPrimitives.h"
@@ -56,106 +62,124 @@ enum class ShapeType : uint32_t
 /**
  * MeshInstance - Node that holds a mesh asset reference and material binding.
  *
- * Holds a path to the mesh file, a runtime model handle, material name,
- * and render layer.
+ * Serializable: MeshPath, MaterialName, RenderLayer
+ * Runtime-only: ModelHandle, MaterialHandle
  */
 class MeshInstance : public Node3D
 {
 public:
   static constexpr NodeType StaticType = NodeType::MeshInstance;
 
-  AxModelHandle ModelHandle;
-  uint32_t MaterialHandle;
-  int32_t RenderLayer;
+  // Serializable properties
+  Property<std::string> MeshPath;
+  Property<std::string> MaterialName;
+  Property<int32_t> RenderLayer;
+
+  // Runtime state
+  AxModelHandle ModelHandle = {0, 0};
+  uint32_t MaterialHandle = 0;
 
   MeshInstance(std::string_view Name, AxHashTableAPI* TableAPI);
 
-  std::string_view GetMeshPath() const { return (MeshPath_); }
-  void SetMeshPath(std::string_view Path) { MeshPath_ = Path; }
-
-  std::string_view GetMaterialName() const { return (MaterialName_); }
-  void SetMaterialName(std::string_view MatName) { MaterialName_ = MatName; }
-
   /** Assign a primitive mesh, clearing MeshPath. */
-  void SetPrimitiveMesh(PrimitiveMesh& Mesh)  { ModelHandle = Mesh.CreateModel(); MeshPath_.clear(); }
+  void SetPrimitiveMesh(PrimitiveMesh& Mesh)  { ModelHandle = Mesh.CreateModel(); MeshPath = ""; }
   void SetPrimitiveMesh(PrimitiveMesh&& Mesh) { SetPrimitiveMesh(Mesh); }
-
-private:
-  std::string MeshPath_;
-  std::string MaterialName_;
 };
 
 /**
- * CameraNode - Node that wraps AxCamera for camera control.
+ * CameraNode - Camera with perspective/orthographic projection.
  *
- * Exposes FOV, near/far clip planes, and projection mode through
- * the underlying AxCamera struct.
+ * Serializable: FieldOfView, NearClipPlane, FarClipPlane, Projection
+ * Runtime-only: AspectRatio, ZoomLevel (renderer sets these)
  */
 class CameraNode : public Node3D
 {
 public:
   static constexpr NodeType StaticType = NodeType::Camera;
 
-  AxCamera Camera;
+  // Serializable properties
+  Property<float> FieldOfView;
+  Property<float> NearClipPlane;
+  Property<float> FarClipPlane;
+  Property<int32_t> Projection;  // 0=perspective, 1=orthographic
+
+  // Runtime state
+  float AspectRatio = 16.0f / 9.0f;
+  float ZoomLevel = 1.0f;
 
   CameraNode(std::string_view Name, AxHashTableAPI* TableAPI);
 
   Mat4 GetViewMatrix() const { return (GetTransform().GetViewMatrix()); }
-  Mat4 GetProjectionMatrix() const { return (Mat4(Camera.ProjectionMatrix)); }
 
-  float GetFOV() const { return (Camera.FieldOfView); }
-  void SetFOV(float FOV) { Camera.FieldOfView = FOV; }
-
-  float GetNear() const { return (Camera.NearClipPlane); }
-  void SetNear(float Near) { Camera.NearClipPlane = Near; }
-
-  float GetFar() const { return (Camera.FarClipPlane); }
-  void SetFar(float Far) { Camera.FarClipPlane = Far; }
-
-  bool IsOrthographic() const { return (Camera.IsOrthographic); }
-  void SetOrthographic(bool Ortho) { Camera.IsOrthographic = Ortho; }
+  Mat4 GetProjectionMatrix() const
+  {
+    if (Projection != 0) {
+      float HalfH = ZoomLevel;
+      float HalfW = HalfH * AspectRatio;
+      return (Mat4::Orthographic(-HalfW, HalfW, -HalfH, HalfH, NearClipPlane, FarClipPlane));
+    }
+    float FOVRadians = FieldOfView * (AX_PI / 180.0f);
+    return (Mat4::Perspective(FOVRadians, AspectRatio, NearClipPlane, FarClipPlane));
+  }
 };
 
 /**
- * LightNode - Node that wraps AxLight for lighting.
+ * LightNode - Scene light source.
  *
- * Exposes light type, color, intensity, and other properties through
- * the underlying AxLight struct.
+ * Serializable: LightType, Color, Intensity, Range, InnerConeAngle, OuterConeAngle
+ * Runtime-only: none (Position is extracted from world transform by renderer)
  */
 class LightNode : public Node3D
 {
 public:
   static constexpr NodeType StaticType = NodeType::Light;
 
-  AxLight Light;
+  // Serializable properties
+  Property<AxLightType> LightType;
+  Property<Vec3> Color;
+  Property<float> Intensity;
+  Property<float> Range;
+  Property<float> InnerConeAngle;
+  Property<float> OuterConeAngle;
 
   LightNode(std::string_view Name, AxHashTableAPI* TableAPI);
 
-  AxLightType GetLightType() const { return (Light.Type); }
-  void SetLightType(AxLightType Type) { Light.Type = Type; }
-
-  AxVec3 GetColor() const { return (Light.Color); }
-  void SetColor(AxVec3 Color) { Light.Color = Color; }
-
-  float GetIntensity() const { return (Light.Intensity); }
-  void SetIntensity(float Intensity) { Light.Intensity = Intensity; }
+  /** Build an AxLight struct for the renderer's OpenGL API. */
+  AxLight BuildLight() const
+  {
+    AxLight L;
+    memset(&L, 0, sizeof(L));
+    L.Type = LightType;
+    L.Color = Color;
+    L.Intensity = Intensity;
+    L.Range = Range;
+    L.InnerConeAngle = InnerConeAngle;
+    L.OuterConeAngle = OuterConeAngle;
+    strncpy(L.Name, std::string(GetName()).c_str(), sizeof(L.Name) - 1);
+    L.Name[sizeof(L.Name) - 1] = '\0';
+    return (L);
+  }
 };
 
 /**
  * RigidBodyNode - Physics body data.
  *
- * Stores mass, velocity, drag, and body type for physics simulation.
+ * Serializable: Mass, Drag, BodyKind
+ * Runtime-only: LinearVelocity, AngularVelocity
  */
 class RigidBodyNode : public Node3D
 {
 public:
   static constexpr NodeType StaticType = NodeType::RigidBody;
 
-  float Mass;
-  AxVec3 LinearVelocity;
-  AxVec3 AngularVelocity;
-  float Drag;
-  BodyType Type;
+  // Serializable properties
+  Property<float> Mass;
+  Property<float> Drag;
+  Property<BodyType> BodyKind;
+
+  // Runtime state
+  Vec3 LinearVelocity = Vec3::Zero();
+  Vec3 AngularVelocity = Vec3::Zero();
 
   RigidBodyNode(std::string_view Name, AxHashTableAPI* TableAPI);
 };
@@ -163,18 +187,22 @@ public:
 /**
  * ColliderNode - Collision shape data.
  *
- * Stores shape parameters for physics collision detection.
+ * Serializable: Shape, Radius, Height, IsTrigger
+ * Runtime-only: Extents
  */
 class ColliderNode : public Node3D
 {
 public:
   static constexpr NodeType StaticType = NodeType::Collider;
 
-  ShapeType Shape;
-  AxVec3 Extents;
-  float Radius;
-  float Height;
-  bool IsTrigger;
+  // Serializable properties
+  Property<ShapeType> Shape;
+  Property<float> Radius;
+  Property<float> Height;
+  Property<bool> IsTrigger;
+
+  // Runtime state
+  Vec3 Extents = Vec3(0.5f, 0.5f, 0.5f);
 
   ColliderNode(std::string_view Name, AxHashTableAPI* TableAPI);
 };
@@ -182,26 +210,25 @@ public:
 /**
  * AudioSourceNode - Audio playback data.
  *
- * Stores clip path, volume, pitch, looping, and spatial audio settings.
+ * Serializable: ClipPath, Volume, Pitch
+ * Runtime-only: IsLooping, Is3D, MaxDistance
  */
 class AudioSourceNode : public Node3D
 {
 public:
   static constexpr NodeType StaticType = NodeType::AudioSource;
 
-  float Volume;
-  float Pitch;
-  bool IsLooping;
-  bool Is3D;
-  float MaxDistance;
+  // Serializable properties
+  Property<std::string> ClipPath;
+  Property<float> Volume;
+  Property<float> Pitch;
+
+  // Runtime state
+  bool IsLooping = false;
+  bool Is3D = true;
+  float MaxDistance = 100.0f;
 
   AudioSourceNode(std::string_view Name, AxHashTableAPI* TableAPI);
-
-  std::string_view GetClipPath() const { return (ClipPath_); }
-  void SetClipPath(std::string_view Path) { ClipPath_ = Path; }
-
-private:
-  std::string ClipPath_;
 };
 
 /**
@@ -220,41 +247,44 @@ public:
 /**
  * AnimatorNode - Controls animation playback on a node.
  *
- * Stores animation name, speed, play state, and current time.
+ * Serializable: AnimationName, Speed
+ * Runtime-only: IsPlaying, CurrentTime
  */
 class AnimatorNode : public Node3D
 {
 public:
   static constexpr NodeType StaticType = NodeType::Animator;
 
-  float Speed;
-  bool IsPlaying;
-  float CurrentTime;
+  // Serializable properties
+  Property<std::string> AnimationName;
+  Property<float> Speed;
+
+  // Runtime state
+  bool IsPlaying = false;
+  float CurrentTime = 0.0f;
 
   AnimatorNode(std::string_view Name, AxHashTableAPI* TableAPI);
-
-  std::string_view GetAnimationName() const { return (AnimationName_); }
-  void SetAnimationName(std::string_view AName) { AnimationName_ = AName; }
-
-private:
-  std::string AnimationName_;
 };
 
 /**
  * ParticleEmitterNode - Controls particle emission on a node.
  *
- * Stores emission parameters for particle effects.
+ * Serializable: MaxParticles, EmissionRate, Lifetime, Speed
+ * Runtime-only: IsEmitting
  */
 class ParticleEmitterNode : public Node3D
 {
 public:
   static constexpr NodeType StaticType = NodeType::ParticleEmitter;
 
-  uint32_t MaxParticles;
-  float EmissionRate;
-  float Lifetime;
-  float Speed;
-  bool IsEmitting;
+  // Serializable properties
+  Property<uint32_t> MaxParticles;
+  Property<float> EmissionRate;
+  Property<float> Lifetime;
+  Property<float> Speed;
+
+  // Runtime state
+  bool IsEmitting = false;
 
   ParticleEmitterNode(std::string_view Name, AxHashTableAPI* TableAPI);
 };
@@ -266,22 +296,21 @@ public:
 /**
  * SpriteNode - 2D rendering node for sprites.
  *
- * Holds a texture path, runtime handle, tint color, and sort order.
+ * Serializable: TexturePath, SortOrder
+ * Runtime-only: TextureHandle, Color
  */
 class SpriteNode : public Node2D
 {
 public:
   static constexpr NodeType StaticType = NodeType::Sprite;
 
-  uint32_t TextureHandle;
-  AxVec4 Color;
-  int32_t SortOrder;
+  // Serializable properties
+  Property<std::string> TexturePath;
+  Property<int32_t> SortOrder;
+
+  // Runtime state
+  uint32_t TextureHandle = 0;
+  Vec4 Color = Vec4(1.0f, 1.0f, 1.0f, 1.0f);
 
   SpriteNode(std::string_view Name, AxHashTableAPI* TableAPI);
-
-  std::string_view GetTexturePath() const { return (TexturePath_); }
-  void SetTexturePath(std::string_view Path) { TexturePath_ = Path; }
-
-private:
-  std::string TexturePath_;
 };

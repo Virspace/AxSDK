@@ -182,10 +182,10 @@ TEST_F(IntegrationTest, FullPipelineParseAndVerifyTransform)
 
   // Verify mesh data on typed nodes
   MeshInstance* PlayerMI = static_cast<MeshInstance*>(MeshNodes[0]);
-  EXPECT_EQ(PlayerMI->GetMeshPath(), "res://meshes/player.glb");
+  EXPECT_TRUE(PlayerMI->MeshPath == "res://meshes/player.glb");
 
   MeshInstance* WeaponMI = static_cast<MeshInstance*>(MeshNodes[1]);
-  EXPECT_EQ(WeaponMI->GetMeshPath(), "res://meshes/sword.glb");
+  EXPECT_TRUE(WeaponMI->MeshPath == "res://meshes/sword.glb");
 
   delete Tree;
 }
@@ -208,16 +208,16 @@ TEST_F(IntegrationTest, ProgrammaticSceneCreation)
 
   // Set data on typed nodes
   CameraNode* Cam = static_cast<CameraNode*>(CamNode);
-  Cam->SetFOV(60.0f);
-  Cam->SetNear(0.1f);
-  Cam->SetFar(500.0f);
+  Cam->FieldOfView = 60.0f;
+  Cam->NearClipPlane = 0.1f;
+  Cam->FarClipPlane = 500.0f;
 
   LightNode* LN = static_cast<LightNode*>(LightNodePtr);
-  LN->SetLightType(AX_LIGHT_TYPE_DIRECTIONAL);
-  LN->SetIntensity(2.0f);
+  LN->LightType = AX_LIGHT_TYPE_DIRECTIONAL;
+  LN->Intensity = 2.0f;
 
   MeshInstance* MI = static_cast<MeshInstance*>(MeshNodePtr);
-  MI->SetMeshPath("models/cube.gltf");
+  MI->MeshPath = "models/cube.gltf";
 
   // Set transform on mesh node
   MeshNodePtr->GetTransform().SetTranslation(Vec3(5.0f, 0.0f, 0.0f));
@@ -359,9 +359,9 @@ TEST_F(IntegrationTest, SceneDestructionCleansUpAllResources)
 
   // Set mesh data on typed nodes
   MeshInstance* MIA = static_cast<MeshInstance*>(NodeA);
-  MIA->SetMeshPath("models/a.glb");
+  MIA->MeshPath = "models/a.glb";
   MeshInstance* MIB = static_cast<MeshInstance*>(NodeB);
-  MIB->SetMeshPath("models/b.glb");
+  MIB->MeshPath = "models/b.glb";
 
   // Subscribe to an event
   IntegrationEventTracker Tracker = {0, 0, nullptr};

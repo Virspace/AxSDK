@@ -129,8 +129,8 @@ TEST_F(SceneExTest, TypedNodeListTracksNodes)
 
   // Verify the typed nodes carry correct data
   MeshInstance* MI = static_cast<MeshInstance*>(MeshA);
-  MI->SetMeshPath("models/test.glb");
-  EXPECT_EQ(MI->GetMeshPath(), "models/test.glb");
+  MI->MeshPath = "models/test.glb";
+  EXPECT_TRUE(MI->MeshPath == "models/test.glb");
 }
 
 //=============================================================================

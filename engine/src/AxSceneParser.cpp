@@ -9,6 +9,7 @@
 #include "AxEngine/AxNode.h"
 #include "AxEngine/AxTypedNodes.h"
 #include "AxEngine/AxPrimitives.h"
+#include "AxEngine/AxPropertyReflection.h"
 
 #include <cstring>
 #include <cstdio>
@@ -446,136 +447,78 @@ static NodeType MapTypeNameToNodeType(const char* TypeName)
 }
 
 ///////////////////////////////////////////////////////////////
-// Typed Node Property Setting
+// Reflection-Driven Property Setting
 ///////////////////////////////////////////////////////////////
 
-static void SetNodeProperty(Node* NodePtr, NodeType Type,
-                             const char* PropName, const char* ValueStr,
-                             float NumericValue, bool IsString, bool IsNumeric,
-                             Tokenizer* T)
+/**
+ * Parse a property value from the tokenizer and set it on the node.
+ * Each PropType owns its own token consumption, so multi-token types
+ * (Vec3, Vec4, Quat) are handled uniformly alongside single-token types.
+ * Returns false on parse error, true on success (including unknown properties).
+ */
+static bool ParseAndSetProperty(Node* NodePtr, const PropDescriptor* Desc,
+                                Tokenizer* T, SceneParser* Parser)
 {
-    switch (Type) {
-        case NodeType::MeshInstance: {
-            MeshInstance* MI = static_cast<MeshInstance*>(NodePtr);
-            if (strcmp(PropName, "mesh") == 0 && IsString) {
-                MI->SetMeshPath(ValueStr);
-            } else if (strcmp(PropName, "material") == 0 && IsString) {
-                MI->SetMaterialName(ValueStr);
-            } else if (strcmp(PropName, "renderLayer") == 0 && IsNumeric) {
-                MI->RenderLayer = static_cast<int32_t>(NumericValue);
-            }
-            break;
+    switch (Desc->Type) {
+        case PropType::Float: {
+            if (T->CurrentToken.Type != AX_TOKEN_NUMBER) { return (true); }
+            float V;
+            ParseFloatToken(&T->CurrentToken, &V);
+            T->CurrentToken = NextToken(T);
+            SetPropertyFloat(NodePtr, Desc, V);
+            return (true);
         }
-        case NodeType::Camera: {
-            CameraNode* Cam = static_cast<CameraNode*>(NodePtr);
-            if (strcmp(PropName, "fov") == 0 && IsNumeric) {
-                Cam->SetFOV(NumericValue);
-            } else if (strcmp(PropName, "near") == 0 && IsNumeric) {
-                Cam->SetNear(NumericValue);
-            } else if (strcmp(PropName, "far") == 0 && IsNumeric) {
-                Cam->SetFar(NumericValue);
-            } else if (strcmp(PropName, "projection") == 0 && !IsString && !IsNumeric) {
-                if (strcmp(ValueStr, "perspective") == 0) {
-                    Cam->SetOrthographic(false);
-                } else if (strcmp(ValueStr, "orthographic") == 0) {
-                    Cam->SetOrthographic(true);
-                }
-            }
-            break;
+        case PropType::Int32: {
+            if (T->CurrentToken.Type != AX_TOKEN_NUMBER) { return (true); }
+            float V;
+            ParseFloatToken(&T->CurrentToken, &V);
+            T->CurrentToken = NextToken(T);
+            SetPropertyInt32(NodePtr, Desc, static_cast<int32_t>(V));
+            return (true);
         }
-        case NodeType::Light: {
-            LightNode* LN = static_cast<LightNode*>(NodePtr);
-            if (strcmp(PropName, "type") == 0 && !IsString && !IsNumeric) {
-                if (strcmp(ValueStr, "directional") == 0)      { LN->SetLightType(AX_LIGHT_TYPE_DIRECTIONAL); }
-                else if (strcmp(ValueStr, "point") == 0)       { LN->SetLightType(AX_LIGHT_TYPE_POINT); }
-                else if (strcmp(ValueStr, "spot") == 0)        { LN->SetLightType(AX_LIGHT_TYPE_SPOT); }
-            } else if (strcmp(PropName, "intensity") == 0 && IsNumeric) {
-                LN->SetIntensity(NumericValue);
-            } else if (strcmp(PropName, "range") == 0 && IsNumeric) {
-                LN->Light.Range = NumericValue;
-            } else if (strcmp(PropName, "innerCone") == 0 && IsNumeric) {
-                LN->Light.InnerConeAngle = NumericValue;
-            } else if (strcmp(PropName, "outerCone") == 0 && IsNumeric) {
-                LN->Light.OuterConeAngle = NumericValue;
-            } else if (strcmp(PropName, "color") == 0) {
-                // color is parsed as vector3 inline; handled at parse time
-            }
-            break;
+        case PropType::UInt32: {
+            if (T->CurrentToken.Type != AX_TOKEN_NUMBER) { return (true); }
+            float V;
+            ParseFloatToken(&T->CurrentToken, &V);
+            T->CurrentToken = NextToken(T);
+            SetPropertyUInt32(NodePtr, Desc, static_cast<uint32_t>(V));
+            return (true);
         }
-        case NodeType::RigidBody: {
-            RigidBodyNode* RB = static_cast<RigidBodyNode*>(NodePtr);
-            if (strcmp(PropName, "mass") == 0 && IsNumeric) {
-                RB->Mass = NumericValue;
-            } else if (strcmp(PropName, "drag") == 0 && IsNumeric) {
-                RB->Drag = NumericValue;
-            } else if (strcmp(PropName, "bodyType") == 0 && !IsString && !IsNumeric) {
-                if (strcmp(ValueStr, "dynamic") == 0)        { RB->Type = BodyType::Dynamic; }
-                else if (strcmp(ValueStr, "static") == 0)    { RB->Type = BodyType::Static; }
-                else if (strcmp(ValueStr, "kinematic") == 0)  { RB->Type = BodyType::Kinematic; }
-            }
-            break;
+        case PropType::Bool: {
+            if (T->CurrentToken.Type != AX_TOKEN_IDENTIFIER) { return (true); }
+            char Buf[16];
+            CopyTokenString(&T->CurrentToken, Buf, sizeof(Buf));
+            T->CurrentToken = NextToken(T);
+            SetPropertyBool(NodePtr, Desc, strcmp(Buf, "true") == 0);
+            return (true);
         }
-        case NodeType::AudioSource: {
-            AudioSourceNode* AS = static_cast<AudioSourceNode*>(NodePtr);
-            if (strcmp(PropName, "clip") == 0 && IsString) {
-                AS->SetClipPath(ValueStr);
-            } else if (strcmp(PropName, "volume") == 0 && IsNumeric) {
-                AS->Volume = NumericValue;
-            } else if (strcmp(PropName, "pitch") == 0 && IsNumeric) {
-                AS->Pitch = NumericValue;
-            }
-            break;
+        case PropType::String: {
+            if (T->CurrentToken.Type != AX_TOKEN_STRING) { return (true); }
+            char Buf[256];
+            CopyTokenString(&T->CurrentToken, Buf, sizeof(Buf));
+            T->CurrentToken = NextToken(T);
+            SetPropertyString(NodePtr, Desc, std::string(Buf));
+            return (true);
         }
-        case NodeType::Collider: {
-            ColliderNode* Col = static_cast<ColliderNode*>(NodePtr);
-            if (strcmp(PropName, "shape") == 0 && !IsString && !IsNumeric) {
-                if (strcmp(ValueStr, "box") == 0)         { Col->Shape = ShapeType::Box; }
-                else if (strcmp(ValueStr, "sphere") == 0) { Col->Shape = ShapeType::Sphere; }
-                else if (strcmp(ValueStr, "capsule") == 0){ Col->Shape = ShapeType::Capsule; }
-                else if (strcmp(ValueStr, "mesh") == 0)   { Col->Shape = ShapeType::Mesh; }
-            } else if (strcmp(PropName, "radius") == 0 && IsNumeric) {
-                Col->Radius = NumericValue;
-            } else if (strcmp(PropName, "height") == 0 && IsNumeric) {
-                Col->Height = NumericValue;
-            } else if (strcmp(PropName, "isTrigger") == 0 && !IsString && !IsNumeric) {
-                Col->IsTrigger = (strcmp(ValueStr, "true") == 0);
-            }
-            break;
+        case PropType::Enum: {
+            if (T->CurrentToken.Type != AX_TOKEN_IDENTIFIER) { return (true); }
+            char Buf[64];
+            CopyTokenString(&T->CurrentToken, Buf, sizeof(Buf));
+            T->CurrentToken = NextToken(T);
+            SetPropertyEnum(NodePtr, Desc, Buf);
+            return (true);
         }
-        case NodeType::Animator: {
-            AnimatorNode* Anim = static_cast<AnimatorNode*>(NodePtr);
-            if (strcmp(PropName, "animation") == 0 && IsString) {
-                Anim->SetAnimationName(ValueStr);
-            } else if (strcmp(PropName, "speed") == 0 && IsNumeric) {
-                Anim->Speed = NumericValue;
-            }
-            break;
+        case PropType::Vec3: {
+            AxVec3 V;
+            if (!ParseVector3(T, &V, Parser)) { return (false); }
+            SetPropertyVec3(NodePtr, Desc, Vec3(V));
+            return (true);
         }
-        case NodeType::ParticleEmitter: {
-            ParticleEmitterNode* PE = static_cast<ParticleEmitterNode*>(NodePtr);
-            if (strcmp(PropName, "maxParticles") == 0 && IsNumeric) {
-                PE->MaxParticles = static_cast<uint32_t>(NumericValue);
-            } else if (strcmp(PropName, "emissionRate") == 0 && IsNumeric) {
-                PE->EmissionRate = NumericValue;
-            } else if (strcmp(PropName, "lifetime") == 0 && IsNumeric) {
-                PE->Lifetime = NumericValue;
-            } else if (strcmp(PropName, "speed") == 0 && IsNumeric) {
-                PE->Speed = NumericValue;
-            }
-            break;
-        }
-        case NodeType::Sprite: {
-            SpriteNode* Spr = static_cast<SpriteNode*>(NodePtr);
-            if (strcmp(PropName, "texture") == 0 && IsString) {
-                Spr->SetTexturePath(ValueStr);
-            } else if (strcmp(PropName, "sortOrder") == 0 && IsNumeric) {
-                Spr->SortOrder = static_cast<int32_t>(NumericValue);
-            }
-            break;
-        }
-        default:
-            break;
+        case PropType::Vec4:
+        case PropType::Quat:
+            return (true);
     }
+    return (true);
 }
 
 ///////////////////////////////////////////////////////////////
@@ -606,7 +549,7 @@ static bool ParsePrimitiveMesh(Tokenizer* T, MeshInstance* MI, SceneParser* SP)
     T->CurrentToken = NextToken(T);
 
     // Clear MeshPath to indicate this is a primitive, not file-based
-    MI->SetMeshPath("");
+    MI->MeshPath = "";
 
     // Initialize default primitive mesh instances for each shape
     BoxMesh BoxP;
@@ -858,15 +801,6 @@ Node* SceneParser::ParseNodeImpl(Tokenizer* T, SceneTree* Scene, Node* Parent)
             }
             T->CurrentToken = NextToken(T);
 
-            // Handle vector3 properties for Light nodes
-            if (Type == NodeType::Light) {
-                if (strcmp(PropName, "color") == 0) {
-                    LightNode* LN = static_cast<LightNode*>(NewNode);
-                    if (!ParseVector3(T, &LN->Light.Color, this)) { return (nullptr); }
-                    continue;
-                }
-            }
-
             // Skip whitespace tokens before the value
             while (T->CurrentToken.Type == AX_TOKEN_COMMENT ||
                    T->CurrentToken.Type == AX_TOKEN_NEWLINE) {
@@ -887,25 +821,13 @@ Node* SceneParser::ParseNodeImpl(Tokenizer* T, SceneTree* Scene, Node* Parent)
                 continue;
             }
 
-            char ValueStr[256] = {0};
-            float NumericValue = 0.0f;
-            bool IsString = false;
-            bool IsNumeric = false;
-
-            if (T->CurrentToken.Type == AX_TOKEN_STRING) {
-                CopyTokenString(&T->CurrentToken, ValueStr, sizeof(ValueStr));
-                IsString = true;
-                T->CurrentToken = NextToken(T);
-            } else if (T->CurrentToken.Type == AX_TOKEN_NUMBER) {
-                ParseFloatToken(&T->CurrentToken, &NumericValue);
-                IsNumeric = true;
-                T->CurrentToken = NextToken(T);
-            } else if (T->CurrentToken.Type == AX_TOKEN_IDENTIFIER) {
-                CopyTokenString(&T->CurrentToken, ValueStr, sizeof(ValueStr));
-                T->CurrentToken = NextToken(T);
+            // Look up property descriptor and parse+set in one step
+            const PropDescriptor* Desc = PropertyRegistry::Get().FindProperty(Type, PropName);
+            if (Desc) {
+                if (!ParseAndSetProperty(NewNode, Desc, T, this)) {
+                    return (nullptr);
+                }
             }
-
-            SetNodeProperty(NewNode, Type, PropName, ValueStr, NumericValue, IsString, IsNumeric, T);
         }
     }
 
@@ -918,7 +840,8 @@ Node* SceneParser::ParseNodeImpl(Tokenizer* T, SceneTree* Scene, Node* Parent)
     // For Light nodes, invoke OnLightParsed with the AxLight data
     if (Type == NodeType::Light) {
         LightNode* LN = static_cast<LightNode*>(NewNode);
-        InvokeOnLightParsed(&LN->Light);
+        AxLight TempLight = LN->BuildLight();
+        InvokeOnLightParsed(&TempLight);
     }
 
     InvokeOnNodeParsed(NewNode);
@@ -1388,202 +1311,95 @@ static void SerializeTransform(std::string& Output, const AxTransform& Transform
 }
 
 /**
- * Serialize typed-node properties for a given node.
+ * Check if a property is at its default value (skip-if-default serialization).
+ */
+static bool IsPropertyAtDefault(const Node* N, const PropDescriptor* D)
+{
+    switch (D->Type) {
+        case PropType::Float:  return (GetPropertyFloat(N, D) == D->FloatDefault);
+        case PropType::Int32:  return (GetPropertyInt32(N, D) == D->IntDefault);
+        case PropType::UInt32: return (GetPropertyUInt32(N, D) == D->UIntDefault);
+        case PropType::Bool:   return (GetPropertyBool(N, D) == D->BoolDefault);
+        case PropType::String: return (GetPropertyString(N, D).empty());
+        case PropType::Enum:   return (GetPropertyInt32(N, D) == D->IntDefault);
+        case PropType::Vec3:   return (false);  // always write Vec3
+        case PropType::Vec4:   return (false);  // always write Vec4
+        case PropType::Quat:   return (false);  // always write Quat
+    }
+    return (false);
+}
+
+/**
+ * Serialize a single property value to the output string.
+ */
+static void SerializeProperty(std::string& Output, const Node* N, const PropDescriptor* D, int Indent)
+{
+    AppendIndent(Output, Indent);
+    Output += D->Name;
+    Output += ": ";
+
+    switch (D->Type) {
+        case PropType::Float:
+            Output += FormatFloat(GetPropertyFloat(N, D));
+            break;
+        case PropType::Int32:
+            Output += FormatFloat(static_cast<float>(GetPropertyInt32(N, D)));
+            break;
+        case PropType::UInt32:
+            Output += FormatFloat(static_cast<float>(GetPropertyUInt32(N, D)));
+            break;
+        case PropType::Bool:
+            Output += GetPropertyBool(N, D) ? "true" : "false";
+            break;
+        case PropType::String:
+            Output += "\"";
+            Output += GetPropertyString(N, D);
+            Output += "\"";
+            break;
+        case PropType::Vec3: {
+            Vec3 V = GetPropertyVec3(N, D);
+            Output += FormatFloat(V.X) + ", ";
+            Output += FormatFloat(V.Y) + ", ";
+            Output += FormatFloat(V.Z);
+            break;
+        }
+        case PropType::Vec4: {
+            Vec4 V = GetPropertyVec4(N, D);
+            Output += FormatFloat(V.X) + ", ";
+            Output += FormatFloat(V.Y) + ", ";
+            Output += FormatFloat(V.Z) + ", ";
+            Output += FormatFloat(V.W);
+            break;
+        }
+        case PropType::Enum: {
+            const char* Str = EnumToString(D->EnumEntries, D->EnumCount, GetPropertyInt32(N, D));
+            Output += Str ? Str : "unknown";
+            break;
+        }
+        case PropType::Quat:
+            break;
+    }
+
+    Output += "\n";
+}
+
+/**
+ * Serialize typed-node properties using the PropertyRegistry.
+ * Iterates over registered property descriptors, skipping defaults.
  */
 static void SerializeTypedNodeProperties(std::string& Output, Node* Current, int Indent)
 {
-    switch (Current->GetType()) {
-        case NodeType::MeshInstance: {
-            MeshInstance* MI = static_cast<MeshInstance*>(Current);
-            if (!MI->GetMeshPath().empty()) {
-                AppendIndent(Output, Indent);
-                Output += "mesh: \"";
-                Output += MI->GetMeshPath();
-                Output += "\"\n";
-            }
-            if (!MI->GetMaterialName().empty()) {
-                AppendIndent(Output, Indent);
-                Output += "material: \"";
-                Output += MI->GetMaterialName();
-                Output += "\"\n";
-            }
-            if (MI->RenderLayer != 0) {
-                AppendIndent(Output, Indent);
-                Output += "renderLayer: " + FormatFloat(static_cast<float>(MI->RenderLayer)) + "\n";
-            }
-            break;
-        }
-        case NodeType::Camera: {
-            CameraNode* Cam = static_cast<CameraNode*>(Current);
-            if (Cam->GetFOV() != 60.0f) {
-                AppendIndent(Output, Indent);
-                Output += "fov: " + FormatFloat(Cam->GetFOV()) + "\n";
-            }
-            if (Cam->GetNear() != 0.1f) {
-                AppendIndent(Output, Indent);
-                Output += "near: " + FormatFloat(Cam->GetNear()) + "\n";
-            }
-            if (Cam->GetFar() != 1000.0f) {
-                AppendIndent(Output, Indent);
-                Output += "far: " + FormatFloat(Cam->GetFar()) + "\n";
-            }
-            if (Cam->IsOrthographic()) {
-                AppendIndent(Output, Indent);
-                Output += "projection: orthographic\n";
-            }
-            break;
-        }
-        case NodeType::Light: {
-            LightNode* LN = static_cast<LightNode*>(Current);
-            // Type
-            AppendIndent(Output, Indent);
-            Output += "type: ";
-            switch (LN->GetLightType()) {
-                case AX_LIGHT_TYPE_DIRECTIONAL: Output += "directional\n"; break;
-                case AX_LIGHT_TYPE_POINT:       Output += "point\n"; break;
-                case AX_LIGHT_TYPE_SPOT:        Output += "spot\n"; break;
-                default:                        Output += "point\n"; break;
-            }
-            // Color
-            AppendIndent(Output, Indent);
-            Output += "color: ";
-            Output += FormatFloat(LN->Light.Color.X) + ", ";
-            Output += FormatFloat(LN->Light.Color.Y) + ", ";
-            Output += FormatFloat(LN->Light.Color.Z) + "\n";
-            // Intensity
-            AppendIndent(Output, Indent);
-            Output += "intensity: " + FormatFloat(LN->GetIntensity()) + "\n";
-            // Range (for point/spot)
-            if (LN->Light.Range > 0.0f) {
-                AppendIndent(Output, Indent);
-                Output += "range: " + FormatFloat(LN->Light.Range) + "\n";
-            }
-            // Cone angles (for spot)
-            if (LN->GetLightType() == AX_LIGHT_TYPE_SPOT) {
-                if (LN->Light.InnerConeAngle > 0.0f) {
-                    AppendIndent(Output, Indent);
-                    Output += "innerCone: " + FormatFloat(LN->Light.InnerConeAngle) + "\n";
-                }
-                if (LN->Light.OuterConeAngle > 0.0f) {
-                    AppendIndent(Output, Indent);
-                    Output += "outerCone: " + FormatFloat(LN->Light.OuterConeAngle) + "\n";
-                }
-            }
-            break;
-        }
-        case NodeType::RigidBody: {
-            RigidBodyNode* RB = static_cast<RigidBodyNode*>(Current);
-            if (RB->Mass != 1.0f) {
-                AppendIndent(Output, Indent);
-                Output += "mass: " + FormatFloat(RB->Mass) + "\n";
-            }
-            if (RB->Drag != 0.0f) {
-                AppendIndent(Output, Indent);
-                Output += "drag: " + FormatFloat(RB->Drag) + "\n";
-            }
-            AppendIndent(Output, Indent);
-            Output += "bodyType: ";
-            switch (RB->Type) {
-                case BodyType::Static:    Output += "static\n"; break;
-                case BodyType::Dynamic:   Output += "dynamic\n"; break;
-                case BodyType::Kinematic: Output += "kinematic\n"; break;
-                default:                  Output += "dynamic\n"; break;
-            }
-            break;
-        }
-        case NodeType::Collider: {
-            ColliderNode* Col = static_cast<ColliderNode*>(Current);
-            AppendIndent(Output, Indent);
-            Output += "shape: ";
-            switch (Col->Shape) {
-                case ShapeType::Box:     Output += "box\n"; break;
-                case ShapeType::Sphere:  Output += "sphere\n"; break;
-                case ShapeType::Capsule: Output += "capsule\n"; break;
-                case ShapeType::Mesh:    Output += "mesh\n"; break;
-                default:                 Output += "box\n"; break;
-            }
-            if (Col->Radius > 0.0f) {
-                AppendIndent(Output, Indent);
-                Output += "radius: " + FormatFloat(Col->Radius) + "\n";
-            }
-            if (Col->Height > 0.0f) {
-                AppendIndent(Output, Indent);
-                Output += "height: " + FormatFloat(Col->Height) + "\n";
-            }
-            if (Col->IsTrigger) {
-                AppendIndent(Output, Indent);
-                Output += "isTrigger: true\n";
-            }
-            break;
-        }
-        case NodeType::AudioSource: {
-            AudioSourceNode* AS = static_cast<AudioSourceNode*>(Current);
-            if (!AS->GetClipPath().empty()) {
-                AppendIndent(Output, Indent);
-                Output += "clip: \"";
-                Output += AS->GetClipPath();
-                Output += "\"\n";
-            }
-            if (AS->Volume != 1.0f) {
-                AppendIndent(Output, Indent);
-                Output += "volume: " + FormatFloat(AS->Volume) + "\n";
-            }
-            if (AS->Pitch != 1.0f) {
-                AppendIndent(Output, Indent);
-                Output += "pitch: " + FormatFloat(AS->Pitch) + "\n";
-            }
-            break;
-        }
-        case NodeType::Animator: {
-            AnimatorNode* Anim = static_cast<AnimatorNode*>(Current);
-            if (!Anim->GetAnimationName().empty()) {
-                AppendIndent(Output, Indent);
-                Output += "animation: \"";
-                Output += Anim->GetAnimationName();
-                Output += "\"\n";
-            }
-            if (Anim->Speed != 1.0f) {
-                AppendIndent(Output, Indent);
-                Output += "speed: " + FormatFloat(Anim->Speed) + "\n";
-            }
-            break;
-        }
-        case NodeType::ParticleEmitter: {
-            ParticleEmitterNode* PE = static_cast<ParticleEmitterNode*>(Current);
-            if (PE->MaxParticles != 100) {
-                AppendIndent(Output, Indent);
-                Output += "maxParticles: " + FormatFloat(static_cast<float>(PE->MaxParticles)) + "\n";
-            }
-            if (PE->EmissionRate != 10.0f) {
-                AppendIndent(Output, Indent);
-                Output += "emissionRate: " + FormatFloat(PE->EmissionRate) + "\n";
-            }
-            if (PE->Lifetime != 2.0f) {
-                AppendIndent(Output, Indent);
-                Output += "lifetime: " + FormatFloat(PE->Lifetime) + "\n";
-            }
-            if (PE->Speed != 1.0f) {
-                AppendIndent(Output, Indent);
-                Output += "speed: " + FormatFloat(PE->Speed) + "\n";
-            }
-            break;
-        }
-        case NodeType::Sprite: {
-            SpriteNode* Spr = static_cast<SpriteNode*>(Current);
-            if (!Spr->GetTexturePath().empty()) {
-                AppendIndent(Output, Indent);
-                Output += "texture: \"";
-                Output += Spr->GetTexturePath();
-                Output += "\"\n";
-            }
-            if (Spr->SortOrder != 0) {
-                AppendIndent(Output, Indent);
-                Output += "sortOrder: " + FormatFloat(static_cast<float>(Spr->SortOrder)) + "\n";
-            }
-            break;
-        }
-        default:
-            break;
+    uint32_t Count = 0;
+    const PropDescriptor* Props = PropertyRegistry::Get().GetProperties(Current->GetType(), &Count);
+    if (!Props) {
+        return;
+    }
+
+    for (uint32_t I = 0; I < Count; ++I) {
+        const PropDescriptor& D = Props[I];
+        if (!HasFlag(D.Flags, PropFlags::Serialize)) { continue; }
+        if (IsPropertyAtDefault(Current, &D)) { continue; }
+        SerializeProperty(Output, Current, &D, Indent);
     }
 }
 

@@ -127,7 +127,7 @@ TEST_F(ParserExTest, ParseMeshInstanceTypedNode)
   EXPECT_EQ(ObjNode->GetType(), NodeType::MeshInstance);
 
   MeshInstance* MI = static_cast<MeshInstance*>(ObjNode);
-  EXPECT_EQ(MI->GetMeshPath(), "res://meshes/cube.glb");
+  EXPECT_TRUE(MI->MeshPath == "res://meshes/cube.glb");
 
   delete Tree;
 }
@@ -167,7 +167,7 @@ TEST_F(ParserExTest, NestedTypedNodesWithTransformsBuildHierarchy)
   EXPECT_FLOAT_EQ(Child->GetTransform().Translation.X, 4.0f);
 
   MeshInstance* MI = static_cast<MeshInstance*>(Child);
-  EXPECT_EQ(MI->GetMeshPath(), "res://child_mesh.glb");
+  EXPECT_TRUE(MI->MeshPath == "res://child_mesh.glb");
 
   delete Tree;
 }
@@ -201,8 +201,8 @@ TEST_F(ParserExTest, MultipleNodesWithMixedTypedNodeTypes)
   EXPECT_EQ(Mesh1->GetType(), NodeType::MeshInstance);
 
   MeshInstance* MI = static_cast<MeshInstance*>(Mesh1);
-  EXPECT_EQ(MI->GetMeshPath(), "res://a.glb");
-  EXPECT_EQ(MI->GetMaterialName(), "MatA");
+  EXPECT_TRUE(MI->MeshPath == "res://a.glb");
+  EXPECT_TRUE(MI->MaterialName == "MatA");
 
   Node* Body = Mesh1->GetNextSibling();
   ASSERT_NE(Body, nullptr);
@@ -211,7 +211,7 @@ TEST_F(ParserExTest, MultipleNodesWithMixedTypedNodeTypes)
 
   RigidBodyNode* RB = static_cast<RigidBodyNode*>(Body);
   EXPECT_FLOAT_EQ(RB->Mass, 10.0f);
-  EXPECT_EQ(RB->Type, BodyType::Dynamic);
+  EXPECT_TRUE(RB->BodyKind == BodyType::Dynamic);
 
   delete Tree;
 }
@@ -233,7 +233,7 @@ TEST_F(ParserExTest, ParseCallbacksFire)
   EXPECT_EQ(Result->GetType(), NodeType::MeshInstance);
 
   MeshInstance* MI = static_cast<MeshInstance*>(Result);
-  EXPECT_EQ(MI->GetMeshPath(), "test.glb");
+  EXPECT_TRUE(MI->MeshPath == "test.glb");
 
   delete Tree;
 }
@@ -259,7 +259,7 @@ TEST_F(ParserExTest, PrefabLoadCreatesStandaloneSubtree)
   EXPECT_EQ(PrefabRoot->GetType(), NodeType::MeshInstance);
 
   MeshInstance* MI = static_cast<MeshInstance*>(PrefabRoot);
-  EXPECT_EQ(MI->GetMeshPath(), "res://prefab_mesh.glb");
+  EXPECT_TRUE(MI->MeshPath == "res://prefab_mesh.glb");
 
   Node* PrefabChild = PrefabRoot->GetFirstChild();
   ASSERT_NE(PrefabChild, nullptr);
@@ -336,8 +336,8 @@ TEST_F(ParserExTest, TG5_SceneWithLightAndNodeProducesCorrectData)
 
   LightNode* LN = static_cast<LightNode*>(Lights[0]);
   EXPECT_EQ(LN->GetName(), "SunLight");
-  EXPECT_EQ(LN->GetLightType(), AX_LIGHT_TYPE_DIRECTIONAL);
-  EXPECT_FLOAT_EQ(LN->GetIntensity(), 2.5f);
+  EXPECT_TRUE(LN->LightType == AX_LIGHT_TYPE_DIRECTIONAL);
+  EXPECT_FLOAT_EQ(LN->Intensity, 2.5f);
 
   // root + SunLight + SceneRoot + Player = 4
   EXPECT_EQ(Tree->GetNodeCount(), 4u);
@@ -393,11 +393,11 @@ TEST_F(ParserExTest, TG5_SceneTreeReturnsCorrectNodeAndLightCounts)
   // Create lights via typed LightNode
   Node* L1 = TestTree->CreateNode("PointLight1", NodeType::Light, nullptr);
   ASSERT_NE(L1, nullptr);
-  static_cast<LightNode*>(L1)->SetLightType(AX_LIGHT_TYPE_POINT);
+  static_cast<LightNode*>(L1)->LightType = AX_LIGHT_TYPE_POINT;
 
   Node* L2 = TestTree->CreateNode("SpotLight1", NodeType::Light, nullptr);
   ASSERT_NE(L2, nullptr);
-  static_cast<LightNode*>(L2)->SetLightType(AX_LIGHT_TYPE_SPOT);
+  static_cast<LightNode*>(L2)->LightType = AX_LIGHT_TYPE_SPOT;
 
   // Create regular nodes
   Node* N1 = TestTree->CreateNode("Entity1", NodeType::Node3D, nullptr);
@@ -443,7 +443,7 @@ TEST_F(ParserExTest, TG5_ParserExCallsSceneTreeDirectlyForTypedNodes)
 
   // Verify MeshInstance data
   MeshInstance* MI = static_cast<MeshInstance*>(Root);
-  EXPECT_EQ(MI->GetMeshPath(), "res://direct.glb");
+  EXPECT_TRUE(MI->MeshPath == "res://direct.glb");
 
   // Verify MeshInstance appears in typed tracking
   uint32_t MeshCount = 0;
@@ -458,9 +458,9 @@ TEST_F(ParserExTest, TG5_ParserExCallsSceneTreeDirectlyForTypedNodes)
   EXPECT_EQ(CamChild->GetType(), NodeType::Camera);
 
   CameraNode* Cam = static_cast<CameraNode*>(CamChild);
-  EXPECT_FLOAT_EQ(Cam->GetFOV(), 60.0f);
-  EXPECT_FLOAT_EQ(Cam->GetNear(), 0.1f);
-  EXPECT_FLOAT_EQ(Cam->GetFar(), 1000.0f);
+  EXPECT_FLOAT_EQ(Cam->FieldOfView, 60.0f);
+  EXPECT_FLOAT_EQ(Cam->NearClipPlane, 0.1f);
+  EXPECT_FLOAT_EQ(Cam->FarClipPlane, 1000.0f);
 
   // Verify RigidBody child
   Node* BodyChild = CamChild->GetNextSibling();
@@ -470,7 +470,7 @@ TEST_F(ParserExTest, TG5_ParserExCallsSceneTreeDirectlyForTypedNodes)
 
   RigidBodyNode* RB = static_cast<RigidBodyNode*>(BodyChild);
   EXPECT_FLOAT_EQ(RB->Mass, 3.5f);
-  EXPECT_EQ(RB->Type, BodyType::Kinematic);
+  EXPECT_TRUE(RB->BodyKind == BodyType::Kinematic);
 
   delete Tree;
 }

@@ -124,9 +124,8 @@ void AxRenderer::EndFrame()
 void AxRenderer::SetMainCamera(CameraNode* Camera)
 {
     MainCameraNode_ = Camera;
-    if (Camera && RenderAPI_ && Viewport_) {
-        RenderAPI_->CreateCamera(&Camera->Camera);
-        Camera->Camera.AspectRatio = Viewport_->Size.X / Viewport_->Size.Y;
+    if (Camera && Viewport_) {
+        Camera->AspectRatio = Viewport_->Size.X / Viewport_->Size.Y;
     }
 }
 
@@ -140,7 +139,7 @@ void AxRenderer::Resize(int32_t Width, int32_t Height)
 
     // Update camera aspect ratio if a main camera is set
     if (MainCameraNode_ && Height > 0) {
-        MainCameraNode_->Camera.AspectRatio =
+        MainCameraNode_->AspectRatio =
             static_cast<float>(Width) / static_cast<float>(Height);
     }
 
@@ -162,9 +161,10 @@ void AxRenderer::SetEditorCameraView(AxVec3 Position, AxVec3 Target,
     CamTransform.LookAt(Vec3(Target), Vec3::Up());
     EditorViewMatrix_ = CamTransform.GetViewMatrix();
 
-    // Compute projection matrix
+    // Compute projection matrix (FOV comes in as degrees, convert to radians)
     float AspectRatio = Viewport_->Size.X / Viewport_->Size.Y;
-    EditorProjectionMatrix_ = Mat4::Perspective(FOV, AspectRatio, Near, Far);
+    float FOVRadians = FOV * (AX_PI / 180.0f);
+    EditorProjectionMatrix_ = Mat4::Perspective(FOVRadians, AspectRatio, Near, Far);
 }
 
 void AxRenderer::RenderScene(SceneTree* Scene)
@@ -211,7 +211,7 @@ void AxRenderer::RenderScene(SceneTree* Scene)
 
         for (uint32_t i = 0; i < Count; ++i) {
             LightNode* LN = static_cast<LightNode*>(LightNodes[i]);
-            TempLights[i] = LN->Light;
+            TempLights[i] = LN->BuildLight();
 
             // Copy the node's world position into the light's position
             const Mat4& WorldMat = LN->GetWorldTransform();

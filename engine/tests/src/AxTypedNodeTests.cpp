@@ -1,11 +1,11 @@
 /**
  * AxTypedNodeTests.cpp - Tests for Godot-Style Typed Node Subclasses
  *
- * Tests each typed node subclass: creation, default values, setter methods,
+ * Tests each typed node subclass: creation, default values, Property<T> access,
  * NodeType correctness, and hierarchy operations through typed nodes.
  *
- * Validates that typed nodes carry data that was previously in Component
- * objects, and that type dispatch via NodeType enum works correctly.
+ * Validates that typed nodes carry data via Property<T> wrappers with automatic
+ * dirty marking, and that type dispatch via NodeType enum works correctly.
  */
 
 #include "gtest/gtest.h"
@@ -53,20 +53,20 @@ TEST_F(TypedNodeTest, MeshInstanceCreationAndDefaults)
 
   EXPECT_EQ(MI.GetType(), NodeType::MeshInstance);
   EXPECT_EQ(MI.GetName(), "TestMesh");
-  EXPECT_EQ(MI.GetMeshPath(), "");
-  EXPECT_EQ(MI.GetMaterialName(), "");
+  EXPECT_TRUE(MI.MeshPath == "");
+  EXPECT_TRUE(MI.MaterialName == "");
   EXPECT_EQ(MI.MaterialHandle, 0u);
-  EXPECT_EQ(MI.RenderLayer, 0);
+  EXPECT_TRUE(MI.RenderLayer == 0);
 
-  // Test setters
-  MI.SetMeshPath("models/cube.glb");
-  EXPECT_EQ(MI.GetMeshPath(), "models/cube.glb");
+  // Test Property<T> assignment
+  MI.MeshPath = "models/cube.glb";
+  EXPECT_TRUE(MI.MeshPath == "models/cube.glb");
 
-  MI.SetMaterialName("DefaultMat");
-  EXPECT_EQ(MI.GetMaterialName(), "DefaultMat");
+  MI.MaterialName = "DefaultMat";
+  EXPECT_TRUE(MI.MaterialName == "DefaultMat");
 
   MI.RenderLayer = 5;
-  EXPECT_EQ(MI.RenderLayer, 5);
+  EXPECT_TRUE(MI.RenderLayer == 5);
 }
 
 //=============================================================================
@@ -80,23 +80,23 @@ TEST_F(TypedNodeTest, CameraNodeCreationAndDefaults)
   EXPECT_EQ(Cam.GetName(), "TestCamera");
 
   // Camera should have reasonable defaults
-  EXPECT_FLOAT_EQ(Cam.GetFOV(), 60.0f);
-  EXPECT_FLOAT_EQ(Cam.GetNear(), 0.1f);
-  EXPECT_FLOAT_EQ(Cam.GetFar(), 1000.0f);
-  EXPECT_FALSE(Cam.IsOrthographic());
+  EXPECT_FLOAT_EQ(Cam.FieldOfView, 60.0f);
+  EXPECT_FLOAT_EQ(Cam.NearClipPlane, 0.1f);
+  EXPECT_FLOAT_EQ(Cam.FarClipPlane, 1000.0f);
+  EXPECT_TRUE(Cam.Projection == 0);  // perspective
 
-  // Test setters
-  Cam.SetFOV(90.0f);
-  EXPECT_FLOAT_EQ(Cam.GetFOV(), 90.0f);
+  // Test Property<T> assignment
+  Cam.FieldOfView = 90.0f;
+  EXPECT_FLOAT_EQ(Cam.FieldOfView, 90.0f);
 
-  Cam.SetNear(0.5f);
-  EXPECT_FLOAT_EQ(Cam.GetNear(), 0.5f);
+  Cam.NearClipPlane = 0.5f;
+  EXPECT_FLOAT_EQ(Cam.NearClipPlane, 0.5f);
 
-  Cam.SetFar(500.0f);
-  EXPECT_FLOAT_EQ(Cam.GetFar(), 500.0f);
+  Cam.FarClipPlane = 500.0f;
+  EXPECT_FLOAT_EQ(Cam.FarClipPlane, 500.0f);
 
-  Cam.SetOrthographic(true);
-  EXPECT_TRUE(Cam.IsOrthographic());
+  Cam.Projection = 1;  // orthographic
+  EXPECT_TRUE(Cam.Projection == 1);
 }
 
 //=============================================================================
@@ -110,25 +110,25 @@ TEST_F(TypedNodeTest, LightNodeCreationAndDefaults)
   EXPECT_EQ(LN.GetName(), "TestLight");
 
   // Light defaults to point light
-  EXPECT_EQ(LN.GetLightType(), AX_LIGHT_TYPE_POINT);
-  EXPECT_FLOAT_EQ(LN.GetIntensity(), 1.0f);
+  EXPECT_TRUE(LN.LightType == AX_LIGHT_TYPE_POINT);
+  EXPECT_FLOAT_EQ(LN.Intensity, 1.0f);
 
-  // Test setters
-  LN.SetLightType(AX_LIGHT_TYPE_POINT);
-  EXPECT_EQ(LN.GetLightType(), AX_LIGHT_TYPE_POINT);
+  // Test Property<T> assignment
+  LN.LightType = AX_LIGHT_TYPE_POINT;
+  EXPECT_TRUE(LN.LightType == AX_LIGHT_TYPE_POINT);
 
-  LN.SetIntensity(2.5f);
-  EXPECT_FLOAT_EQ(LN.GetIntensity(), 2.5f);
+  LN.Intensity = 2.5f;
+  EXPECT_FLOAT_EQ(LN.Intensity, 2.5f);
 
-  LN.SetColor({1.0f, 0.5f, 0.0f});
-  AxVec3 Color = LN.GetColor();
-  EXPECT_FLOAT_EQ(Color.R, 1.0f);
-  EXPECT_FLOAT_EQ(Color.G, 0.5f);
-  EXPECT_FLOAT_EQ(Color.B, 0.0f);
+  LN.Color = Vec3(1.0f, 0.5f, 0.0f);
+  Vec3 Color = LN.Color;
+  EXPECT_FLOAT_EQ(Color.X, 1.0f);
+  EXPECT_FLOAT_EQ(Color.Y, 0.5f);
+  EXPECT_FLOAT_EQ(Color.Z, 0.0f);
 
-  // Test direct Light struct access
-  LN.Light.Range = 100.0f;
-  EXPECT_FLOAT_EQ(LN.Light.Range, 100.0f);
+  // Test direct Property field access
+  LN.Range = 100.0f;
+  EXPECT_FLOAT_EQ(LN.Range, 100.0f);
 }
 
 //=============================================================================
@@ -142,16 +142,16 @@ TEST_F(TypedNodeTest, RigidBodyNodeCreationAndDefaults)
   EXPECT_EQ(RB.GetName(), "TestBody");
   EXPECT_FLOAT_EQ(RB.Mass, 1.0f);
   EXPECT_FLOAT_EQ(RB.Drag, 0.0f);
-  EXPECT_EQ(RB.Type, BodyType::Dynamic);
+  EXPECT_TRUE(RB.BodyKind == BodyType::Dynamic);
   EXPECT_FLOAT_EQ(RB.LinearVelocity.X, 0.0f);
   EXPECT_FLOAT_EQ(RB.LinearVelocity.Y, 0.0f);
   EXPECT_FLOAT_EQ(RB.LinearVelocity.Z, 0.0f);
 
   // Modify fields
   RB.Mass = 10.0f;
-  RB.Type = BodyType::Kinematic;
+  RB.BodyKind = BodyType::Kinematic;
   EXPECT_FLOAT_EQ(RB.Mass, 10.0f);
-  EXPECT_EQ(RB.Type, BodyType::Kinematic);
+  EXPECT_TRUE(RB.BodyKind == BodyType::Kinematic);
 }
 
 //=============================================================================
@@ -163,17 +163,17 @@ TEST_F(TypedNodeTest, ColliderNodeCreationAndDefaults)
 
   EXPECT_EQ(Col.GetType(), NodeType::Collider);
   EXPECT_EQ(Col.GetName(), "TestCollider");
-  EXPECT_EQ(Col.Shape, ShapeType::Box);
+  EXPECT_TRUE(Col.Shape == ShapeType::Box);
   EXPECT_FLOAT_EQ(Col.Radius, 0.5f);
   EXPECT_FLOAT_EQ(Col.Height, 1.0f);
-  EXPECT_FALSE(Col.IsTrigger);
+  EXPECT_TRUE(Col.IsTrigger == false);
 
   Col.Shape = ShapeType::Sphere;
   Col.Radius = 2.0f;
   Col.IsTrigger = true;
-  EXPECT_EQ(Col.Shape, ShapeType::Sphere);
+  EXPECT_TRUE(Col.Shape == ShapeType::Sphere);
   EXPECT_FLOAT_EQ(Col.Radius, 2.0f);
-  EXPECT_TRUE(Col.IsTrigger);
+  EXPECT_TRUE(Col.IsTrigger == true);
 }
 
 //=============================================================================
@@ -185,17 +185,17 @@ TEST_F(TypedNodeTest, AudioSourceNodeCreationAndDefaults)
 
   EXPECT_EQ(AS.GetType(), NodeType::AudioSource);
   EXPECT_EQ(AS.GetName(), "TestAudio");
-  EXPECT_EQ(AS.GetClipPath(), "");
+  EXPECT_TRUE(AS.ClipPath == "");
   EXPECT_FLOAT_EQ(AS.Volume, 1.0f);
   EXPECT_FLOAT_EQ(AS.Pitch, 1.0f);
   EXPECT_FALSE(AS.IsLooping);
   EXPECT_TRUE(AS.Is3D);
   EXPECT_FLOAT_EQ(AS.MaxDistance, 100.0f);
 
-  AS.SetClipPath("sounds/explosion.wav");
+  AS.ClipPath = "sounds/explosion.wav";
   AS.Volume = 0.5f;
   AS.IsLooping = true;
-  EXPECT_EQ(AS.GetClipPath(), "sounds/explosion.wav");
+  EXPECT_TRUE(AS.ClipPath == "sounds/explosion.wav");
   EXPECT_FLOAT_EQ(AS.Volume, 0.5f);
   EXPECT_TRUE(AS.IsLooping);
 }
@@ -220,15 +220,15 @@ TEST_F(TypedNodeTest, AnimatorNodeCreationAndDefaults)
 
   EXPECT_EQ(Anim.GetType(), NodeType::Animator);
   EXPECT_EQ(Anim.GetName(), "TestAnimator");
-  EXPECT_EQ(Anim.GetAnimationName(), "");
+  EXPECT_TRUE(Anim.AnimationName == "");
   EXPECT_FLOAT_EQ(Anim.Speed, 1.0f);
   EXPECT_FALSE(Anim.IsPlaying);
   EXPECT_FLOAT_EQ(Anim.CurrentTime, 0.0f);
 
-  Anim.SetAnimationName("idle");
+  Anim.AnimationName = "idle";
   Anim.Speed = 2.0f;
   Anim.IsPlaying = true;
-  EXPECT_EQ(Anim.GetAnimationName(), "idle");
+  EXPECT_TRUE(Anim.AnimationName == "idle");
   EXPECT_FLOAT_EQ(Anim.Speed, 2.0f);
   EXPECT_TRUE(Anim.IsPlaying);
 }
@@ -242,16 +242,16 @@ TEST_F(TypedNodeTest, ParticleEmitterNodeCreationAndDefaults)
 
   EXPECT_EQ(PE.GetType(), NodeType::ParticleEmitter);
   EXPECT_EQ(PE.GetName(), "TestEmitter");
-  EXPECT_EQ(PE.MaxParticles, 100u);
+  EXPECT_TRUE(PE.MaxParticles == 100u);
   EXPECT_FLOAT_EQ(PE.EmissionRate, 10.0f);
   EXPECT_FLOAT_EQ(PE.Lifetime, 2.0f);
   EXPECT_FLOAT_EQ(PE.Speed, 1.0f);
   EXPECT_FALSE(PE.IsEmitting);
 
-  PE.MaxParticles = 500;
+  PE.MaxParticles = 500u;
   PE.EmissionRate = 50.0f;
   PE.IsEmitting = true;
-  EXPECT_EQ(PE.MaxParticles, 500u);
+  EXPECT_TRUE(PE.MaxParticles == 500u);
   EXPECT_FLOAT_EQ(PE.EmissionRate, 50.0f);
   EXPECT_TRUE(PE.IsEmitting);
 }
@@ -265,19 +265,19 @@ TEST_F(TypedNodeTest, SpriteNodeCreationAndDefaults)
 
   EXPECT_EQ(Spr.GetType(), NodeType::Sprite);
   EXPECT_EQ(Spr.GetName(), "TestSprite");
-  EXPECT_EQ(Spr.GetTexturePath(), "");
+  EXPECT_TRUE(Spr.TexturePath == "");
   EXPECT_EQ(Spr.TextureHandle, 0u);
-  EXPECT_EQ(Spr.SortOrder, 0);
+  EXPECT_TRUE(Spr.SortOrder == 0);
 
   // SpriteNode inherits from Node2D
   EXPECT_FLOAT_EQ(Spr.GetTransform().Scale.X, 1.0f);
 
-  Spr.SetTexturePath("textures/hero.png");
+  Spr.TexturePath = "textures/hero.png";
   Spr.SortOrder = 10;
-  Spr.Color = {1.0f, 0.0f, 0.0f, 1.0f};
-  EXPECT_EQ(Spr.GetTexturePath(), "textures/hero.png");
-  EXPECT_EQ(Spr.SortOrder, 10);
-  EXPECT_FLOAT_EQ(Spr.Color.R, 1.0f);
+  Spr.Color = Vec4(1.0f, 0.0f, 0.0f, 1.0f);
+  EXPECT_TRUE(Spr.TexturePath == "textures/hero.png");
+  EXPECT_TRUE(Spr.SortOrder == 10);
+  EXPECT_FLOAT_EQ(Spr.Color.X, 1.0f);
 }
 
 //=============================================================================
@@ -310,12 +310,12 @@ TEST_F(TypedNodeTest, TypedNodesWorkInHierarchy)
 
   // Cast to typed node and modify data
   MeshInstance* MI = static_cast<MeshInstance*>(MeshNode);
-  MI->SetMeshPath("models/player.glb");
-  EXPECT_EQ(MI->GetMeshPath(), "models/player.glb");
+  MI->MeshPath = "models/player.glb";
+  EXPECT_TRUE(MI->MeshPath == "models/player.glb");
 
   ::LightNode* LN = static_cast<::LightNode*>(LightNode);
-  LN->SetIntensity(3.0f);
-  EXPECT_FLOAT_EQ(LN->GetIntensity(), 3.0f);
+  LN->Intensity = 3.0f;
+  EXPECT_FLOAT_EQ(LN->Intensity, 3.0f);
 
   delete Tree;
 }
@@ -426,8 +426,8 @@ TEST_F(TypedNodeTest, TypeDispatchViaStaticCast)
   // This is the canonical dispatch pattern
   if (NodePtr->GetType() == NodeType::MeshInstance) {
     MeshInstance* MI = static_cast<MeshInstance*>(NodePtr);
-    MI->SetMeshPath("dispatch_test.glb");
-    EXPECT_EQ(MI->GetMeshPath(), "dispatch_test.glb");
+    MI->MeshPath = "dispatch_test.glb";
+    EXPECT_TRUE(MI->MeshPath == "dispatch_test.glb");
   } else {
     FAIL() << "Expected NodeType::MeshInstance";
   }
@@ -445,38 +445,38 @@ TEST_F(TypedNodeTest, StringPathsAcceptLongPaths)
   // Build a path longer than the old 256-char limit
   std::string LongPath(512, 'a');
   LongPath = "models/" + LongPath + ".glb";
-  MI.SetMeshPath(LongPath);
-  EXPECT_EQ(MI.GetMeshPath(), LongPath);
-  EXPECT_EQ(MI.GetMeshPath().size(), LongPath.size());
+  MI.MeshPath = LongPath;
+  EXPECT_TRUE(MI.MeshPath == LongPath);
+  EXPECT_EQ(MI.MeshPath.Get().size(), LongPath.size());
 
   // Same for material name (old limit was 64)
   std::string LongMat(128, 'm');
-  MI.SetMaterialName(LongMat);
-  EXPECT_EQ(MI.GetMaterialName(), LongMat);
+  MI.MaterialName = LongMat;
+  EXPECT_TRUE(MI.MaterialName == LongMat);
 }
 
 //=============================================================================
-// Test 17: String path getters return string_view
+// Test 17: String property Get returns const reference
 //=============================================================================
-TEST_F(TypedNodeTest, StringPathGettersReturnStringView)
+TEST_F(TypedNodeTest, StringPropertyGetReturnsConstRef)
 {
   MeshInstance MI("ViewTest", TableAPI_);
-  MI.SetMeshPath("models/test.glb");
+  MI.MeshPath = "models/test.glb";
 
-  std::string_view Path = MI.GetMeshPath();
+  const std::string& Path = MI.MeshPath;
   EXPECT_EQ(Path, "models/test.glb");
 
   AudioSourceNode AS("AudioView", TableAPI_);
-  AS.SetClipPath("sounds/test.wav");
-  EXPECT_EQ(AS.GetClipPath(), "sounds/test.wav");
+  AS.ClipPath = "sounds/test.wav";
+  EXPECT_TRUE(AS.ClipPath == "sounds/test.wav");
 
   AnimatorNode Anim("AnimView", TableAPI_);
-  Anim.SetAnimationName("walk");
-  EXPECT_EQ(Anim.GetAnimationName(), "walk");
+  Anim.AnimationName = "walk";
+  EXPECT_TRUE(Anim.AnimationName == "walk");
 
   SpriteNode Spr("SpriteView", TableAPI_);
-  Spr.SetTexturePath("textures/test.png");
-  EXPECT_EQ(Spr.GetTexturePath(), "textures/test.png");
+  Spr.TexturePath = "textures/test.png";
+  EXPECT_TRUE(Spr.TexturePath == "textures/test.png");
 }
 
 //=============================================================================
@@ -485,17 +485,17 @@ TEST_F(TypedNodeTest, StringPathGettersReturnStringView)
 TEST_F(TypedNodeTest, DefaultStringPathsAreEmpty)
 {
   MeshInstance MI("EmptyTest", TableAPI_);
-  EXPECT_TRUE(MI.GetMeshPath().empty());
-  EXPECT_TRUE(MI.GetMaterialName().empty());
+  EXPECT_TRUE(MI.MeshPath.Get().empty());
+  EXPECT_TRUE(MI.MaterialName.Get().empty());
 
   AudioSourceNode AS("EmptyAudio", TableAPI_);
-  EXPECT_TRUE(AS.GetClipPath().empty());
+  EXPECT_TRUE(AS.ClipPath.Get().empty());
 
   AnimatorNode Anim("EmptyAnim", TableAPI_);
-  EXPECT_TRUE(Anim.GetAnimationName().empty());
+  EXPECT_TRUE(Anim.AnimationName.Get().empty());
 
   SpriteNode Spr("EmptySprite", TableAPI_);
-  EXPECT_TRUE(Spr.GetTexturePath().empty());
+  EXPECT_TRUE(Spr.TexturePath.Get().empty());
 }
 
 //=============================================================================

@@ -18,7 +18,10 @@ set(AXENGINE_SOURCES
     include/AxEngine/AxSignal.h
     include/AxEngine/AxScriptLog.h
     include/AxEngine/AxDebugDraw.h
+    include/AxEngine/AxProperty.h
+    include/AxEngine/AxPropertyReflection.h
     src/AxTransformType.cpp
+    src/AxPropertyReflection.cpp
     src/AxScriptRegistry.cpp
     src/AxSceneParser.cpp
     src/AxScriptLog.cpp
