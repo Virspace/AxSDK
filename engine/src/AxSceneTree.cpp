@@ -35,6 +35,10 @@
  */
 static uint32_t NodeDepth(Node* N)
 {
+  if (!N) {
+    return (0);
+  }
+
   uint32_t Depth = 0;
   Node* Current = N->GetParent();
   while (Current) {

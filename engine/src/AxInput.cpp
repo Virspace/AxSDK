@@ -31,6 +31,10 @@ AxInput& AxInput::Get()
 
 void AxInput::Initialize(AxAPIRegistry* Registry, AxWindow* Window)
 {
+    if (!Registry) {
+        return;
+    }
+
     WindowAPI_ = static_cast<AxWindowAPI*>(Registry->Get(AXON_WINDOW_API_NAME));
     Window_ = Window;
 }

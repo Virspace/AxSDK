@@ -36,6 +36,8 @@ AxRenderer::~AxRenderer()
 bool AxRenderer::Initialize(AxAPIRegistry* Registry, uint64_t WindowHandle, int32_t Width, int32_t Height)
 {
     if (!Registry || !WindowHandle) {
+        AX_LOG(ERROR, "Renderer::Initialize: invalid parameters (Registry=%p, WindowHandle=%llu)",
+               (void*)Registry, (unsigned long long)WindowHandle);
         return (false);
     }
 
@@ -112,12 +114,20 @@ void AxRenderer::Shutdown()
 
 void AxRenderer::BeginFrame()
 {
+    if (!RenderAPI_) {
+        return;
+    }
+
     RenderAPI_->NewFrame();
     RenderAPI_->SetActiveViewport(Viewport_);
 }
 
 void AxRenderer::EndFrame()
 {
+    if (!RenderAPI_) {
+        return;
+    }
+
     RenderAPI_->SwapBuffers();
 }
 
@@ -274,7 +284,7 @@ void AxRenderer::RenderNode(Node* NodePtr, const AxMat4x4* ParentTransform)
     // If this node is a MeshInstance with a loaded model, render it
     if (NodePtr->GetType() == NodeType::MeshInstance) {
         MeshInstance* MI = static_cast<MeshInstance*>(NodePtr);
-        if (AX_HANDLE_IS_VALID(MI->ModelHandle)) {
+        if (AX_HANDLE_IS_VALID(MI->ModelHandle) && ResourceAPI_) {
             const AxModelData* Model = ResourceAPI_->GetModel(MI->ModelHandle);
             if (Model) {
                 RenderModel(Model, &WorldTransform);
@@ -292,7 +302,7 @@ void AxRenderer::RenderNode(Node* NodePtr, const AxMat4x4* ParentTransform)
 
 void AxRenderer::RenderModel(const AxModelData* Model, const AxMat4x4* BaseTransform)
 {
-    if (!Model || !ShaderData_) return;
+    if (!Model || !ShaderData_ || !ResourceAPI_) return;
 
     for (uint32_t i = 0; i < Model->MeshCount; i++)
     {

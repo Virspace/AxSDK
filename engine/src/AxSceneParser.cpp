@@ -920,6 +920,8 @@ SceneTree* SceneParser::ParseSceneImpl(Tokenizer* T)
 void SceneParser::Init(AxAPIRegistry* Registry)
 {
     if (!Registry) {
+        AX_LOG(ERROR, "SceneParser::Init: NULL Registry");
+        SetError("SceneParser::Init: NULL Registry");
         return;
     }
 

@@ -32,6 +32,7 @@ AxAPIRegistry* PrimitiveMesh::Registry_ = nullptr;
 
 void PrimitiveMesh::Init(AxAPIRegistry* Registry)
 {
+    AXON_ASSERT(Registry && "PrimitiveMesh::Init called with null Registry");
     Registry_ = Registry;
 }
 

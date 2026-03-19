@@ -465,6 +465,10 @@ void Node::EmitSignalArgs(std::string_view Name, const SignalArgs& Args)
 
 uint32_t Node::Connect(std::string_view SignalName, SignalCallback Callback, Node* Receiver)
 {
+  if (!Callback) {
+    return (0);
+  }
+
   // Find or create signal slot
   SignalSlot* Slot = nullptr;
   for (auto& S : Signals_) {

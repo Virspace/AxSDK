@@ -14,6 +14,10 @@
 
 const char* EnumToString(const EnumEntry* Entries, uint8_t Count, int32_t Value)
 {
+  if (!Entries || Count == 0) {
+    return (nullptr);
+  }
+
   for (uint8_t I = 0; I < Count; ++I) {
     if (Entries[I].Value == Value) {
       return (Entries[I].Name);
@@ -24,6 +28,10 @@ const char* EnumToString(const EnumEntry* Entries, uint8_t Count, int32_t Value)
 
 bool StringToEnum(const EnumEntry* Entries, uint8_t Count, std::string_view Name, int32_t* OutValue)
 {
+  if (!Entries || !OutValue || Count == 0) {
+    return (false);
+  }
+
   for (uint8_t I = 0; I < Count; ++I) {
     if (Name == Entries[I].Name) {
       *OutValue = Entries[I].Value;
@@ -54,6 +62,10 @@ void PropertyRegistry::Register(NodeType Type, const PropDescriptor* Descriptors
 
 const PropDescriptor* PropertyRegistry::GetProperties(NodeType Type, uint32_t* OutCount) const
 {
+  if (!OutCount) {
+    return (nullptr);
+  }
+
   uint32_t Index = static_cast<uint32_t>(Type);
   if (Index < MaxNodeTypes && Entries_[Index].Count > 0) {
     *OutCount = Entries_[Index].Count;

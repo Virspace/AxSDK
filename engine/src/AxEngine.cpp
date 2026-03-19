@@ -194,6 +194,8 @@ bool AxEngine::InitRenderer()
 
 void AxEngine::InitInput()
 {
+    AXON_ASSERT(APIRegistry_ && "InitInput called before APIRegistry_ set");
+
     if (IsEditorHosted()) {
         // Editor-hosted: initialize with nullptr -- AxInput will no-op on Update()
         AxInput::Get().Initialize(APIRegistry_, nullptr);
@@ -204,20 +206,19 @@ void AxEngine::InitInput()
 
 bool AxEngine::InitScene()
 {
-
     SceneTree_ = LoadScene("examples/graphics/scenes/sponza_atrium.ats");
     if (!SceneTree_) {
         AX_LOG(ERROR, "Failed to load scene");
         return (false);
     }
 
-
-
     uint32_t CamCount = 0;
     Node** CamNodes = SceneTree_->GetNodesByType(NodeType::Camera, &CamCount);
     if (CamNodes && CamCount > 0) {
         CameraNode* SceneCam = static_cast<CameraNode*>(CamNodes[0]);
-        Renderer_->SetMainCamera(SceneCam);
+        if (Renderer_) {
+            Renderer_->SetMainCamera(SceneCam);
+        }
         SceneTree_->SetMainCamera(SceneCam);
     }
 
@@ -229,7 +230,13 @@ bool AxEngine::InitGameScript()
 {
 #if !defined(AX_SHIPPING)
     // Development/Debug: load Game DLL (static initializers register scripts on load)
+    AXON_ASSERT(PlatformAPI_ && "InitGameScript called before PlatformAPI_ set");
+    AXON_ASSERT(PlatformAPI_->DLLAPI && "PlatformAPI_->DLLAPI is null");
     AxPlatformDLLAPI* DLLAPI = PlatformAPI_->DLLAPI;
+    if (!DLLAPI) {
+        AX_LOG(ERROR, "DLLAPI not available");
+        return (false);
+    }
     GameDLL_ = DLLAPI->Load("libGame.dll");
     if (!DLLAPI->IsValid(GameDLL_)) {
         AX_LOG(ERROR, "Failed to load Game DLL");
@@ -502,6 +509,7 @@ AxEngine::~AxEngine()
 
 SceneTree* AxEngine::LoadScene(const char* FilePath)
 {
+    AXON_ASSERT(FilePath && "LoadScene called with null FilePath");
     if (!FilePath) {
         return (nullptr);
     }
@@ -515,6 +523,8 @@ SceneTree* AxEngine::LoadScene(const char* FilePath)
 
 void AxEngine::LoadSceneModels(SceneTree* Scene)
 {
+    AXON_ASSERT(Scene && "LoadSceneModels called with null Scene");
+    AXON_ASSERT(ResourceAPI_ && "LoadSceneModels called before ResourceAPI_ init");
     if (!Scene || !ResourceAPI_) {
         return;
     }
@@ -550,6 +560,7 @@ void AxEngine::LoadSceneModels(SceneTree* Scene)
 
 void AxEngine::UnloadScene()
 {
+    AXON_ASSERT(SceneTree_ && "UnloadScene called with no scene loaded");
     if (!SceneTree_) {
         return;
     }
